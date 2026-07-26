@@ -1,6 +1,6 @@
 workflows:
-  ios-feature-build:
-    name: iOS Feature Build
+  ios-compile-check:
+    name: iOS Compile Check (No Signing)
     instance_type: mac_mini_m2
     max_build_duration: 120
 
@@ -12,6 +12,61 @@ workflows:
           include: true
           source: true
       cancel_previous_builds: true
+
+    environment:
+      groups:
+        - turbometa_secrets
+      vars:
+        XCODE_PROJECT: "CameraAccess.xcodeproj"
+        XCODE_SCHEME: "TurboMeta"
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+
+    scripts:
+      - name: Validate project and required variables
+        script: |
+          set -euo pipefail
+          test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          : "${META_APP_ID:?Set META_APP_ID in the turbometa_secrets group}"
+          : "${CLIENT_TOKEN:?Set CLIENT_TOKEN in the turbometa_secrets group}"
+
+      - name: Resolve Swift packages
+        script: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
+
+      - name: Compile Release without Apple signing
+        script: |
+          set -euo pipefail
+          mkdir -p "$CM_BUILD_DIR/build"
+          xcodebuild \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$CM_BUILD_DIR/build/DerivedData" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            META_APP_ID="$META_APP_ID" \
+            CLIENT_TOKEN="$CLIENT_TOKEN" \
+            build | tee "$CM_BUILD_DIR/build/compile-check.log"
+
+    artifacts:
+      - build/compile-check.log
+      - build/DerivedData/Build/Products/Release-iphoneos/*.app
+
+  ios-feature-build:
+    name: iOS Feature Build
+    instance_type: mac_mini_m2
+    max_build_duration: 120
 
     integrations:
       app_store_connect: turbometa-app-store-connect
