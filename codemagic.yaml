@@ -1,0 +1,138 @@
+workflows:
+  ios-feature-build:
+    name: iOS Feature Build
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "feature/*"
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    integrations:
+      app_store_connect: turbometa-app-store-connect
+
+    environment:
+      groups:
+        - turbometa_secrets
+      vars:
+        XCODE_PROJECT: "CameraAccess.xcodeproj"
+        XCODE_SCHEME: "TurboMeta"
+        BUNDLE_ID: "com.smartview.glassai.app"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.smartview.glassai.app
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+
+    scripts:
+      - name: Validate project and required variables
+        script: |
+          set -euo pipefail
+          test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          : "${META_APP_ID:?Set META_APP_ID in the turbometa_secrets group}"
+          : "${CLIENT_TOKEN:?Set CLIENT_TOKEN in the turbometa_secrets group}"
+
+      - name: Resolve Swift packages
+        script: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
+
+      - name: Apply App Store signing profiles
+        script: xcode-project use-profiles
+
+      - name: Build signed IPA
+        script: |
+          set -euo pipefail
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive-xcargs "CURRENT_PROJECT_VERSION=$CM_BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+  ios-testflight:
+    name: iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "main"
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    integrations:
+      app_store_connect: turbometa-app-store-connect
+
+    environment:
+      groups:
+        - turbometa_secrets
+      vars:
+        XCODE_PROJECT: "CameraAccess.xcodeproj"
+        XCODE_SCHEME: "TurboMeta"
+        BUNDLE_ID: "com.smartview.glassai.app"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.smartview.glassai.app
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+
+    scripts:
+      - name: Validate project and required variables
+        script: |
+          set -euo pipefail
+          test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          : "${META_APP_ID:?Set META_APP_ID in the turbometa_secrets group}"
+          : "${CLIENT_TOKEN:?Set CLIENT_TOKEN in the turbometa_secrets group}"
+
+      - name: Resolve Swift packages
+        script: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
+
+      - name: Apply App Store signing profiles
+        script: xcode-project use-profiles
+
+      - name: Build signed IPA
+        script: |
+          set -euo pipefail
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive-xcargs "CURRENT_PROJECT_VERSION=$CM_BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: false
+        submit_to_app_store: false
