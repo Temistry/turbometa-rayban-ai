@@ -77,10 +77,10 @@ workflows:
       vars:
         XCODE_PROJECT: "CameraAccess.xcodeproj"
         XCODE_SCHEME: "TurboMeta"
-        BUNDLE_ID: "com.smartview.glassai.app"
+        BUNDLE_ID: "io.github.temistry.turbometa"
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.smartview.glassai.app
+        bundle_identifier: io.github.temistry.turbometa
       xcode: latest
 
     cache:
@@ -143,10 +143,10 @@ workflows:
       vars:
         XCODE_PROJECT: "CameraAccess.xcodeproj"
         XCODE_SCHEME: "TurboMeta"
-        BUNDLE_ID: "com.smartview.glassai.app"
+        BUNDLE_ID: "io.github.temistry.turbometa"
       ios_signing:
         distribution_type: app_store
-        bundle_identifier: com.smartview.glassai.app
+        bundle_identifier: io.github.temistry.turbometa
       xcode: latest
 
     cache:
