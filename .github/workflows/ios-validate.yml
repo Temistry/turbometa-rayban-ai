@@ -29,14 +29,37 @@ jobs:
       - name: 소스 체크아웃
         uses: actions/checkout@v4
 
-      - name: 최신 안정 Xcode 선택
-        uses: maxim-lobanov/setup-xcode@v1
-        with:
-          xcode-version: latest-stable
-
-      - name: Xcode 및 프로젝트 정보
+      - name: iPhone Simulator SDK가 있는 Xcode 선택
+        shell: bash
         run: |
+          set -euo pipefail
+
+          selected=""
+          while IFS= read -r candidate; do
+            developer_dir="$candidate/Contents/Developer"
+            if DEVELOPER_DIR="$developer_dir" xcrun --sdk iphonesimulator --show-sdk-path >/dev/null 2>&1; then
+              selected="$developer_dir"
+              break
+            fi
+          done < <(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print | sort -Vr)
+
+          if [[ -z "$selected" ]]; then
+            echo "설치된 Xcode 중 iPhone Simulator SDK를 포함한 항목을 찾지 못했습니다." >&2
+            find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print >&2 || true
+            exit 1
+          fi
+
+          sudo xcode-select --switch "$selected"
+          echo "DEVELOPER_DIR=$selected" >> "$GITHUB_ENV"
+          echo "선택한 Developer 디렉터리: $selected"
+
+      - name: Xcode, SDK 및 프로젝트 정보
+        shell: bash
+        run: |
+          set -euo pipefail
           xcodebuild -version
+          xcodebuild -showsdks
+          echo "Simulator SDK: $(xcrun --sdk iphonesimulator --show-sdk-path)"
           xcodebuild -list -project CameraAccess.xcodeproj
 
       - name: 한국어 및 보안 정적 점검
@@ -57,6 +80,7 @@ jobs:
             -project CameraAccess.xcodeproj \
             -scheme TurboMeta \
             -configuration Debug \
+            -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -onlyUsePackageVersionsFromResolvedFile \
             CODE_SIGNING_ALLOWED=NO \
