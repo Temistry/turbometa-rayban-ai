@@ -2,8 +2,8 @@
 """TurboMeta 한국어 UI 및 기본 보안 설정 정적 점검.
 
 외부 패키지 없이 실행되며 GitHub Actions와 로컬 개발 환경에서 같은 검사를 사용한다.
-완전한 침투 테스트를 대신하지는 않지만, 저장소 비밀정보, 과도한 ATS 예외,
-필수 보호 코드 누락, 중국어 사용자 문자열과 의심스러운 민감 로그를 빠르게 차단한다.
+완전한 침투 테스트를 대신하지는 않지만 저장소 비밀정보, 과도한 ATS 예외,
+필수 보호 코드 누락, 번역 키 누락과 중국어 사용자 문자열을 빠르게 차단한다.
 """
 
 from __future__ import annotations
@@ -17,6 +17,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "CameraAccess"
 REPORT_PATH = ROOT / "audit-report.txt"
+SUPPORTED_KOREAN_RESOURCE_DIRECTORIES = {"ko.lproj", "zh-Hans.lproj"}
+STRINGS_ASSIGNMENT_PATTERN = re.compile(
+    r'^\s*"(?P<key>[^"\\]+)"\s*=\s*"(?P<value>(?:\\.|[^"\\])*)"\s*;',
+    re.MULTILINE,
+)
 
 
 @dataclass(frozen=True)
@@ -52,6 +57,14 @@ def strip_swift_comments(text: str) -> str:
     return re.sub(r"//[^\n]*", "", text)
 
 
+def korean_localization_files() -> list[Path]:
+    return sorted(
+        path
+        for path in SOURCE_ROOT.rglob("Localizable.strings")
+        if path.parent.name in SUPPORTED_KOREAN_RESOURCE_DIRECTORIES
+    )
+
+
 def audit_secrets_and_transport(findings: list[Finding]) -> None:
     secret_patterns = [
         (re.compile(r"\bsk-[A-Za-z0-9_-]{20,}\b"), "OpenAI 계열 API Key처럼 보이는 문자열"),
@@ -83,11 +96,27 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
     try:
         with info_plist.open("rb") as handle:
             plist = plistlib.load(handle)
+
         ats = plist.get("NSAppTransportSecurity", {})
         if ats.get("NSAllowsArbitraryLoads") is True:
             findings.append(Finding("치명", relative(info_plist), 1, "NSAllowsArbitraryLoads=true는 허용되지 않습니다"))
         if ats.get("NSAllowsArbitraryLoadsInWebContent") is True:
             findings.append(Finding("치명", relative(info_plist), 1, "웹 콘텐츠 전체 ATS 예외가 설정되어 있습니다"))
+
+        if plist.get("CFBundleDevelopmentRegion") != "ko":
+            findings.append(Finding("치명", relative(info_plist), 1, "앱 기본 언어가 ko로 고정되어 있지 않습니다"))
+        if "ko" not in plist.get("CFBundleLocalizations", []):
+            findings.append(Finding("치명", relative(info_plist), 1, "CFBundleLocalizations에 ko가 없습니다"))
+        if plist.get("CFBundleSpokenName") != "터보메타":
+            findings.append(Finding("경고", relative(info_plist), 1, "Siri용 한국어 앱 발음 이름이 터보메타로 설정되지 않았습니다"))
+        if not plist.get("NSSiriUsageDescription"):
+            findings.append(Finding("치명", relative(info_plist), 1, "NSSiriUsageDescription이 비어 있습니다"))
+
+        mwd = plist.get("MWDAT", {})
+        for key in ("MetaAppID", "ClientToken"):
+            value = mwd.get(key)
+            if not isinstance(value, str) or not value.startswith("$("):
+                findings.append(Finding("치명", relative(info_plist), 1, f"MWDAT {key}는 저장소 값이 아니라 빌드 변수로 주입해야 합니다"))
     except Exception as exc:  # noqa: BLE001
         findings.append(Finding("치명", relative(info_plist), 1, f"Info.plist 파싱 실패: {exc}"))
 
@@ -124,6 +153,7 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
         "CameraAccess/Info.plist": [
             "NSSiriUsageDescription",
             "NSAllowsLocalNetworking",
+            "CFBundleSpokenName",
         ],
     }
 
@@ -140,24 +170,58 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
 
 def audit_localization_strings(findings: list[Finding]) -> None:
     chinese_pattern = re.compile(r"[\u4e00-\u9fff]")
-    assignment_pattern = re.compile(
-        r'^\s*"(?P<key>[^"\\]+)"\s*=\s*"(?P<value>(?:\\.|[^"\\])*)"\s*;',
-        re.MULTILINE,
-    )
+    files = korean_localization_files()
+    if not files:
+        findings.append(Finding("치명", "CameraAccess", 1, "한국어 Localizable.strings 파일이 없습니다"))
+        return
 
-    for path in SOURCE_ROOT.rglob("Localizable.strings"):
-        if path.parent.name not in {"ko.lproj", "zh-Hans.lproj"}:
-            continue
+    defined_keys: dict[str, tuple[Path, int, str]] = {}
+
+    for path in files:
         text = path.read_text(encoding="utf-8", errors="replace")
-        for match in assignment_pattern.finditer(text):
+        for match in STRINGS_ASSIGNMENT_PATTERN.finditer(text):
+            key = match.group("key")
             value = match.group("value")
+            line = line_number(text, match.start())
+
+            if key in defined_keys:
+                previous_path, previous_line, _ = defined_keys[key]
+                findings.append(
+                    Finding(
+                        "경고",
+                        relative(path),
+                        line,
+                        f"번역 키가 중복 정의되었습니다: {key} (기존 {relative(previous_path)}:{previous_line})",
+                    )
+                )
+            else:
+                defined_keys[key] = (path, line, value)
+
+            if not value.strip():
+                findings.append(Finding("경고", relative(path), line, f"번역 값이 비어 있습니다: {key}"))
             if chinese_pattern.search(value):
                 findings.append(
                     Finding(
                         "경고",
                         relative(path),
-                        line_number(text, match.start()),
-                        f"한국어 리소스 값에 중국어/한자가 남아 있습니다: {match.group('key')} = {value[:80]}",
+                        line,
+                        f"한국어 리소스 값에 중국어/한자가 남아 있습니다: {key} = {value[:80]}",
+                    )
+                )
+
+    localized_key_pattern = re.compile(r'"(?P<key>[A-Za-z0-9_.-]+)"\s*\.localized\b')
+    for path in SOURCE_ROOT.rglob("*.swift"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        code = strip_swift_comments(text)
+        for match in localized_key_pattern.finditer(code):
+            key = match.group("key")
+            if key not in defined_keys:
+                findings.append(
+                    Finding(
+                        "경고",
+                        relative(path),
+                        line_number(code, match.start()),
+                        f"한국어 번역 파일에 없는 키를 사용합니다: {key}",
                     )
                 )
 
@@ -291,6 +355,5 @@ if __name__ == "__main__":
     findings.sort(key=lambda item: ({"치명": 0, "경고": 1, "참고": 2}[item.severity], item.path, item.line))
     write_report(findings)
 
-    # 중국어 사용자 문자열은 기능 요구사항 위반이므로 치명 항목과 함께 CI를 실패시킨다.
     if any(item.severity in {"치명", "경고"} for item in findings):
         sys.exit(1)
