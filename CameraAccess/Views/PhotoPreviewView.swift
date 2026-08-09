@@ -1,18 +1,6 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- * All rights reserved.
- *
- * This source code is licensed under the license found in the
- * LICENSE file in the root directory of this source tree.
+ * Meta 안경으로 촬영한 사진 미리보기
  */
-
-//
-// PhotoPreviewView.swift
-//
-// UI for previewing and sharing photos captured from Meta wearable devices via the DAT SDK.
-// This view displays photos captured using StreamSession.capturePhoto() and provides sharing
-// functionality.
-//
 
 import SwiftUI
 
@@ -27,71 +15,50 @@ struct PhotoPreviewView: View {
 
   var body: some View {
     ZStack {
-      // Semi-transparent background overlay
       Color.black.opacity(0.8)
         .ignoresSafeArea()
-        .onTapGesture {
-          dismissWithAnimation()
-        }
+        .onTapGesture { dismissWithAnimation() }
 
       VStack(spacing: 20) {
         photoDisplayView
 
-        // Action Buttons
         VStack(spacing: 12) {
-          // Top row: AI Recognition and LeanEat
           HStack(spacing: 12) {
-            // AI Recognition Button
-            if let onAIRecognition = onAIRecognition {
-              Button {
-                onAIRecognition()
-              } label: {
-                HStack {
-                  Image(systemName: "brain")
-                  Text(NSLocalizedString("photo.ai", comment: "AI Recognition"))
-                    .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(12)
+            if let onAIRecognition {
+              Button(action: onAIRecognition) {
+                Label("photo.ai".localized, systemImage: "brain")
+                  .fontWeight(.semibold)
+                  .frame(maxWidth: .infinity)
+                  .padding()
+                  .background(Color.blue)
+                  .foregroundColor(.white)
+                  .cornerRadius(12)
               }
             }
 
-            // LeanEat Button
-            if let onLeanEat = onLeanEat {
-              Button {
-                onLeanEat()
-              } label: {
-                HStack {
-                  Image(systemName: "chart.bar.fill")
-                  Text(NSLocalizedString("photo.nutrition", comment: "Nutrition Analysis"))
-                    .fontWeight(.semibold)
-                }
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(AppColors.leanEat)
-                .foregroundColor(.white)
-                .cornerRadius(12)
+            if let onLeanEat {
+              Button(action: onLeanEat) {
+                Label("photo.nutrition".localized, systemImage: "chart.bar.fill")
+                  .fontWeight(.semibold)
+                  .frame(maxWidth: .infinity)
+                  .padding()
+                  .background(AppColors.leanEat)
+                  .foregroundColor(.white)
+                  .cornerRadius(12)
               }
             }
           }
 
-          // Bottom row: Share
           Button {
             showShareSheet = true
           } label: {
-            HStack {
-              Image(systemName: "square.and.arrow.up")
-              Text(NSLocalizedString("photo.share", comment: "Share"))
-                .fontWeight(.semibold)
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(Color.gray.opacity(0.8))
-            .foregroundColor(.white)
-            .cornerRadius(12)
+            Label("photo.share".localized, systemImage: "square.and.arrow.up")
+              .fontWeight(.semibold)
+              .frame(maxWidth: .infinity)
+              .padding()
+              .background(Color.gray.opacity(0.8))
+              .foregroundColor(.white)
+              .cornerRadius(12)
           }
         }
         .padding(.horizontal, 40)
@@ -115,9 +82,7 @@ struct PhotoPreviewView: View {
         .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
         .gesture(
           DragGesture()
-            .onChanged { value in
-              dragOffset = value.translation
-            }
+            .onChanged { dragOffset = $0.translation }
             .onEnded { value in
               if abs(value.translation.height) > 100 {
                 dismissWithAnimation()
@@ -146,21 +111,13 @@ struct ShareSheet: UIViewControllerRepresentable {
   let photo: UIImage
 
   func makeUIViewController(context: Context) -> UIActivityViewController {
-    let activityViewController = UIActivityViewController(
+    let controller = UIActivityViewController(
       activityItems: [photo],
       applicationActivities: nil
     )
-
-    // Exclude certain activity types if needed
-    activityViewController.excludedActivityTypes = [
-      .assignToContact,
-      .addToReadingList,
-    ]
-
-    return activityViewController
+    controller.excludedActivityTypes = [.assignToContact, .addToReadingList]
+    return controller
   }
 
-  func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {
-    // No updates needed
-  }
+  func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
