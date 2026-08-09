@@ -1,34 +1,32 @@
 /*
- * Live Translate Models
- * 实时翻译数据模型：语种、音色、翻译记录
+ * 실시간 번역 언어, 음성, 기록과 WebSocket 이벤트 모델
  */
 
 import Foundation
 
-// MARK: - 支持的语种
+// MARK: - 번역 언어
 
 enum TranslateLanguage: String, CaseIterable, Codable, Identifiable {
-    // 支持音频+文本输出的语种
-    case en = "en"      // 英语
-    case zh = "zh"      // 中文
-    case ja = "ja"      // 日语
-    case ko = "ko"      // 韩语
-    case fr = "fr"      // 法语
-    case de = "de"      // 德语
-    case ru = "ru"      // 俄语
-    case es = "es"      // 西班牙语
-    case pt = "pt"      // 葡萄牙语
-    case it = "it"      // 意大利语
-    case yue = "yue"    // 粤语
+    case en
+    case zh
+    case ja
+    case ko
+    case fr
+    case de
+    case ru
+    case es
+    case pt
+    case it
+    case yue
 
-    // 仅支持输入（作为源语言）的语种
-    case id = "id"      // 印尼语
-    case vi = "vi"      // 越南语
-    case th = "th"      // 泰语
-    case ar = "ar"      // 阿拉伯语
-    case hi = "hi"      // 印地语
-    case el = "el"      // 希腊语
-    case tr = "tr"      // 土耳其语
+    // 입력 언어로만 지원되는 항목
+    case id
+    case vi
+    case th
+    case ar
+    case hi
+    case el
+    case tr
 
     var id: String { rawValue }
 
@@ -55,30 +53,30 @@ enum TranslateLanguage: String, CaseIterable, Codable, Identifiable {
         }
     }
 
+    /// 기존 화면 코드와 호환하기 위해 이름은 유지하되 국기 이모티콘 대신 문자 표지를 사용한다.
     var flag: String {
         switch self {
-        case .en: return "🇺🇸"
-        case .zh: return "🇨🇳"
-        case .ja: return "🇯🇵"
-        case .ko: return "🇰🇷"
-        case .fr: return "🇫🇷"
-        case .de: return "🇩🇪"
-        case .ru: return "🇷🇺"
-        case .es: return "🇪🇸"
-        case .pt: return "🇵🇹"
-        case .it: return "🇮🇹"
-        case .yue: return "🇭🇰"
-        case .id: return "🇮🇩"
-        case .vi: return "🇻🇳"
-        case .th: return "🇹🇭"
-        case .ar: return "🇸🇦"
-        case .hi: return "🇮🇳"
-        case .el: return "🇬🇷"
-        case .tr: return "🇹🇷"
+        case .en: return "EN"
+        case .zh: return "중"
+        case .ja: return "일"
+        case .ko: return "한"
+        case .fr: return "FR"
+        case .de: return "DE"
+        case .ru: return "RU"
+        case .es: return "ES"
+        case .pt: return "PT"
+        case .it: return "IT"
+        case .yue: return "광"
+        case .id: return "ID"
+        case .vi: return "VI"
+        case .th: return "TH"
+        case .ar: return "AR"
+        case .hi: return "HI"
+        case .el: return "EL"
+        case .tr: return "TR"
         }
     }
 
-    /// 是否支持作为目标语言（输出音频+文本）
     var supportsAudioOutput: Bool {
         switch self {
         case .en, .zh, .ja, .ko, .fr, .de, .ru, .es, .pt, .it, .yue:
@@ -88,18 +86,16 @@ enum TranslateLanguage: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// 可作为目标语言的语种
     static var targetLanguages: [TranslateLanguage] {
-        allCases.filter { $0.supportsAudioOutput }
+        allCases.filter(\.supportsAudioOutput)
     }
 
-    /// 所有源语言
     static var sourceLanguages: [TranslateLanguage] {
         allCases
     }
 }
 
-// MARK: - 翻译音色
+// MARK: - 번역 음성
 
 enum TranslateVoice: String, CaseIterable, Codable, Identifiable {
     case cherry = "Cherry"
@@ -139,36 +135,31 @@ enum TranslateVoice: String, CaseIterable, Codable, Identifiable {
         }
     }
 
-    /// 支持的语种（音色可能只支持部分语种）
     var supportedLanguages: [TranslateLanguage] {
         switch self {
         case .cherry, .nofish:
-            // 支持多语种
             return [.zh, .en, .fr, .de, .ru, .it, .es, .pt, .ja, .ko]
         case .jada, .dylan, .sunny, .peter, .eric:
-            // 仅支持中文
             return [.zh]
         case .kiki:
-            // 仅支持粤语
             return [.yue]
         }
     }
 
-    /// 检查音色是否支持指定语种
     func supports(language: TranslateLanguage) -> Bool {
         supportedLanguages.contains(language)
     }
 }
 
-// MARK: - 翻译记录
+// MARK: - 번역 기록
 
 struct TranslateRecord: Codable, Identifiable {
     let id: UUID
     let timestamp: Date
     let sourceLanguage: TranslateLanguage
     let targetLanguage: TranslateLanguage
-    let originalText: String      // 识别的原文
-    let translatedText: String    // 翻译结果
+    let originalText: String
+    let translatedText: String
 
     init(
         id: UUID = UUID(),
@@ -187,7 +178,7 @@ struct TranslateRecord: Codable, Identifiable {
     }
 }
 
-// MARK: - WebSocket 事件
+// MARK: - WebSocket 이벤트
 
 enum TranslateClientEvent: String {
     case sessionUpdate = "session.update"
@@ -209,5 +200,5 @@ enum TranslateServerEvent: String {
     case responseContentPartDone = "response.content_part.done"
     case responseOutputItemDone = "response.output_item.done"
     case responseDone = "response.done"
-    case error = "error"
+    case error
 }
