@@ -238,6 +238,7 @@ def audit_swift_strings(findings: list[Finding]) -> None:
     allowed_chinese_literals = {"优秀", "良好", "一般", "较差"}
     allowed_english_fragments = {
         "AI",
+        "Meta",
         "TurboMeta",
         "Ray-Ban Meta",
         "OpenClaw",
@@ -262,8 +263,8 @@ def audit_swift_strings(findings: list[Finding]) -> None:
         "Xcode",
         "WebSocket",
         "Gateway",
-        "ws://",
-        "wss://",
+        "ws:",
+        "wss:",
         "127.0.0.1",
     }
 
