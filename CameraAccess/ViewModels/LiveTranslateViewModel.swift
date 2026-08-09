@@ -79,7 +79,6 @@ final class LiveTranslateViewModel: ObservableObject {
         imageEnhanceEnabled = UserDefaults.standard.object(forKey: "translate_image_enhance") as? Bool ?? false
         usePhoneMic = UserDefaults.standard.object(forKey: "translate_use_phone_mic") as? Bool ?? false
 
-        // 기존 중국어 기본값을 사용자가 명시적으로 저장하지 않은 개발 빌드는 한국어로 교정한다.
         if UserDefaults.standard.object(forKey: "translate_target_language") == nil {
             targetLanguage = .ko
             UserDefaults.standard.set(TranslateLanguage.ko.rawValue, forKey: "translate_target_language")
@@ -90,9 +89,11 @@ final class LiveTranslateViewModel: ObservableObject {
     }
 
     func connect() {
-        let apiKey = APIProviderManager.staticLiveAIAPIKey
+        // 실시간 번역은 Live AI 제공자 선택과 무관하게 Alibaba 전용 모델을 사용한다.
+        let endpoint = APIProviderManager.staticAlibabaEndpoint
+        let apiKey = APIKeyManager.shared.getAPIKey(for: .alibaba, endpoint: endpoint) ?? ""
         guard !apiKey.isEmpty else {
-            presentError("livetranslate.error.noApiKey".localized)
+            presentError("Alibaba \(endpoint.displayName) API Key를 먼저 설정하세요")
             return
         }
 
@@ -100,7 +101,7 @@ final class LiveTranslateViewModel: ObservableObject {
         translateService = LiveTranslateService(apiKey: apiKey)
         setupCallbacks()
         updateServiceSettings()
-        print("[TranslateVM][INFO] 연결 요청 source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue) voice=\(selectedVoice.rawValue)")
+        print("[TranslateVM][INFO] 연결 요청 endpoint=\(endpoint.rawValue) source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue) voice=\(selectedVoice.rawValue)")
         translateService?.connect()
     }
 
