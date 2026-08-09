@@ -34,14 +34,14 @@
 
 ### 진행 중
 
-- [ ] Xcode 프로젝트에 새 서비스 파일 등록
-- [ ] API 제공자 설정을 Google 중심으로 정리
-- [ ] Quick Vision Gemini REST 전환
-- [ ] Live AI Google 고정
-- [ ] Live Translate Gemini Live 전환
-- [ ] Q&A 저장 훅 연결
-- [ ] 설정 화면에 지식 로그 폴더·동기화 UI 추가
-- [ ] README 기능 설명 갱신
+- [x] Xcode 프로젝트에 새 서비스 파일 등록
+- [x] API 제공자 설정을 Google 중심으로 정리
+- [x] Quick Vision Gemini REST 전환
+- [x] Live AI Google 고정
+- [x] Live Translate Gemini Live 전환
+- [x] Q&A 저장 훅 연결
+- [x] 설정 화면에 지식 로그 폴더·동기화 UI 추가
+- [x] README 기능 설명 갱신
 - [ ] 정적 보안 검사와 iOS 빌드 검증
 
 ### 보안 메모
@@ -51,6 +51,52 @@
 - 질문·답변 본문은 진단 콘솔에 출력하지 않는다.
 - 지식 로그에는 이미지, 음성, 위치, 사용자 계정 정보를 저장하지 않는다.
 - 외부 폴더에는 사용자가 명시적으로 선택한 경우에만 동기화한다.
+
+---
+
+## 2026-08-09 · iOS 시뮬레이터 컴파일 안정화 및 문서 정합화
+
+### 목적
+
+- GitHub Actions iOS Simulator 빌드를 막던 통합 설정 화면과 지식 로그 서비스의 인터페이스 불일치를 최소 수정으로 해결한다.
+- 공개 문서를 현재 Gemini 중심·Files 기반 로그 동기화 구조에 맞춘다.
+
+### 수정 파일
+
+- `CameraAccess/Views/UnifiedSettingsView.swift`
+- `README.md`
+- `README_EN.md`
+- `docs/WORKLOG.md`
+
+### 주요 변경
+
+- 존재하지 않는 `destinationDisplayName` 참조를 서비스의 `destinationStatusText`로 교체했다.
+- `configureDestination`의 비-throwing 인터페이스에 맞춰 불필요한 `try/catch`를 제거했다.
+- iOS 17 `onChange` overload로 설정 화면 경고를 정리했다.
+- README를 Google Gemini API Key 단일 설정, Quick Vision `ko-KR` 시스템 TTS, Gemini Live AI/번역, Markdown·JSONL 지식 로그, Files 기반 Google Drive 폴더 동기화, 별도 Drive OAuth secret 미사용 정책으로 갱신했다.
+
+### 발생한 문제와 해결
+
+- **문제:** `KnowledgeLogService`에는 `destinationName`과 `destinationStatusText`만 있는데 설정 화면이 `destinationDisplayName`을 참조하여 Swift 컴파일이 실패했다.
+- **해결:** 기존 서비스가 이미 제공하는 안전한 표시용 계산 속성 `destinationStatusText`를 사용했다. 폴더 선택과 동기화 동작은 변경하지 않았다.
+
+### 검증 결과
+
+- 로컬 정적 감사: fatal 0건, warning 0건, informational 1건(기존 개발자 로그 공유 안내).
+- 로컬 Windows 작업 환경에는 Xcode/iPhone Simulator SDK가 없어 `xcodebuild`는 실행할 수 없다.
+- 원격 브랜치의 기존 GitHub Actions Simulator 빌드는 이 수정 전 커밋에서 실패했다. 수정 커밋 push 후 같은 워크플로의 성공 결과를 확인해야 한다.
+
+### 남은 실제 기기 검증
+
+- Ray-Ban Meta 권한·카메라 스트림, Gemini Live 오디오와 Bluetooth 경로
+- Quick Vision Gemini 결과 및 iOS `ko-KR` 시스템 TTS
+- 실시간 번역, 텍스트 전용 Markdown/JSONL 로그 마스킹
+- Files 문서 선택기, bookmark 복원, Google Drive 폴더 동기화
+
+### 보안 메모
+
+- 실제 API Key, access token, refresh token, JWT, OAuth secret 및 식별 가능한 파생 형태를 문서·로그·테스트 출력에 기록하지 않았다.
+- Files 기반 Drive 동기화는 사용자가 선택한 폴더와 security-scoped bookmark만 사용하며 별도 Drive OAuth 자격 증명을 추가하지 않는다.
 
 ---
 

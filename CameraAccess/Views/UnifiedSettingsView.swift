@@ -73,7 +73,7 @@ struct UnifiedSettingsView: View {
                 UserDefaults.standard.set("ko-KR", forKey: "output_language")
                 refreshAPIKeyStatus()
             }
-            .onChange(of: knowledgeLog.lastErrorMessage) { message in
+            .onChange(of: knowledgeLog.lastErrorMessage) { _, message in
                 guard let message, !message.isEmpty else { return }
                 knowledgeErrorMessage = message
                 showKnowledgeError = true
@@ -200,9 +200,7 @@ struct UnifiedSettingsView: View {
                 icon: "folder.badge.plus",
                 iconColor: .blue,
                 title: "동기화 폴더",
-                value: knowledgeLog.isDestinationConfigured
-                    ? knowledgeLog.destinationDisplayName
-                    : "설정 안 됨",
+                value: knowledgeLog.destinationStatusText,
                 valueColor: knowledgeLog.isDestinationConfigured ? .green : .orange
             ) {
                 showKnowledgeFolderPicker = true
@@ -298,12 +296,7 @@ struct UnifiedSettingsView: View {
     }
 
     private func configureKnowledgeFolder(_ url: URL) {
-        do {
-            try knowledgeLog.configureDestination(url)
-        } catch {
-            knowledgeErrorMessage = error.localizedDescription
-            showKnowledgeError = true
-        }
+        knowledgeLog.configureDestination(url)
     }
 
     private var lastSyncText: String {

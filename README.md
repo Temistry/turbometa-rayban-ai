@@ -29,7 +29,7 @@ Ray-Ban Meta 스마트 안경의 카메라와 마이크를 AI 서비스에 연�
 
 ### Quick Vision
 
-안경 시점의 사진을 촬영해 AI로 분석하고 결과를 한국어 음성으로 읽습니다.
+안경 시점의 사진을 촬영해 **Google Gemini**로 분석하고 결과를 iOS 시스템 TTS `ko-KR` 음성으로 읽습니다. 별도의 Cloud TTS Key는 필요하지 않습니다.
 
 지원 모드:
 
@@ -51,27 +51,40 @@ Ray-Ban Meta 스마트 안경의 카메라와 마이크를 AI 서비스에 연�
 → 한국어 TTS 재생
 ```
 
-### Live AI
+### Gemini Live AI
 
-안경 카메라와 마이크를 이용한 실시간 멀티모달 대화 기능입니다.
-
-지원 제공자:
-
-- Alibaba Qwen Omni
-- Google Gemini Live
+안경 카메라와 마이크를 이용한 실시간 멀티모달 대화 기능입니다. 일반 사용자 실행 경로는 **Google Gemini Live**로 고정되며, 설정 화면에서는 Google Gemini API Key 하나만 입력합니다. 기존 공급자 호환 코드는 이전 설치 데이터와 개발자 호환을 위해 내부에 남아 있을 수 있지만 일반 UI에는 노출하지 않습니다.
 
 대화 기록은 한국어 환경 기준으로 저장되며, 음성 인식 결과와 대화 본문은 개발자 로그에 직접 출력하지 않습니다.
 
 ### 실시간 번역
 
-음성을 실시간으로 인식하고 선택한 대상 언어로 번역합니다. 기본 대상 언어는 한국어입니다.
+Gemini Live 세션을 통역 전용으로 구성해 음성을 실시간으로 인식하고 선택한 대상 언어로 번역합니다. 기본 대상 언어는 한국어입니다.
 
 - iPhone 마이크 또는 Bluetooth 입력 선택
-- 번역 텍스트와 음성 출력
+- 번역 텍스트와 선택적 음성 출력
 - 선택적 안경 영상 프레임 보조 입력
+- Google Gemini API Key 하나 사용
 - 번역 기록 최대 50개 유지
 
-실시간 번역은 Alibaba 전용 모델을 사용하므로 Alibaba 서비스 지역에 맞는 API Key가 필요합니다.
+### 개인 지식 로그
+
+Quick Vision, Gemini Live AI, 실시간 번역의 질문과 답변을 기기 로컬 보호 저장소에 기록합니다.
+
+- 사람이 읽는 Markdown과 기계 처리를 위한 JSONL을 함께 저장
+- API Key, Bearer Token, JWT, 긴 credential 문자열, Base64 payload를 저장 전에 마스킹
+- 이미지 원본, 오디오 원본, 위치 정보, 인증 정보는 저장하지 않음
+- 사용자 질문·답변 원문을 진단 콘솔에 출력하지 않음
+
+### Files 기반 Google Drive 폴더 동기화
+
+Google Drive API Key, OAuth client secret, refresh token, 별도 OAuth 인증 체계는 추가하지 않습니다. 사용자가 iOS Files 문서 선택기에서 Google Drive 폴더(또는 지원되는 다른 Files 제공자 폴더)를 선택하면 보안 범위 bookmark로 권한을 보관하고 아래 경로에 지식 로그를 동기화합니다.
+
+```text
+<선택한 폴더>/TurboMetaKnowledge/
+```
+
+북마크가 오래되었거나 Files 제공자가 권한을 회수하면 사용자가 폴더를 다시 선택해야 합니다.
 
 ### OpenClaw
 
@@ -157,25 +170,16 @@ Quick Vision과 Live AI는 안경 카메라와 앱 상태가 필요하므로 명
 
 ## 지원 AI 서비스
 
-### 비전 분석
+일반 사용자 AI 실행 경로는 Google Gemini 중심입니다.
 
-| 제공자 | 기본 모델 | 비고 |
+| 기능 | 기본 모델/구성 | 인증 |
 |---|---|---|
-| Alibaba Cloud DashScope | `qwen3-vl-plus` | 베이징과 싱가포르 Endpoint 지원 |
-| OpenRouter | 사용자가 선택 | 비전 지원 모델만 필터 가능 |
+| Quick Vision · 음식 분석 | `gemini-3.6-flash` | Google Gemini API Key |
+| Live AI | `gemini-3.1-flash-live-preview` | 같은 Google Gemini API Key |
+| 실시간 번역 | Gemini Live 통역 지시 | 같은 Google Gemini API Key |
+| Quick Vision 음성 출력 | iOS 시스템 TTS `ko-KR` | 별도 TTS Key 없음 |
 
-### 실시간 대화
-
-| 제공자 | 모델 | 비고 |
-|---|---|---|
-| Alibaba Qwen Omni | `qwen3-omni-flash-realtime` | 실시간 음성과 영상 |
-| Google Gemini Live | `gemini-3.1-flash-live-preview` | 원시 WebSocket 연결 사용 |
-
-### 음성 출력
-
-- Alibaba 비전 사용 시 `qwen3-tts-flash` 우선 시도
-- Alibaba TTS 실패 또는 OpenRouter 사용 시 iOS `ko-KR` 시스템 TTS로 대체
-- Bluetooth A2DP 또는 기기 스피커 출력 경로 사용
+기존 Alibaba/OpenRouter 제공자 타입은 이전 설치 데이터와 개발자 호환을 위해 남아 있을 수 있지만, 일반 설정 화면과 기본 실행 경로에서는 사용하지 않습니다.
 
 ## 개발 환경 준비
 
@@ -185,7 +189,7 @@ Quick Vision과 Live AI는 안경 카메라와 앱 상태가 필요하므로 명
 - iOS 17 이상이 설치된 iPhone
 - Ray-Ban Meta 스마트 안경
 - Meta Wearables 개발자 프로젝트
-- 사용할 AI 제공자의 API Key
+- Google Gemini API Key
 - 실제 기기 설치를 위한 Apple 개발자 서명 환경
 
 Windows에서 작업하는 경우 GitHub와 Codemagic을 이용해 원격 macOS 빌드를 수행할 수 있습니다. 다만 Bluetooth, 카메라, 오디오 경로와 Siri 동작은 결국 실제 iPhone에서 확인해야 합니다. 시뮬레이터가 안경을 갑자기 물리적으로 만들어 주지는 않습니다.
@@ -227,7 +231,7 @@ CLIENT_TOKEN=<발급받은 Client Token>
 3. Signing & Capabilities에서 자신의 Team을 선택합니다.
 4. iPhone을 연결하고 Run을 실행합니다.
 5. 앱에서 Ray-Ban Meta 연결 권한을 승인합니다.
-6. 설정 화면에서 AI 제공자, 서비스 지역, 모델과 API Key를 등록합니다.
+6. 설정 화면에서 **Google Gemini API Key**를 등록합니다. 일반 사용자는 공급자·서비스 지역·모델을 따로 선택하지 않습니다.
 
 서명 없이 컴파일만 확인할 때는 다음 명령을 사용할 수 있습니다.
 
@@ -242,23 +246,33 @@ xcodebuild \
   clean build
 ```
 
-## API Key 설정
+## Google Gemini API Key 설정
 
-앱의 `내 정보` 탭에서 서비스별 Key를 등록합니다.
+1. [Google AI Studio](https://aistudio.google.com/apikey)에서 Gemini API Key를 발급합니다.
+2. 앱의 `내 정보` 탭에서 **Google Gemini API Key**를 선택합니다.
+3. Key를 입력하고 저장합니다.
 
-- Alibaba 베이징 API Key
-- Alibaba 싱가포르 API Key
-- OpenRouter API Key
-- Google Gemini API Key
-- OpenClaw Gateway 토큰
-- RTMP 스트림 키
+예시가 필요할 때는 실제 형식과 구별되는 placeholder만 사용합니다.
+
+```text
+<YOUR_API_KEY>
+```
+
+**절대로 API Key를 소스 코드, `Info.plist`, `.env`, JSON, README, 작업 로그, 테스트 출력 또는 커밋에 넣지 마세요.** 실제 값뿐 아니라 접두사·접미사·해시·Base64 원문 등 식별 가능한 형태도 기록하지 않습니다.
 
 저장 정책:
 
-- API Key와 토큰은 iOS Keychain 사용
+- 사용자 입력 API Key와 연동 토큰은 iOS Keychain 사용
 - 접근 등급은 `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
 - iCloud Keychain이나 새 기기로 자동 이전하지 않음
 - `UserDefaults`와 일반 파일에 평문 저장하지 않음
+
+Meta Wearables 설정은 Xcode 또는 CI의 빌드 변수로 주입합니다.
+
+```text
+META_APP_ID=<YOUR_META_APP_ID>
+CLIENT_TOKEN=<YOUR_CLIENT_TOKEN>
+```
 
 기기에 저장된 Key는 탈옥, 디버깅 권한 탈취, 악성 프로파일, 메모리 분석까지 막아 주는 절대 방패가 아닙니다. 공개 서비스에서는 서버가 발급하는 짧은 수명의 토큰을 사용하는 구조가 더 안전합니다.
 
@@ -349,6 +363,10 @@ CLIENT_TOKEN
 - URL 자격 증명과 쿼리 입력 거부
 - OpenClaw 원격 명령 허용 목록
 - 로그 자격 증명과 Base64 payload 마스킹
+- Quick Vision·Live AI·번역 지식 로그를 Markdown + JSONL 텍스트로만 저장
+- 이미지·음성 원본·위치·인증정보를 지식 로그에서 제외
+- 사용자가 선택한 Files 폴더만 security-scoped bookmark로 동기화
+- Google Drive API/OAuth secret·refresh token을 추가하지 않음
 - 사용자 발화와 AI 대화 본문을 네트워크 진단 로그에서 제외
 - `URLSessionConfiguration.ephemeral` 사용
 - 예상된 WebSocket 종료와 실제 연결 장애 구분
@@ -368,12 +386,14 @@ CLIENT_TOKEN
 CI 성공은 컴파일 가능성을 확인할 뿐, 실제 안경과 iPhone의 모든 동작을 증명하지 않습니다. 내부 TestFlight 빌드에서 다음 항목을 확인합니다.
 
 - Ray-Ban Meta 등록과 재연결
-- 안경 카메라 영상 수신
-- 사진 촬영 후 Quick Vision 분석
-- 한국어 TTS가 iPhone 또는 Bluetooth 출력으로 재생되는지
-- Live AI 마이크 입력과 한국어 응답
-- 실시간 번역의 기본 대상 언어가 한국어인지
+- 안경 카메라 영상 수신과 카메라 권한
+- 사진 촬영 후 Gemini Quick Vision 분석
+- iOS `ko-KR` 시스템 TTS가 iPhone 또는 Bluetooth 출력으로 재생되는지
+- Gemini Live AI 마이크 입력과 한국어 응답
+- Gemini Live 실시간 번역의 기본 대상 언어가 한국어인지
 - Siri 한국어 호출 문구 인식
+- Markdown + JSONL 로컬 지식 로그 생성과 credential 마스킹
+- Files 문서 선택기, security-scoped bookmark 복원, Google Drive 폴더 동기화
 - OpenClaw의 사설망과 WSS 연결
 - RTMP 또는 RTMPS 송출
 - 연결 해제 시 불필요한 `Socket is not connected` 오류가 나타나지 않는지
@@ -387,10 +407,10 @@ CameraAccess/
 ├── Intents/                 Siri App Intents와 App Shortcuts
 ├── Managers/                언어, AI 제공자, 기능 모드 관리
 ├── Models/                  대화, 번역, 영양 분석 데이터 모델
-├── Services/                비전, TTS, Live AI, 번역, RTMP, OpenClaw
+├── Services/                Gemini, 지식 로그, Live AI, 번역, RTMP, OpenClaw
 ├── Utils/                   Keychain과 권한 유틸리티
 ├── ViewModels/              화면 상태와 서비스 연결
-├── Views/                   SwiftUI 화면과 개발자 로그 콘솔
+├── Views/                   SwiftUI 화면, 통합 설정, 개발자 로그 콘솔
 ├── Info.plist               권한 문구와 Meta DAT 설정
 └── TurboMetaApp.swift       앱 진입점과 한국어 Shortcut 갱신
 
