@@ -1,19 +1,17 @@
 /*
  * Quick Vision Service
- * 快速识图服务 - 支持多提供商 (阿里云/OpenRouter)
- * 返回简洁的描述，适合 TTS 播报
+ * 이미지 인식 API 호출 및 진단 로그를 담당한다.
  */
 
 import Foundation
 import UIKit
 
-class QuickVisionService {
+final class QuickVisionService {
     private let apiKey: String
     private let baseURL: String
     private let model: String
     private let provider: APIProvider
 
-    /// Initialize with explicit configuration
     init(apiKey: String, baseURL: String? = nil, model: String? = nil) {
         self.apiKey = apiKey
         self.provider = VisionAPIConfig.provider
@@ -21,7 +19,6 @@ class QuickVisionService {
         self.model = model ?? VisionAPIConfig.model
     }
 
-    /// Initialize with current provider configuration
     convenience init() {
         self.init(
             apiKey: VisionAPIConfig.apiKey,
@@ -30,7 +27,7 @@ class QuickVisionService {
         )
     }
 
-    // MARK: - API Request/Response Models
+    // MARK: - API models
 
     struct ChatCompletionRequest: Codable {
         let model: String
@@ -60,7 +57,6 @@ class QuickVisionService {
 
     struct ChatCompletionResponse: Codable {
         let choices: [Choice]?
-        let error: APIError?
 
         struct Choice: Codable {
             let message: Message?
@@ -74,138 +70,179 @@ class QuickVisionService {
                 let content: String?
             }
         }
-
-        struct APIError: Codable {
-            let message: String?
-            let code: Int?
-        }
     }
 
-    // MARK: - Quick Vision Analysis
+    // MARK: - Public API
 
-    /// 快速识图 - 返回简洁的语音描述
-    /// - Parameters:
-    ///   - image: 要识别的图片
-    ///   - customPrompt: 自定义提示词（可选，如果为 nil 则使用当前模式的提示词）
-    /// - Returns: 简洁的描述文本，适合 TTS 播报
     func analyzeImage(_ image: UIImage, customPrompt: String? = nil) async throws -> String {
-        // Convert image to base64
+        let startedAt = Date()
+
         guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            print("[QuickVisionAPI][ERROR] JPEG 변환 실패 size=\(image.size.width)x\(image.size.height)")
             throw QuickVisionError.invalidImage
         }
 
+        let prompt = customPrompt ?? QuickVisionModeManager.staticPrompt
         let base64String = imageData.base64EncodedString()
         let dataURL = "data:image/jpeg;base64,\(base64String)"
 
-        // 使用自定义提示词、模式管理器的提示词、或默认提示词
-        let prompt = customPrompt ?? QuickVisionModeManager.staticPrompt
-
-        // Create API request
         let request = ChatCompletionRequest(
             model: model,
             messages: [
-                ChatCompletionRequest.Message(
+                .init(
                     role: "user",
                     content: [
-                        ChatCompletionRequest.Message.Content(
-                            type: "image_url",
-                            text: nil,
-                            imageUrl: ChatCompletionRequest.Message.Content.ImageURL(url: dataURL)
-                        ),
-                        ChatCompletionRequest.Message.Content(
-                            type: "text",
-                            text: prompt,
-                            imageUrl: nil
-                        )
+                        .init(type: "image_url", text: nil, imageUrl: .init(url: dataURL)),
+                        .init(type: "text", text: prompt, imageUrl: nil)
                     ]
                 )
             ]
         )
 
-        // Make API call
-        return try await makeRequest(request)
+        print("[QuickVisionAPI][INFO] 분석 준비 provider=\(provider.displayName) model=\(model) imageBytes=\(imageData.count) promptLength=\(prompt.count)")
+
+        let result = try await makeRequest(request)
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        print("[QuickVisionAPI][INFO] 분석 완료 elapsedMs=\(elapsedMs) resultLength=\(result.count)")
+        return result
     }
 
-    // MARK: - Private Methods
+    // MARK: - Request
 
-    private func makeRequest(_ request: ChatCompletionRequest) async throws -> String {
+    private func makeRequest(_ requestBody: ChatCompletionRequest) async throws -> String {
         guard let url = URL(string: "\(baseURL)/chat/completions") else {
+            print("[QuickVisionAPI][ERROR] 잘못된 URL baseURL=\(baseURL)")
             throw QuickVisionError.invalidResponse
         }
 
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
 
-        // Set headers based on provider
-        let headers = VisionAPIConfig.headers(with: apiKey)
-        for (key, value) in headers {
-            urlRequest.setValue(value, forHTTPHeaderField: key)
+        for (key, value) in VisionAPIConfig.headers(with: apiKey) {
+            request.setValue(value, forHTTPHeaderField: key)
         }
-
-        urlRequest.timeoutInterval = 60 // 60秒超时（OpenRouter 可能需要更长时间）
-
-        let encoder = JSONEncoder()
-        urlRequest.httpBody = try encoder.encode(request)
-
-        print("📡 [QuickVision] Sending request to \(model) via \(provider.displayName)...")
-        print("📡 [QuickVision] URL: \(url.absoluteString)")
-
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw QuickVisionError.invalidResponse
-        }
-
-        // Log raw response for debugging
-        let rawResponse = String(data: data, encoding: .utf8) ?? "Unable to decode"
-        print("📡 [QuickVision] HTTP Status: \(httpResponse.statusCode)")
-        print("📡 [QuickVision] Raw response: \(rawResponse.prefix(500))")
-
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ [QuickVision] API error: \(httpResponse.statusCode) - \(errorMessage)")
-            throw QuickVisionError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-        }
-
-        let decoder = JSONDecoder()
-        let apiResponse: ChatCompletionResponse
 
         do {
-            apiResponse = try decoder.decode(ChatCompletionResponse.self, from: data)
+            request.httpBody = try JSONEncoder().encode(requestBody)
         } catch {
-            print("❌ [QuickVision] JSON decode error: \(error)")
+            let nsError = error as NSError
+            print("[QuickVisionAPI][ERROR] 요청 JSON 인코딩 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+            throw error
+        }
+
+        let requestBytes = request.httpBody?.count ?? 0
+        print("[QuickVisionAPI][HTTP] POST url=\(url.absoluteString) provider=\(provider.displayName) model=\(model) requestBytes=\(requestBytes) timeout=\(request.timeoutInterval)s")
+
+        let data: Data
+        let response: URLResponse
+        let startedAt = Date()
+
+        do {
+            (data, response) = try await URLSession.shared.data(for: request)
+        } catch {
+            let nsError = error as NSError
+            print("[QuickVisionAPI][ERROR] 네트워크 요청 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) userInfo=\(nsError.userInfo) url=\(url.host ?? "-")")
+            throw QuickVisionError.network(
+                domain: nsError.domain,
+                code: nsError.code,
+                message: nsError.localizedDescription
+            )
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("[QuickVisionAPI][ERROR] HTTP 응답이 아님 responseType=\(type(of: response)) bytes=\(data.count)")
             throw QuickVisionError.invalidResponse
         }
 
-        // Check for API error in response body
-        if let apiError = apiResponse.error {
-            let errorMsg = apiError.message ?? "Unknown API error"
-            print("❌ [QuickVision] API returned error: \(errorMsg)")
-            throw QuickVisionError.apiError(statusCode: apiError.code ?? -1, message: errorMsg)
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "-"
+        let requestID = httpResponse.value(forHTTPHeaderField: "x-request-id")
+            ?? httpResponse.value(forHTTPHeaderField: "request-id")
+            ?? httpResponse.value(forHTTPHeaderField: "x-dashscope-request-id")
+            ?? "-"
+
+        print("[QuickVisionAPI][HTTP] response status=\(httpResponse.statusCode) elapsedMs=\(elapsedMs) bytes=\(data.count) contentType=\(contentType) requestID=\(requestID)")
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let serverMessage = extractServerError(from: data)
+            print("[QuickVisionAPI][ERROR] API 응답 오류 status=\(httpResponse.statusCode) requestID=\(requestID) body=\(serverMessage)")
+            throw QuickVisionError.apiError(
+                statusCode: httpResponse.statusCode,
+                requestID: requestID,
+                message: serverMessage
+            )
         }
 
-        // Get content from choices
-        guard let choices = apiResponse.choices, let firstChoice = choices.first else {
-            print("❌ [QuickVision] No choices in response")
+        let responseBody: ChatCompletionResponse
+        do {
+            responseBody = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+        } catch {
+            let nsError = error as NSError
+            let preview = safePreview(data)
+            print("[QuickVisionAPI][ERROR] 응답 JSON 디코딩 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) bodyPreview=\(preview)")
+            throw QuickVisionError.invalidResponse
+        }
+
+        guard let firstChoice = responseBody.choices?.first else {
+            print("[QuickVisionAPI][ERROR] choices가 비어 있음 responseBytes=\(data.count)")
             throw QuickVisionError.emptyResponse
         }
 
-        // Try message.content first, then delta.content
         let content = firstChoice.message?.content ?? firstChoice.delta?.content
-
-        guard let result = content, !result.isEmpty else {
-            print("❌ [QuickVision] Empty content in response")
+        guard let content, !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            print("[QuickVisionAPI][ERROR] 첫 choice의 content가 비어 있음")
             throw QuickVisionError.emptyResponse
         }
 
-        let trimmedResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("✅ [QuickVision] Result: \(trimmedResult)")
+        return content.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
-        return trimmedResult
+    private func extractServerError(from data: Data) -> String {
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let error = json["error"] as? [String: Any] {
+                let message = error["message"] as? String ?? String(describing: error)
+                let code = error["code"].map(String.init(describing:)) ?? "-"
+                return sanitize("code=\(code), message=\(message)")
+            }
+
+            if let message = json["message"] as? String {
+                return sanitize(message)
+            }
+
+            return sanitize(String(describing: json))
+        }
+
+        return safePreview(data)
+    }
+
+    private func safePreview(_ data: Data) -> String {
+        guard let text = String(data: data, encoding: .utf8) else {
+            return "UTF-8로 해석할 수 없는 응답 \(data.count)바이트"
+        }
+        return sanitize(String(text.prefix(2_000)))
+    }
+
+    private func sanitize(_ text: String) -> String {
+        var output = text
+        let patterns: [(String, String)] = [
+            (#"(?i)(Bearer\s+)[A-Za-z0-9._~+\-/=]+"#, "$1<숨김>"),
+            (#"(?i)([?&](?:token|key|api_key|apikey)=)[^&\s]+"#, "$1<숨김>"),
+            (#"data:image/[^;\s]+;base64,[A-Za-z0-9+/=]+"#, "<이미지 데이터 생략>"),
+            (#"(?<![A-Za-z0-9])[A-Za-z0-9+/]{256,}={0,2}(?![A-Za-z0-9])"#, "<대용량 데이터 생략>")
+        ]
+
+        for (pattern, replacement) in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(output.startIndex..<output.endIndex, in: output)
+            output = regex.stringByReplacingMatches(in: output, range: range, withTemplate: replacement)
+        }
+
+        return output
     }
 }
 
-// MARK: - Error Types
+// MARK: - Errors
 
 enum QuickVisionError: LocalizedError {
     case noDevice
@@ -214,24 +251,28 @@ enum QuickVisionError: LocalizedError {
     case invalidImage
     case emptyResponse
     case invalidResponse
-    case apiError(statusCode: Int, message: String)
+    case network(domain: String, code: Int, message: String)
+    case apiError(statusCode: Int, requestID: String, message: String)
 
     var errorDescription: String? {
         switch self {
         case .noDevice:
-            return "眼镜未连接，请先在 Meta View 中配对眼镜"
+            return "안경이 연결되지 않았습니다. Meta View에서 먼저 안경을 연결하세요"
         case .streamNotReady:
-            return "视频流启动失败，请检查眼镜连接状态"
+            return "영상 스트림을 시작하지 못했습니다. 안경 연결 상태를 확인하세요"
         case .frameTimeout:
-            return "等待视频帧超时，请重试"
+            return "영상 프레임 대기 시간이 초과되었습니다. 다시 시도하세요"
         case .invalidImage:
-            return "无法处理图片"
+            return "이미지를 처리할 수 없습니다"
         case .emptyResponse:
-            return "AI返回空响应，请重试"
+            return "AI가 빈 응답을 반환했습니다. 다시 시도하세요"
         case .invalidResponse:
-            return "无效的响应格式"
-        case .apiError(let statusCode, let message):
-            return "API错误(\(statusCode)): \(message)"
+            return "AI 응답 형식이 올바르지 않습니다"
+        case .network(let domain, let code, let message):
+            return "네트워크 오류가 발생했습니다. \(message) (\(domain) \(code))"
+        case .apiError(let statusCode, let requestID, let message):
+            let requestSuffix = requestID == "-" ? "" : " 요청 ID: \(requestID)"
+            return "API 오류 \(statusCode): \(message)\(requestSuffix)"
         }
     }
 }
