@@ -9,7 +9,6 @@ on:
       - "CameraAccess/**"
       - "CameraAccess.xcodeproj/**"
       - "Scripts/audit_localization_security.py"
-      - "Package.resolved"
       - ".github/workflows/ios-validate.yml"
   workflow_dispatch:
 
@@ -43,11 +42,12 @@ jobs:
       - name: 한국어 및 보안 정적 점검
         run: python3 Scripts/audit_localization_security.py
 
-      - name: Swift 패키지 의존성 확인
+      - name: 고정된 Swift 패키지 의존성 확인
         run: |
           xcodebuild \
             -resolvePackageDependencies \
-            -project CameraAccess.xcodeproj
+            -project CameraAccess.xcodeproj \
+            -onlyUsePackageVersionsFromResolvedFile
 
       - name: iOS 시뮬레이터 빌드
         shell: bash
@@ -58,6 +58,7 @@ jobs:
             -scheme TurboMeta \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
+            -onlyUsePackageVersionsFromResolvedFile \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             ONLY_ACTIVE_ARCH=NO \
