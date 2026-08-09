@@ -55,6 +55,7 @@
 		4BA57AE52EF8227E002EC214 /* VisionAPIConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA57A902EF8227E002EC214 /* VisionAPIConfig.swift */; };
 		4BA57AE62EF8227E002EC214 /* TimeUtils.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA57A962EF8227E002EC214 /* TimeUtils.swift */; };
 		4BA57AE72EF8227E002EC214 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA57AB92EF8227E002EC214 /* SettingsView.swift */; };
+		B27C3D4E5F60718293A4B5C6 /* UnifiedSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27C3D4E5F60718293A4B5C7 /* UnifiedSettingsView.swift */; };
 		4BA57AE82EF8227E002EC214 /* CardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA57AA22EF8227E002EC214 /* CardView.swift */; };
 		4BA57AE92EF8227E002EC214 /* MockDeviceKitView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA57AAA2EF8227E002EC214 /* MockDeviceKitView.swift */; };
 		4BA57AEA2EF8227E002EC214 /* OmniRealtimeViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BA57A9D2EF8227E002EC214 /* OmniRealtimeViewModel.swift */; };
@@ -171,6 +172,7 @@
 		4BA57AB72EF8227E002EC214 /* RecordsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordsView.swift; sourceTree = "<group>"; };
 		4BA57AB82EF8227E002EC214 /* RegistrationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RegistrationView.swift; sourceTree = "<group>"; };
 		4BA57AB92EF8227E002EC214 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		B27C3D4E5F60718293A4B5C7 /* UnifiedSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnifiedSettingsView.swift; sourceTree = "<group>"; };
 		4BA57ABA2EF8227E002EC214 /* SimpleLiveStreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SimpleLiveStreamView.swift; sourceTree = "<group>"; };
 		4BA57ABB2EF8227E002EC214 /* StreamSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamSessionView.swift; sourceTree = "<group>"; };
 		4BA57ABC2EF8227E002EC214 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
@@ -378,6 +380,7 @@
 				4BA57AB72EF8227E002EC214 /* RecordsView.swift */,
 				4BA57AB82EF8227E002EC214 /* RegistrationView.swift */,
 				4BA57AB92EF8227E002EC214 /* SettingsView.swift */,
+				B27C3D4E5F60718293A4B5C7 /* UnifiedSettingsView.swift */,
 				4BA57ABA2EF8227E002EC214 /* SimpleLiveStreamView.swift */,
 				4BA57ABB2EF8227E002EC214 /* StreamSessionView.swift */,
 				4BA57ABC2EF8227E002EC214 /* StreamView.swift */,
@@ -610,6 +613,7 @@
 				4BA57AE52EF8227E002EC214 /* VisionAPIConfig.swift in Sources */,
 				4BA57AE62EF8227E002EC214 /* TimeUtils.swift in Sources */,
 				4BA57AE72EF8227E002EC214 /* SettingsView.swift in Sources */,
+				B27C3D4E5F60718293A4B5C6 /* UnifiedSettingsView.swift in Sources */,
 				4BA57AF62EF82400002EC214 /* PermissionsRequestView.swift in Sources */,
 				4BA57AE82EF8227E002EC214 /* CardView.swift in Sources */,
 				4BA57AE92EF8227E002EC214 /* MockDeviceKitView.swift in Sources */,
