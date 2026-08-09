@@ -1,8 +1,3 @@
-/*
- * Quick Vision Mode Manager
- * 快速识图模式管理器 - 管理当前模式、自定义提示词、翻译目标语言
- */
-
 import Foundation
 import SwiftUI
 
@@ -15,112 +10,62 @@ class QuickVisionModeManager: ObservableObject {
     private let translateTargetLanguageKey = "quickVisionTranslateTargetLanguage"
 
     @Published var currentMode: QuickVisionMode {
-        didSet {
-            userDefaults.set(currentMode.rawValue, forKey: modeKey)
-            print("📋 [QuickVisionModeManager] 模式已切换: \(currentMode.displayName)")
-        }
+        didSet { userDefaults.set(currentMode.rawValue, forKey: modeKey) }
     }
-
     @Published var customPrompt: String {
-        didSet {
-            userDefaults.set(customPrompt, forKey: customPromptKey)
-        }
+        didSet { userDefaults.set(customPrompt, forKey: customPromptKey) }
     }
-
     @Published var translateTargetLanguage: String {
-        didSet {
-            userDefaults.set(translateTargetLanguage, forKey: translateTargetLanguageKey)
-        }
+        didSet { userDefaults.set(translateTargetLanguage, forKey: translateTargetLanguageKey) }
     }
 
-    // 支持的翻译目标语言
     static let supportedLanguages: [(code: String, name: String)] = [
-        ("zh-CN", "中文"),
-        ("en-US", "English"),
-        ("ja-JP", "日本語"),
-        ("ko-KR", "한국어"),
-        ("fr-FR", "Français"),
-        ("de-DE", "Deutsch"),
-        ("es-ES", "Español"),
-        ("it-IT", "Italiano"),
-        ("pt-BR", "Português"),
-        ("ru-RU", "Русский")
+        ("ko-KR", "한국어"), ("en-US", "영어"), ("ja-JP", "일본어"),
+        ("zh-CN", "중국어"), ("fr-FR", "프랑스어"), ("de-DE", "독일어"),
+        ("es-ES", "스페인어"), ("it-IT", "이탈리아어"),
+        ("pt-BR", "포르투갈어"), ("ru-RU", "러시아어")
     ]
 
     private init() {
-        // 加载保存的模式
-        if let savedMode = userDefaults.string(forKey: modeKey),
-           let mode = QuickVisionMode(rawValue: savedMode) {
+        if let savedMode = userDefaults.string(forKey: modeKey), let mode = QuickVisionMode(rawValue: savedMode) {
             self.currentMode = mode
         } else {
             self.currentMode = .standard
         }
-
-        // 加载自定义提示词
-        self.customPrompt = userDefaults.string(forKey: customPromptKey) ?? "quickvision.custom.default".localized
-
-        // 加载翻译目标语言（默认跟随系统语言）
-        if let savedLanguage = userDefaults.string(forKey: translateTargetLanguageKey) {
-            self.translateTargetLanguage = savedLanguage
-        } else {
-            self.translateTargetLanguage = LanguageManager.staticApiLanguageCode
-        }
+        self.customPrompt = userDefaults.string(forKey: customPromptKey) ?? "눈앞의 장면을 핵심만 짧고 자연스러운 한국어로 설명해줘. 음성으로 듣기 좋게 1~2문장으로 답해줘."
+        self.translateTargetLanguage = userDefaults.string(forKey: translateTargetLanguageKey) ?? "ko-KR"
     }
 
-    // MARK: - Get Current Prompt
+    func getPrompt() -> String { getPrompt(for: currentMode) }
 
-    /// 获取当前模式的完整提示词
-    func getPrompt() -> String {
-        switch currentMode {
-        case .custom:
-            return customPrompt
-        case .translate:
-            return getTranslatePrompt()
-        default:
-            return currentMode.prompt
-        }
-    }
-
-    /// 获取指定模式的提示词
     func getPrompt(for mode: QuickVisionMode) -> String {
         switch mode {
-        case .custom:
-            return customPrompt
+        case .standard:
+            return "너는 스마트 안경 AI 도우미야. 눈앞의 장면에서 중요한 내용을 짧고 자연스러운 한국어 1~2문장으로 설명해줘. '사진에서'나 '이미지에서' 같은 표현 없이 바로 설명해줘."
+        case .health:
+            return "사진 속 음식이나 음료의 영양 균형, 당·염분·지방, 첨가물과 건강상 주의점을 분석하고 실용적인 조언을 한국어로 짧게 알려줘."
+        case .blind:
+            return "시각 보조를 위해 눈앞의 사람과 사물, 거리와 방향, 장애물이나 위험 요소를 우선순위대로 명확한 한국어로 설명해줘."
+        case .reading:
+            return "눈앞에 보이는 글자를 읽기 순서대로 정확히 인식해서 한국어로 읽어줘. 외국어라면 원문을 간단히 밝히고 의미를 한국어로 설명해줘."
         case .translate:
             return getTranslatePrompt()
-        default:
-            return mode.prompt
+        case .encyclopedia:
+            return "눈앞의 사물, 건축물, 작품 또는 생물을 식별하고 이름, 종류, 배경과 흥미로운 정보를 한국어로 짧고 쉽게 설명해줘."
+        case .custom:
+            return customPrompt
         }
     }
 
-    /// 获取翻译模式的提示词（包含目标语言）
     private func getTranslatePrompt() -> String {
-        let targetLanguageName = Self.supportedLanguages.first { $0.code == translateTargetLanguage }?.name ?? "中文"
-        let basePrompt = "prompt.quickvision.translate".localized
-        return basePrompt.replacingOccurrences(of: "{LANGUAGE}", with: targetLanguageName)
+        let target = Self.supportedLanguages.first { $0.code == translateTargetLanguage }?.name ?? "한국어"
+        return "눈앞의 글자를 정확히 인식하고 \(target)(으)로 자연스럽게 번역해줘. 번역 결과를 먼저 말하고 불필요한 설명은 생략해줘."
     }
 
-    // MARK: - Mode Management
+    func setMode(_ mode: QuickVisionMode) { currentMode = mode }
+    func setCustomPrompt(_ prompt: String) { customPrompt = prompt }
+    func setTranslateTargetLanguage(_ languageCode: String) { translateTargetLanguage = languageCode }
 
-    func setMode(_ mode: QuickVisionMode) {
-        currentMode = mode
-    }
-
-    func setCustomPrompt(_ prompt: String) {
-        customPrompt = prompt
-    }
-
-    func setTranslateTargetLanguage(_ languageCode: String) {
-        translateTargetLanguage = languageCode
-    }
-
-    // MARK: - Static Access (for non-SwiftUI contexts)
-
-    static var staticCurrentMode: QuickVisionMode {
-        return shared.currentMode
-    }
-
-    static var staticPrompt: String {
-        return shared.getPrompt()
-    }
+    static var staticCurrentMode: QuickVisionMode { shared.currentMode }
+    static var staticPrompt: String { shared.getPrompt() }
 }
