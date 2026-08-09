@@ -1,36 +1,39 @@
 /*
- * OpenClaw ASR Service
- * 阿里云 Fun-ASR 实时语音识别
- * 麦克风录音 → PCM 16kHz → WebSocket → 实时文字
+ * OpenClaw 한국어 음성 입력 서비스
+ * Alibaba Fun-ASR WebSocket으로 16kHz PCM을 전송한다.
+ * 사용자 발화 내용과 API Key는 로그에 기록하지 않는다.
  */
 
-import Foundation
 import AVFoundation
+import Foundation
 
-class OpenClawASRService: NSObject {
-
-    // WebSocket
+final class OpenClawASRService: NSObject {
     private var webSocket: URLSessionWebSocketTask?
     private var urlSession: URLSession?
-    private let wsURL = "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+
+    private var webSocketURL: String {
+        switch APIProviderManager.staticAlibabaEndpoint {
+        case .beijing:
+            return "wss://dashscope.aliyuncs.com/api-ws/v1/inference"
+        case .singapore:
+            return "wss://dashscope-intl.aliyuncs.com/api-ws/v1/inference"
+        }
+    }
+
     private let model = "fun-asr-realtime"
-
-    // Audio
-    private var audioEngine: AVAudioEngine?
-    private var audioConverter: AVAudioConverter?
-    private let targetSampleRate: Double = 16000
-    private var isRecording = false
-
-    // API Key
     private let apiKey: String
 
-    // Task tracking
-    private var taskId: String?
-    private var isRunning = false
+    private var audioEngine: AVAudioEngine?
+    private var audioConverter: AVAudioConverter?
+    private let targetSampleRate: Double = 16_000
+    private var isRecording = false
 
-    // Callbacks
-    var onPartialResult: ((String) -> Void)?  // 中间结果
-    var onFinalResult: ((String) -> Void)?     // 最终结果（一句话说完）
+    private var taskID: String?
+    private var isRunning = false
+    private var isIntentionalStop = false
+
+    var onPartialResult: ((String) -> Void)?
+    var onFinalResult: ((String) -> Void)?
     var onError: ((String) -> Void)?
 
     init(apiKey: String) {
@@ -38,72 +41,100 @@ class OpenClawASRService: NSObject {
         super.init()
     }
 
-    // MARK: - Start/Stop
-
     func start() {
         guard !isRunning else { return }
+        guard !apiKey.isEmpty else {
+            onError?("음성 인식 API Key가 설정되지 않았습니다")
+            return
+        }
+
         isRunning = true
-        taskId = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
+        isIntentionalStop = false
+        taskID = UUID().uuidString.lowercased().replacingOccurrences(of: "-", with: "")
         connectWebSocket()
     }
 
     func stop() {
+        guard isRunning || webSocket != nil else { return }
         isRunning = false
+        isIntentionalStop = true
         stopRecording()
 
-        // Send stop signal
-        if webSocket != nil {
+        if webSocket?.state == .running {
             sendStopTask()
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.webSocket?.cancel(with: .goingAway, reason: nil)
-            self?.webSocket = nil
-            self?.urlSession?.invalidateAndCancel()
-            self?.urlSession = nil
-        }
+        let socket = webSocket
+        webSocket = nil
+        let session = urlSession
+        urlSession = nil
 
-        print("[ASR] Stopped")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            socket?.cancel(with: .goingAway, reason: nil)
+            session?.invalidateAndCancel()
+        }
+        print("[ASR][INFO] 음성 인식 종료")
     }
 
-    // MARK: - WebSocket
-
     private func connectWebSocket() {
-        guard let url = URL(string: wsURL) else { return }
+        guard let url = URL(string: webSocketURL) else {
+            onError?("음성 인식 서버 주소가 올바르지 않습니다")
+            return
+        }
 
         var request = URLRequest(url: url)
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 15
 
-        let config = URLSessionConfiguration.default
-        config.connectionProxyDictionary = [:]
-        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: nil)
-        webSocket = urlSession?.webSocketTask(with: request)
-        webSocket?.resume()
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
 
-        print("[ASR] Connecting to Fun-ASR...")
+        let delegateQueue = OperationQueue()
+        delegateQueue.name = "com.turbometa.openclaw-asr"
+        delegateQueue.maxConcurrentOperationCount = 1
+        urlSession = URLSession(configuration: configuration, delegate: self, delegateQueue: delegateQueue)
+
+        let task = urlSession?.webSocketTask(with: request)
+        task?.maximumMessageSize = 2 * 1024 * 1024
+        webSocket = task
+        task?.resume()
+
+        print("[ASR][INFO] Fun-ASR 연결 시작 host=\(url.host ?? "-") endpoint=\(APIProviderManager.staticAlibabaEndpoint.rawValue)")
     }
 
     private func receiveMessage() {
-        webSocket?.receive { [weak self] result in
+        guard let webSocket else { return }
+        webSocket.receive { [weak self] result in
+            guard let self else { return }
             switch result {
             case .success(let message):
-                self?.handleMessage(message)
-                self?.receiveMessage()
+                self.handleMessage(message)
+                self.receiveMessage()
+
             case .failure(let error):
-                print("[ASR] Receive error: \(error.localizedDescription)")
+                let nsError = error as NSError
+                let expected = self.isIntentionalStop
+                    || self.webSocket?.state == .canceling
+                    || self.webSocket?.state == .completed
+                print("[ASR][\(expected ? "INFO" : "ERROR")] 수신 종료 expected=\(expected) domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+                if !expected {
+                    DispatchQueue.main.async {
+                        self.onError?("음성 인식 연결 오류: \(nsError.localizedDescription)")
+                    }
+                }
             }
         }
     }
 
-    // MARK: - Protocol Messages
-
     private func sendRunTask() {
-        guard let taskId else { return }
+        guard let taskID else { return }
 
-        let payload: [String: Any] = [
+        sendJSON([
             "header": [
                 "action": "run-task",
-                "task_id": taskId,
+                "task_id": taskID,
                 "streaming": "duplex"
             ],
             "payload": [
@@ -113,126 +144,139 @@ class OpenClawASRService: NSObject {
                 "model": model,
                 "parameters": [
                     "format": "pcm",
-                    "sample_rate": 16000,
+                    "sample_rate": 16_000,
                     "vocabulary_id": "",
                     "disfluency_removal_enabled": false
                 ] as [String: Any],
                 "input": [:] as [String: Any]
             ] as [String: Any]
-        ]
-
-        sendJSON(payload)
-        print("[ASR] Sent run-task")
+        ], action: "run-task")
     }
 
     private func sendStopTask() {
-        guard let taskId else { return }
-
-        let payload: [String: Any] = [
+        guard let taskID else { return }
+        sendJSON([
             "header": [
                 "action": "finish-task",
-                "task_id": taskId,
+                "task_id": taskID,
                 "streaming": "duplex"
             ],
-            "payload": [
-                "input": [:] as [String: Any]
-            ]
-        ]
-
-        sendJSON(payload)
-        print("[ASR] Sent finish-task")
+            "payload": ["input": [:] as [String: Any]]
+        ], action: "finish-task")
     }
 
     private func sendAudioData(_ data: Data) {
-        webSocket?.send(.data(data)) { error in
-            if let error {
-                print("[ASR] Send audio error: \(error.localizedDescription)")
+        guard let webSocket, webSocket.state == .running else { return }
+        webSocket.send(.data(data)) { [weak self] error in
+            guard let self, let error else { return }
+            let nsError = error as NSError
+            print("[ASR][ERROR] 오디오 전송 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+            if !self.isIntentionalStop {
+                DispatchQueue.main.async {
+                    self.onError?("음성 데이터 전송 오류: \(nsError.localizedDescription)")
+                }
             }
         }
     }
 
-    private func sendJSON(_ dict: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: dict),
-              let text = String(data: data, encoding: .utf8) else { return }
-        webSocket?.send(.string(text)) { error in
+    private func sendJSON(_ dictionary: [String: Any], action: String) {
+        guard let data = try? JSONSerialization.data(withJSONObject: dictionary),
+              let text = String(data: data, encoding: .utf8),
+              let webSocket,
+              webSocket.state == .running else {
+            print("[ASR][WARN] JSON 전송 준비 실패 action=\(action)")
+            return
+        }
+
+        webSocket.send(.string(text)) { error in
             if let error {
-                print("[ASR] Send JSON error: \(error.localizedDescription)")
+                let nsError = error as NSError
+                print("[ASR][ERROR] JSON 전송 실패 action=\(action) domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
             }
         }
+        print("[ASR][INFO] 제어 메시지 전송 action=\(action)")
     }
-
-    // MARK: - Message Handling
 
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
         let text: String
         switch message {
-        case .string(let s): text = s
-        case .data(let d): text = String(data: d, encoding: .utf8) ?? ""
-        @unknown default: return
+        case .string(let string):
+            text = string
+        case .data(let data):
+            text = String(data: data, encoding: .utf8) ?? ""
+        @unknown default:
+            return
         }
 
         guard let data = text.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let header = json["header"] as? [String: Any] else {
+            print("[ASR][ERROR] 서버 메시지 JSON 파싱 실패 bytes=\(text.utf8.count)")
+            return
+        }
 
-        let header = json["header"] as? [String: Any]
-        let event = header?["event"] as? String
-
+        let event = header["event"] as? String ?? "-"
         switch event {
         case "task-started":
-            print("[ASR] Task started, beginning recording")
+            print("[ASR][INFO] 서버 작업 시작")
             startRecording()
 
         case "result-generated":
-            if let payload = json["payload"] as? [String: Any],
-               let output = payload["output"] as? [String: Any],
-               let sentence = output["sentence"] as? [String: Any] {
-                let text = sentence["text"] as? String ?? ""
-                let endTime = sentence["end_time"] as? Int
+            guard let payload = json["payload"] as? [String: Any],
+                  let output = payload["output"] as? [String: Any],
+                  let sentence = output["sentence"] as? [String: Any] else { return }
 
-                if endTime != nil && endTime! > 0 {
-                    // Sentence complete
-                    if !text.isEmpty {
-                        print("[ASR] Final: \(text)")
-                        DispatchQueue.main.async { self.onFinalResult?(text) }
-                    }
+            let recognizedText = sentence["text"] as? String ?? ""
+            let endTime = sentence["end_time"] as? Int ?? 0
+            guard !recognizedText.isEmpty else { return }
+
+            // 인식된 발화는 개인정보일 수 있으므로 내용은 로그에 남기지 않는다.
+            print("[ASR][INFO] 인식 결과 수신 final=\(endTime > 0) length=\(recognizedText.count)")
+            DispatchQueue.main.async {
+                if endTime > 0 {
+                    self.onFinalResult?(recognizedText)
                 } else {
-                    // Partial result
-                    if !text.isEmpty {
-                        DispatchQueue.main.async { self.onPartialResult?(text) }
-                    }
+                    self.onPartialResult?(recognizedText)
                 }
             }
 
         case "task-finished":
-            print("[ASR] Task finished")
+            print("[ASR][INFO] 서버 작업 종료")
 
         case "task-failed":
-            let message = header?["error_message"] as? String ?? "Unknown error"
-            print("[ASR] Task failed: \(message)")
-            DispatchQueue.main.async { self.onError?(message) }
+            let code = header["error_code"].map { String(describing: $0) } ?? "-"
+            let message = header["error_message"] as? String ?? "설명 없는 서버 오류"
+            print("[ASR][ERROR] 서버 작업 실패 code=\(code) message=\(message)")
+            DispatchQueue.main.async {
+                self.onError?("음성 인식 서버 오류: \(message) (코드 \(code))")
+            }
 
         default:
-            break
+            print("[ASR][INFO] 서버 이벤트 event=\(event)")
         }
     }
-
-    // MARK: - Audio Recording
 
     private func startRecording() {
         guard !isRecording else { return }
 
         do {
             let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.playAndRecord, mode: .default, options: [.allowBluetooth, .defaultToSpeaker])
+            try audioSession.setCategory(
+                .playAndRecord,
+                mode: .voiceChat,
+                options: [.allowBluetooth, .defaultToSpeaker]
+            )
             try audioSession.setActive(true)
 
-            audioEngine = AVAudioEngine()
-            guard let engine = audioEngine else { return }
-
+            let engine = AVAudioEngine()
+            audioEngine = engine
             let inputNode = engine.inputNode
             let inputFormat = inputNode.outputFormat(forBus: 0)
 
-            print("[ASR] Input: \(inputFormat.sampleRate)Hz, target: \(targetSampleRate)Hz")
+            let inputs = audioSession.currentRoute.inputs
+                .map { "\($0.portType.rawValue):\($0.portName)" }
+                .joined(separator: ",")
+            print("[ASR][AUDIO] 녹음 시작 input=[\(inputs)] sampleRate=\(inputFormat.sampleRate) channels=\(inputFormat.channelCount) targetSampleRate=16000")
 
             inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
                 self?.processAudioBuffer(buffer)
@@ -241,10 +285,12 @@ class OpenClawASRService: NSObject {
             engine.prepare()
             try engine.start()
             isRecording = true
-            print("[ASR] Recording started")
         } catch {
-            print("[ASR] Recording failed: \(error)")
-            DispatchQueue.main.async { self.onError?("Recording failed: \(error.localizedDescription)") }
+            let nsError = error as NSError
+            print("[ASR][ERROR] 녹음 시작 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) userInfo=\(nsError.userInfo)")
+            DispatchQueue.main.async {
+                self.onError?("마이크 시작 오류: \(nsError.localizedDescription)")
+            }
         }
     }
 
@@ -252,40 +298,39 @@ class OpenClawASRService: NSObject {
         guard isRecording else { return }
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine?.stop()
-        isRecording = false
+        audioEngine = nil
         audioConverter = nil
-        print("[ASR] Recording stopped")
+        isRecording = false
+        print("[ASR][INFO] 녹음 중지")
     }
 
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        let inputFormat = buffer.format
-
-        // Resample to 16kHz mono if needed
         let outputBuffer: AVAudioPCMBuffer
-        if inputFormat.sampleRate != targetSampleRate || inputFormat.channelCount != 1 {
+        if buffer.format.sampleRate != targetSampleRate || buffer.format.channelCount != 1 {
             guard let resampled = resample(buffer) else { return }
             outputBuffer = resampled
         } else {
             outputBuffer = buffer
         }
 
-        // Convert Float32 to PCM16
         guard let floatData = outputBuffer.floatChannelData else { return }
         let frameLength = Int(outputBuffer.frameLength)
-        var pcmData = Data(count: frameLength * 2)
-        pcmData.withUnsafeMutableBytes { raw in
-            guard let ptr = raw.baseAddress?.assumingMemoryBound(to: Int16.self) else { return }
-            for i in 0..<frameLength {
-                let sample = max(-1.0, min(1.0, floatData[0][i]))
-                ptr[i] = Int16(sample * 32767.0)
+        var pcmData = Data(count: frameLength * MemoryLayout<Int16>.size)
+        pcmData.withUnsafeMutableBytes { rawBuffer in
+            guard let pointer = rawBuffer.baseAddress?.assumingMemoryBound(to: Int16.self) else { return }
+            for index in 0..<frameLength {
+                let sample = max(-1.0, min(1.0, floatData[0][index]))
+                pointer[index] = Int16(sample * 32_767.0).littleEndian
             }
         }
-
         sendAudioData(pcmData)
     }
 
     private func resample(_ input: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
-        guard let outputFormat = AVAudioFormat(standardFormatWithSampleRate: targetSampleRate, channels: 1) else { return nil }
+        guard let outputFormat = AVAudioFormat(
+            standardFormatWithSampleRate: targetSampleRate,
+            channels: 1
+        ) else { return nil }
 
         if audioConverter == nil || audioConverter?.inputFormat != input.format {
             audioConverter = AVAudioConverter(from: input.format, to: outputFormat)
@@ -294,34 +339,50 @@ class OpenClawASRService: NSObject {
 
         let ratio = targetSampleRate / input.format.sampleRate
         let outputFrameCount = AVAudioFrameCount(Double(input.frameLength) * ratio)
-        guard let output = AVAudioPCMBuffer(pcmFormat: outputFormat, frameCapacity: outputFrameCount) else { return nil }
+        guard let output = AVAudioPCMBuffer(
+            pcmFormat: outputFormat,
+            frameCapacity: outputFrameCount
+        ) else { return nil }
 
-        var hasProvidedInput = false
-        var error: NSError?
-        converter.convert(to: output, error: &error) { _, outStatus in
-            if hasProvidedInput {
-                outStatus.pointee = .noDataNow
+        var providedInput = false
+        var conversionError: NSError?
+        converter.convert(to: output, error: &conversionError) { _, status in
+            if providedInput {
+                status.pointee = .noDataNow
                 return nil
             }
-            hasProvidedInput = true
-            outStatus.pointee = .haveData
+            providedInput = true
+            status.pointee = .haveData
             return input
         }
 
-        return error == nil ? output : nil
+        if let conversionError {
+            print("[ASR][ERROR] 16kHz 리샘플링 실패 description=\(conversionError.localizedDescription)")
+            return nil
+        }
+        return output
     }
 }
 
-// MARK: - URLSessionWebSocketDelegate
-
 extension OpenClawASRService: URLSessionWebSocketDelegate {
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        print("[ASR] WebSocket connected")
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
+    ) {
+        print("[ASR][INFO] WebSocket 열림 protocol=\(`protocol` ?? "-")")
         receiveMessage()
         sendRunTask()
     }
 
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        print("[ASR] WebSocket closed: \(closeCode.rawValue)")
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
+        let reasonText = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "-"
+        let expected = isIntentionalStop || closeCode == .goingAway || closeCode == .normalClosure
+        print("[ASR][\(expected ? "INFO" : "ERROR")] WebSocket 닫힘 expected=\(expected) code=\(closeCode.rawValue) reason=\(reasonText)")
     }
 }
