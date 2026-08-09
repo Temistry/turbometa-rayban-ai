@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="UTF-8"?>
+﻿<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -55,12 +55,14 @@
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Needed to connect to Meta AI Glasses</string>
+	<key>NSCameraUsageDescription</key>
+	<string>TurboMeta는 스마트 글라스의 카메라 영상을 사용해 사진 촬영과 AI 시각 인식 기능을 제공합니다.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>TurboMeta 需要访问麦克风以实现与智能眼镜的实时语音对话功能。</string>
+	<string>TurboMeta ?誤곮???벧?뗩즼餓ε츩?겻툗?븃꺗?쇤븳?꾢츩?띈??녑?瑥앭뒣?썬?/string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>TurboMeta 需要访问相册以保存从智能眼镜拍摄的照片。</string>
+	<string>TurboMeta ?誤곮???쎑?뚥빳岳앭춼餓롦쇇?썹쑝?쒏땷?꾤쉪?㎫뎴??/string>
 	<key>NSSiriUsageDescription</key>
-	<string>TurboMeta 需要 Siri 权限以支持语音快捷指令触发快速识图功能。</string>
+	<string>TurboMeta ?誤?Siri ?껈솏餓ζ뵱?곮??녑엮?룡뙁餓ㅸ㏄?묈엮?잒칳?얍뒣?썬?/string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
@@ -98,3 +100,4 @@
 	</array>
 </dict>
 </plist>
+
