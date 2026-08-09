@@ -31,18 +31,20 @@ workflows:
           set -euo pipefail
           test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
           test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
           : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
           : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
 
       - name: 한국어 및 보안 정적 점검
         script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
 
-      - name: Swift 패키지 의존성 확인
+      - name: 고정된 Swift 패키지 의존성 확인
         script: |
           set -euo pipefail
           xcodebuild -resolvePackageDependencies \
             -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME"
+            -scheme "$XCODE_SCHEME" \
+            -onlyUsePackageVersionsFromResolvedFile
 
       - name: Apple 서명 없이 Release 컴파일
         script: |
@@ -54,6 +56,7 @@ workflows:
             -configuration Release \
             -destination "generic/platform=iOS" \
             -derivedDataPath "$CM_BUILD_DIR/build/DerivedData" \
+            -onlyUsePackageVersionsFromResolvedFile \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
@@ -98,18 +101,20 @@ workflows:
           set -euo pipefail
           test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
           test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
           : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
           : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
 
       - name: 한국어 및 보안 정적 점검
         script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
 
-      - name: Swift 패키지 의존성 확인
+      - name: 고정된 Swift 패키지 의존성 확인
         script: |
           set -euo pipefail
           xcodebuild -resolvePackageDependencies \
             -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME"
+            -scheme "$XCODE_SCHEME" \
+            -onlyUsePackageVersionsFromResolvedFile
 
       - name: App Store 서명 프로필 적용
         script: xcode-project use-profiles
@@ -120,7 +125,7 @@ workflows:
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD"
+            --archive-xcargs "-onlyUsePackageVersionsFromResolvedFile CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD"
 
     artifacts:
       - audit-report.txt
@@ -168,18 +173,20 @@ workflows:
           set -euo pipefail
           test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
           test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
           : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
           : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
 
       - name: 한국어 및 보안 정적 점검
         script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
 
-      - name: Swift 패키지 의존성 확인
+      - name: 고정된 Swift 패키지 의존성 확인
         script: |
           set -euo pipefail
           xcodebuild -resolvePackageDependencies \
             -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
-            -scheme "$XCODE_SCHEME"
+            -scheme "$XCODE_SCHEME" \
+            -onlyUsePackageVersionsFromResolvedFile
 
       - name: App Store 서명 프로필 적용
         script: xcode-project use-profiles
@@ -190,7 +197,7 @@ workflows:
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD"
+            --archive-xcargs "-onlyUsePackageVersionsFromResolvedFile CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD"
 
     artifacts:
       - audit-report.txt
