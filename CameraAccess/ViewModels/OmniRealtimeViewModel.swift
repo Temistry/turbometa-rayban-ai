@@ -1,17 +1,14 @@
 /*
- * Omni Realtime ViewModel
- * Manages real-time multimodal conversation with AI
- * Supports both Alibaba Qwen Omni and Google Gemini Live
+ * 실시간 멀티모달 대화 상태 관리자
+ * Alibaba Qwen Omni와 Google Gemini Live를 같은 한국어 UI로 연결한다.
  */
 
+import AVFoundation
 import Foundation
 import SwiftUI
-import AVFoundation
 
 @MainActor
-class OmniRealtimeViewModel: ObservableObject {
-
-    // Published state
+final class OmniRealtimeViewModel: ObservableObject {
     @Published var isConnected = false
     @Published var isRecording = false
     @Published var isSpeaking = false
@@ -20,32 +17,29 @@ class OmniRealtimeViewModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var showError = false
 
-    // Services (use one based on provider)
     private var omniService: OmniRealtimeService?
     private var geminiService: GeminiLiveService?
     private let provider: LiveAIProvider
     private let apiKey: String
 
-    // Video frame
     private var currentVideoFrame: UIImage?
-    private var isImageSendingEnabled = false // 是否已启用图片发送（第一次音频后）
+    private var isImageSendingEnabled = false
+    private var isDisconnecting = false
 
     init(apiKey: String) {
         self.apiKey = apiKey
         self.provider = APIProviderManager.staticLiveAIProvider
 
-        // Initialize appropriate service based on provider
         switch provider {
         case .alibaba:
-            self.omniService = OmniRealtimeService(apiKey: apiKey)
+            omniService = OmniRealtimeService(apiKey: apiKey)
         case .google:
-            self.geminiService = GeminiLiveService(apiKey: apiKey)
+            geminiService = GeminiLiveService(apiKey: apiKey)
         }
 
         setupCallbacks()
+        print("[LiveAIVM][INFO] 초기화 provider=\(provider.displayName) apiKeyConfigured=\(!apiKey.isEmpty)")
     }
-
-    // MARK: - Setup
 
     private func setupCallbacks() {
         switch provider {
@@ -57,178 +51,172 @@ class OmniRealtimeViewModel: ObservableObject {
     }
 
     private func setupOmniCallbacks() {
-        guard let omniService = omniService else { return }
+        guard let omniService else { return }
 
         omniService.onConnected = { [weak self] in
             Task { @MainActor in
-                self?.isConnected = true
+                guard let self, !self.isDisconnecting else { return }
+                self.isConnected = true
+                print("[LiveAIVM][INFO] Alibaba 세션 연결 완료")
             }
         }
 
         omniService.onFirstAudioSent = { [weak self] in
             Task { @MainActor in
-                print("✅ [OmniVM] 收到第一次音频发送回调，启用图片发送")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self?.isImageSendingEnabled = true
-                    print("📸 [OmniVM] 图片发送已启用（语音触发模式）")
-                }
+                guard let self else { return }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                self.isImageSendingEnabled = true
+                print("[LiveAIVM][INFO] 음성 감지 시 안경 화면 전송 활성화")
             }
         }
 
         omniService.onSpeechStarted = { [weak self] in
             Task { @MainActor in
-                self?.isSpeaking = true
-
-                if let strongSelf = self,
-                   strongSelf.isImageSendingEnabled,
-                   let frame = strongSelf.currentVideoFrame {
-                    print("🎤📸 [OmniVM] 检测到用户语音，发送当前视频帧")
-                    strongSelf.omniService?.sendImageAppend(frame)
+                guard let self else { return }
+                if self.isImageSendingEnabled, let frame = self.currentVideoFrame {
+                    print("[LiveAIVM][INFO] 사용자 발화 감지, 현재 화면 전송 size=\(frame.size.width)x\(frame.size.height)")
+                    self.omniService?.sendImageAppend(frame)
                 }
-            }
-        }
-
-        omniService.onSpeechStopped = { [weak self] in
-            Task { @MainActor in
-                self?.isSpeaking = false
             }
         }
 
         omniService.onTranscriptDelta = { [weak self] delta in
             Task { @MainActor in
-                print("📝 [OmniVM] AI回复片段: \(delta)")
                 self?.currentTranscript += delta
             }
         }
 
         omniService.onUserTranscript = { [weak self] userText in
             Task { @MainActor in
-                guard let self = self else { return }
-                print("💬 [OmniVM] 保存用户语音: \(userText)")
-                self.conversationHistory.append(
-                    ConversationMessage(role: .user, content: userText)
-                )
+                guard let self, !userText.isEmpty else { return }
+                self.conversationHistory.append(.init(role: .user, content: userText))
+                print("[LiveAIVM][INFO] 사용자 자막 저장 length=\(userText.count)")
             }
         }
 
         omniService.onTranscriptDone = { [weak self] fullText in
             Task { @MainActor in
-                guard let self = self else { return }
-                let textToSave = fullText.isEmpty ? self.currentTranscript : fullText
-                guard !textToSave.isEmpty else {
-                    print("⚠️ [OmniVM] AI回复为空，跳过保存")
-                    return
-                }
-                print("💬 [OmniVM] 保存AI回复: \(textToSave)")
-                self.conversationHistory.append(
-                    ConversationMessage(role: .assistant, content: textToSave)
-                )
-                self.currentTranscript = ""
+                self?.finishAssistantTranscript(fullText)
             }
         }
 
+        omniService.onAudioDelta = { [weak self] _ in
+            Task { @MainActor in self?.isSpeaking = true }
+        }
+
         omniService.onAudioDone = { [weak self] in
-            Task { @MainActor in
-                // Audio playback complete
-            }
+            Task { @MainActor in self?.isSpeaking = false }
         }
 
         omniService.onError = { [weak self] error in
             Task { @MainActor in
-                self?.errorMessage = error
-                self?.showError = true
+                self?.presentError(error)
             }
         }
     }
 
     private func setupGeminiCallbacks() {
-        guard let geminiService = geminiService else { return }
+        guard let geminiService else { return }
 
         geminiService.onConnected = { [weak self] in
             Task { @MainActor in
-                self?.isConnected = true
+                guard let self, !self.isDisconnecting else { return }
+                self.isConnected = true
+                print("[LiveAIVM][INFO] Gemini 세션 연결 완료")
             }
         }
 
         geminiService.onFirstAudioSent = { [weak self] in
             Task { @MainActor in
-                print("✅ [GeminiVM] 收到第一次音频发送回调，启用图片发送")
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    self?.isImageSendingEnabled = true
-                    print("📸 [GeminiVM] 图片发送已启用（语音触发模式）")
-                }
+                guard let self else { return }
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                self.isImageSendingEnabled = true
+                print("[LiveAIVM][INFO] Gemini 화면 전송 활성화")
             }
         }
 
         geminiService.onSpeechStarted = { [weak self] in
             Task { @MainActor in
-                self?.isSpeaking = true
-
-                if let strongSelf = self,
-                   strongSelf.isImageSendingEnabled,
-                   let frame = strongSelf.currentVideoFrame {
-                    print("🎤📸 [GeminiVM] 检测到用户语音，发送当前视频帧")
-                    strongSelf.geminiService?.sendImageInput(frame)
+                guard let self else { return }
+                if self.isImageSendingEnabled, let frame = self.currentVideoFrame {
+                    print("[LiveAIVM][INFO] Gemini 사용자 발화 감지, 현재 화면 전송 size=\(frame.size.width)x\(frame.size.height)")
+                    self.geminiService?.sendImageInput(frame)
                 }
             }
         }
 
-        geminiService.onSpeechStopped = { [weak self] in
+        geminiService.onTranscriptDelta = { [weak self] delta in
             Task { @MainActor in
-                self?.isSpeaking = false
-            }
-        }
-
-        geminiService.onTranscriptDelta = { [weak self] (delta: String) in
-            Task { @MainActor in
-                print("📝 [GeminiVM] AI回复片段: \(delta)")
                 self?.currentTranscript += delta
             }
         }
 
-        geminiService.onUserTranscript = { [weak self] (userText: String) in
+        geminiService.onUserTranscript = { [weak self] userText in
             Task { @MainActor in
-                guard let self = self else { return }
-                print("💬 [GeminiVM] 保存用户语音: \(userText)")
-                self.conversationHistory.append(
-                    ConversationMessage(role: .user, content: userText)
-                )
+                guard let self, !userText.isEmpty else { return }
+                self.conversationHistory.append(.init(role: .user, content: userText))
+                print("[LiveAIVM][INFO] Gemini 사용자 자막 저장 length=\(userText.count)")
             }
         }
 
-        geminiService.onTranscriptDone = { [weak self] (fullText: String) in
+        geminiService.onTranscriptDone = { [weak self] fullText in
             Task { @MainActor in
-                guard let self = self else { return }
-                let textToSave = fullText.isEmpty ? self.currentTranscript : fullText
-                guard !textToSave.isEmpty else {
-                    print("⚠️ [GeminiVM] AI回复为空，跳过保存")
-                    return
-                }
-                print("💬 [GeminiVM] 保存AI回复: \(textToSave)")
-                self.conversationHistory.append(
-                    ConversationMessage(role: .assistant, content: textToSave)
-                )
-                self.currentTranscript = ""
+                self?.finishAssistantTranscript(fullText)
             }
+        }
+
+        geminiService.onAudioDelta = { [weak self] _ in
+            Task { @MainActor in self?.isSpeaking = true }
         }
 
         geminiService.onAudioDone = { [weak self] in
-            Task { @MainActor in
-                self?.isSpeaking = false
-            }
+            Task { @MainActor in self?.isSpeaking = false }
         }
 
-        geminiService.onError = { [weak self] (error: String) in
+        geminiService.onError = { [weak self] error in
             Task { @MainActor in
-                self?.errorMessage = error
-                self?.showError = true
+                self?.presentError(error)
             }
         }
+    }
+
+    private func finishAssistantTranscript(_ fullText: String) {
+        let textToSave = fullText.isEmpty ? currentTranscript : fullText
+        guard !textToSave.isEmpty else {
+            print("[LiveAIVM][WARN] AI 자막이 비어 있어 저장 생략")
+            currentTranscript = ""
+            return
+        }
+
+        conversationHistory.append(.init(role: .assistant, content: textToSave))
+        currentTranscript = ""
+        print("[LiveAIVM][INFO] AI 자막 저장 length=\(textToSave.count)")
+    }
+
+    private func presentError(_ error: String) {
+        guard !isDisconnecting else {
+            print("[LiveAIVM][INFO] 종료 중 오류 콜백 무시 description=\(error)")
+            return
+        }
+
+        errorMessage = error
+        showError = true
+        isConnected = false
+        isRecording = false
+        isSpeaking = false
+        print("[LiveAIVM][ERROR] 사용자 오류 표시 description=\(error)")
     }
 
     // MARK: - Connection
 
     func connect() {
+        guard !apiKey.isEmpty else {
+            presentError("\(provider.displayName) API Key가 설정되지 않았습니다")
+            return
+        }
+
+        isDisconnecting = false
+        print("[LiveAIVM][INFO] 연결 요청 provider=\(provider.displayName)")
         switch provider {
         case .alibaba:
             omniService?.connect()
@@ -238,9 +226,11 @@ class OmniRealtimeViewModel: ObservableObject {
     }
 
     func disconnect() {
-        // Save conversation before disconnecting
-        saveConversation()
+        guard !isDisconnecting else { return }
+        isDisconnecting = true
+        print("[LiveAIVM][INFO] 연결 종료 provider=\(provider.displayName)")
 
+        saveConversation()
         stopRecording()
 
         switch provider {
@@ -251,58 +241,51 @@ class OmniRealtimeViewModel: ObservableObject {
         }
 
         isConnected = false
+        isSpeaking = false
         isImageSendingEnabled = false
     }
 
     private func saveConversation() {
-        // Only save if there's meaningful conversation
         guard !conversationHistory.isEmpty else {
-            print("💬 [LiveAI] 无对话内容，跳过保存")
+            print("[LiveAIVM][INFO] 저장할 대화 없음")
             return
         }
 
-        let aiModel: String
-        switch provider {
-        case .alibaba:
-            aiModel = "qwen3-omni-flash-realtime"
-        case .google:
-            aiModel = "gemini-2.0-flash-exp"
-        }
+        let model = provider == .alibaba
+            ? "qwen3-omni-flash-realtime"
+            : "gemini-2.0-flash-exp"
 
         let record = ConversationRecord(
             messages: conversationHistory,
-            aiModel: aiModel,
-            language: "zh-CN" // TODO: 从设置中获取
+            aiModel: model,
+            language: "ko-KR"
         )
-
         ConversationStorage.shared.saveConversation(record)
-        print("💾 [LiveAI] 对话已保存: \(conversationHistory.count) 条消息")
+        print("[LiveAIVM][INFO] 대화 저장 messages=\(conversationHistory.count) model=\(model) language=ko-KR")
     }
 
     // MARK: - Recording
 
     func startRecording() {
         guard isConnected else {
-            print("⚠️ [LiveAI] 未连接，无法开始录音")
-            errorMessage = "请先连接服务器"
-            showError = true
+            presentError("AI 서버에 연결된 뒤 마이크를 시작하세요")
             return
         }
+        guard !isRecording else { return }
 
-        print("🎤 [LiveAI] 开始录音（语音触发模式）- Provider: \(provider.displayName)")
-
+        print("[LiveAIVM][INFO] 마이크 시작 provider=\(provider.displayName)")
         switch provider {
         case .alibaba:
             omniService?.startRecording()
         case .google:
             geminiService?.startRecording()
         }
-
         isRecording = true
     }
 
     func stopRecording() {
-        print("🛑 [LiveAI] 停止录音")
+        guard isRecording else { return }
+        print("[LiveAIVM][INFO] 마이크 중지 provider=\(provider.displayName)")
 
         switch provider {
         case .alibaba:
@@ -310,26 +293,20 @@ class OmniRealtimeViewModel: ObservableObject {
         case .google:
             geminiService?.stopRecording()
         }
-
         isRecording = false
     }
-
-    // MARK: - Video Frames
 
     func updateVideoFrame(_ frame: UIImage) {
         currentVideoFrame = frame
     }
 
-    // MARK: - Manual Mode (if needed)
-
     func sendMessage() {
         omniService?.commitAudioBuffer()
     }
 
-    // MARK: - Cleanup
-
     func dismissError() {
         showError = false
+        errorMessage = nil
     }
 
     nonisolated deinit {
@@ -339,8 +316,6 @@ class OmniRealtimeViewModel: ObservableObject {
         }
     }
 }
-
-// MARK: - Conversation Message
 
 struct ConversationMessage: Identifiable {
     let id = UUID()
