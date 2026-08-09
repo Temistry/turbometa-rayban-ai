@@ -1,0 +1,89 @@
+name: 지식 로그 서비스 Xcode 등록
+
+on:
+  push:
+    branches:
+      - feature/testflight-signing-config
+    paths:
+      - ".github/workflows/register-knowledge-log-service.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: register-knowledge-log-service
+  cancel-in-progress: false
+
+jobs:
+  register:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Xcode 프로젝트에 서비스 등록
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          project = Path("CameraAccess.xcodeproj/project.pbxproj")
+          text = project.read_text(encoding="utf-8")
+
+          if "KnowledgeLogService.swift in Sources" not in text:
+              build_anchor = "\t\t6FE225749B8E795D8D265971 /* QuickVisionStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7F490219E64EC144DAF8A8C /* QuickVisionStorage.swift */; };\n"
+              file_anchor = "\t\tC7F490219E64EC144DAF8A8C /* QuickVisionStorage.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickVisionStorage.swift; sourceTree = \"<group>\"; };\n"
+              group_anchor = "\t\t\t\tC7F490219E64EC144DAF8A8C /* QuickVisionStorage.swift */,\n"
+              source_anchor = "\t\t\t\t6FE225749B8E795D8D265971 /* QuickVisionStorage.swift in Sources */,\n"
+
+              anchors = [build_anchor, file_anchor, group_anchor, source_anchor]
+              missing = [anchor for anchor in anchors if anchor not in text]
+              if missing:
+                  raise SystemExit("Xcode 프로젝트 기준 문자열을 찾지 못했습니다")
+
+              text = text.replace(
+                  build_anchor,
+                  build_anchor + "\t\tA17B2C3D4E5F60718293A4B5 /* KnowledgeLogService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17B2C3D4E5F60718293A4B6 /* KnowledgeLogService.swift */; };\n",
+                  1,
+              )
+              text = text.replace(
+                  file_anchor,
+                  file_anchor + "\t\tA17B2C3D4E5F60718293A4B6 /* KnowledgeLogService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KnowledgeLogService.swift; sourceTree = \"<group>\"; };\n",
+                  1,
+              )
+              text = text.replace(
+                  group_anchor,
+                  group_anchor + "\t\t\t\tA17B2C3D4E5F60718293A4B6 /* KnowledgeLogService.swift */,\n",
+                  1,
+              )
+              text = text.replace(
+                  source_anchor,
+                  source_anchor + "\t\t\t\tA17B2C3D4E5F60718293A4B5 /* KnowledgeLogService.swift in Sources */,\n",
+                  1,
+              )
+
+              project.write_text(text, encoding="utf-8")
+
+          workflow = Path(".github/workflows/register-knowledge-log-service.yml")
+          workflow.unlink()
+          PY
+
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+
+          if git diff --cached --quiet; then
+            echo "변경 사항 없음"
+            exit 0
+          fi
+
+          git commit -m "Register KnowledgeLogService in Xcode project"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
