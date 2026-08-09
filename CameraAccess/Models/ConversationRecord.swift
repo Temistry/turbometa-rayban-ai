@@ -15,7 +15,7 @@ struct ConversationRecord: Identifiable, Codable {
         id: UUID = UUID(),
         timestamp: Date = Date(),
         messages: [ConversationMessage],
-        aiModel: String = "qwen3-omni-flash-realtime",
+        aiModel: String = GeminiModelCatalog.live,
         language: String = "ko-KR"
     ) {
         self.id = id
