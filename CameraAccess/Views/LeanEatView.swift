@@ -1,6 +1,5 @@
 /*
- * LeanEat View
- * 食物营养分析界面
+ * 음식 영양 분석 화면
  */
 
 import SwiftUI
@@ -19,12 +18,10 @@ struct LeanEatView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                AppColors.secondaryBackground
-                    .ignoresSafeArea()
+                AppColors.secondaryBackground.ignoresSafeArea()
 
                 ScrollView {
                     VStack(spacing: AppSpacing.lg) {
-                        // Photo section
                         photoSection
 
                         if viewModel.isAnalyzing {
@@ -40,25 +37,20 @@ struct LeanEatView: View {
                     .padding()
                 }
             }
-            .navigationTitle("LeanEat 营养分析")
+            .navigationTitle("leaneat.title".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") {
-                        dismiss()
-                    }
+                    Button("done".localized) { dismiss() }
                 }
             }
         }
         .task {
-            // Auto-analyze on appear
             if viewModel.nutritionData == nil && viewModel.errorMessage == nil {
                 await viewModel.analyzeFood()
             }
         }
     }
-
-    // MARK: - Photo Section
 
     private var photoSection: some View {
         Image(uiImage: photo)
@@ -69,26 +61,23 @@ struct LeanEatView: View {
             .shadow(color: AppShadow.medium(), radius: 8, x: 0, y: 4)
     }
 
-    // MARK: - Analyzing View
-
     private var analyzingView: some View {
         VStack(spacing: AppSpacing.lg) {
             ProgressView()
                 .scaleEffect(1.5)
                 .tint(AppColors.leanEat)
 
-            Text("AI正在分析食物营养...")
+            Text("음식과 영양 정보를 분석하고 있습니다")
                 .font(AppTypography.headline)
                 .foregroundColor(AppColors.textPrimary)
 
-            Text("请稍候，这可能需要几秒钟")
+            Text("사진을 AI 서비스로 전송하므로 몇 초 정도 걸릴 수 있습니다")
                 .font(AppTypography.caption)
                 .foregroundColor(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
         }
         .padding(.vertical, AppSpacing.xl)
     }
-
-    // MARK: - Error View
 
     private func errorView(_ error: String) -> some View {
         VStack(spacing: AppSpacing.lg) {
@@ -96,7 +85,7 @@ struct LeanEatView: View {
                 .font(.system(size: 60))
                 .foregroundColor(.orange)
 
-            Text("分析失败")
+            Text("leaneat.error.title".localized)
                 .font(AppTypography.title2)
                 .foregroundColor(AppColors.textPrimary)
 
@@ -104,30 +93,24 @@ struct LeanEatView: View {
                 .font(AppTypography.body)
                 .foregroundColor(AppColors.textSecondary)
                 .multilineTextAlignment(.center)
+                .textSelection(.enabled)
                 .padding(.horizontal)
 
             Button {
-                Task {
-                    await viewModel.retry()
-                }
+                Task { await viewModel.retry() }
             } label: {
-                HStack {
-                    Image(systemName: "arrow.clockwise")
-                    Text("重试")
-                }
-                .font(AppTypography.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.md)
-                .background(AppColors.leanEat)
-                .cornerRadius(AppCornerRadius.lg)
+                Label("leaneat.retry".localized, systemImage: "arrow.clockwise")
+                    .font(AppTypography.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.md)
+                    .background(AppColors.leanEat)
+                    .cornerRadius(AppCornerRadius.lg)
             }
             .padding(.horizontal, AppSpacing.xl)
         }
         .padding(.vertical, AppSpacing.xl)
     }
-
-    // MARK: - Analyze Prompt View
 
     private var analyzePromptView: some View {
         VStack(spacing: AppSpacing.lg) {
@@ -135,85 +118,73 @@ struct LeanEatView: View {
                 .font(.system(size: 60))
                 .foregroundColor(AppColors.leanEat)
 
-            Text("开始分析")
+            Text("영양 분석 시작")
                 .font(AppTypography.title2)
                 .foregroundColor(AppColors.textPrimary)
 
-            Text("点击下方按钮开始分析食物营养")
+            Text("아래 버튼을 눌러 사진 속 음식의 예상 영양 정보를 분석합니다")
                 .font(AppTypography.body)
                 .foregroundColor(AppColors.textSecondary)
+                .multilineTextAlignment(.center)
 
             Button {
-                Task {
-                    await viewModel.analyzeFood()
-                }
+                Task { await viewModel.analyzeFood() }
             } label: {
-                HStack {
-                    Image(systemName: "sparkles")
-                    Text("开始分析")
-                }
-                .font(AppTypography.headline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.md)
-                .background(
-                    LinearGradient(
-                        colors: [AppColors.leanEat, AppColors.leanEat.opacity(0.8)],
-                        startPoint: .leading,
-                        endPoint: .trailing
+                Label("분석 시작", systemImage: "sparkles")
+                    .font(AppTypography.headline)
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.md)
+                    .background(
+                        LinearGradient(
+                            colors: [AppColors.leanEat, AppColors.leanEat.opacity(0.8)],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
                     )
-                )
-                .cornerRadius(AppCornerRadius.lg)
+                    .cornerRadius(AppCornerRadius.lg)
             }
             .padding(.horizontal, AppSpacing.xl)
         }
         .padding(.vertical, AppSpacing.xl)
     }
 
-    // MARK: - Nutrition Result View
-
     private func nutritionResultView(_ nutrition: FoodNutritionResponse) -> some View {
         VStack(spacing: AppSpacing.lg) {
-            // Health Score Card
             healthScoreCard(nutrition)
-
-            // Total Nutrition Summary
             totalNutritionCard(nutrition)
-
-            // Food Items List
             foodItemsList(nutrition.foods)
 
-            // Health Suggestions
             if !nutrition.suggestions.isEmpty {
                 suggestionsCard(nutrition.suggestions)
             }
+
+            Text("수치는 사진을 바탕으로 한 AI 추정치이며 의료 또는 영양 진단이 아닙니다")
+                .font(.caption2)
+                .foregroundColor(AppColors.textTertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal)
         }
     }
 
-    // MARK: - Health Score Card
-
     private func healthScoreCard(_ nutrition: FoodNutritionResponse) -> some View {
-        VStack(spacing: AppSpacing.md) {
-            Text("健康评分")
+        let scoreColor = color(named: nutrition.healthScoreColor)
+
+        return VStack(spacing: AppSpacing.md) {
+            Text("leaneat.healthscore".localized)
                 .font(AppTypography.headline)
                 .foregroundColor(AppColors.textPrimary)
 
             ZStack {
                 Circle()
-                    .stroke(
-                        Color.gray.opacity(0.2),
-                        lineWidth: 15
-                    )
+                    .stroke(Color.gray.opacity(0.2), lineWidth: 15)
                     .frame(width: 140, height: 140)
 
                 Circle()
-                    .trim(from: 0, to: CGFloat(nutrition.healthScore) / 100)
+                    .trim(from: 0, to: CGFloat(max(0, min(100, nutrition.healthScore))) / 100)
                     .stroke(
                         LinearGradient(
-                            colors: [
-                                Color(nutrition.healthScoreColor == "green" ? .green : nutrition.healthScoreColor == "yellow" ? .yellow : nutrition.healthScoreColor == "orange" ? .orange : .red),
-                                Color(nutrition.healthScoreColor == "green" ? .green : nutrition.healthScoreColor == "yellow" ? .yellow : nutrition.healthScoreColor == "orange" ? .orange : .red).opacity(0.6)
-                            ],
+                            colors: [scoreColor, scoreColor.opacity(0.6)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -239,42 +210,37 @@ struct LeanEatView: View {
         .shadow(color: AppShadow.small(), radius: 4, x: 0, y: 2)
     }
 
-    // MARK: - Total Nutrition Card
-
     private func totalNutritionCard(_ nutrition: FoodNutritionResponse) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Text("总营养成分")
+            Text("leaneat.totalnutrition".localized)
                 .font(AppTypography.headline)
                 .foregroundColor(AppColors.textPrimary)
 
-            LazyVGrid(columns: [
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ], spacing: AppSpacing.md) {
+            LazyVGrid(
+                columns: [GridItem(.flexible()), GridItem(.flexible())],
+                spacing: AppSpacing.md
+            ) {
                 nutritionItem(
                     icon: "flame.fill",
-                    title: "热量",
+                    title: "leaneat.calories".localized,
                     value: nutrition.formattedTotalCalories,
                     color: .orange
                 )
-
                 nutritionItem(
                     icon: "leaf.fill",
-                    title: "蛋白质",
+                    title: "leaneat.protein".localized,
                     value: nutrition.formattedTotalProtein,
                     color: .green
                 )
-
                 nutritionItem(
                     icon: "drop.fill",
-                    title: "脂肪",
+                    title: "leaneat.fat".localized,
                     value: nutrition.formattedTotalFat,
                     color: .yellow
                 )
-
                 nutritionItem(
                     icon: "sparkles",
-                    title: "碳水",
+                    title: "leaneat.carbs".localized,
                     value: nutrition.formattedTotalCarbs,
                     color: .blue
                 )
@@ -306,11 +272,9 @@ struct LeanEatView: View {
         .cornerRadius(AppCornerRadius.lg)
     }
 
-    // MARK: - Food Items List
-
     private func foodItemsList(_ foods: [FoodItem]) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            Text("食物明细")
+            Text("leaneat.foods".localized)
                 .font(AppTypography.headline)
                 .foregroundColor(AppColors.textPrimary)
                 .padding(.horizontal)
@@ -322,11 +286,13 @@ struct LeanEatView: View {
     }
 
     private func foodItemCard(_ food: FoodItem) -> some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            // Food name and rating
+        let ratingColor = color(named: food.healthRatingColorName)
+
+        return VStack(alignment: .leading, spacing: AppSpacing.sm) {
             HStack {
-                Text(food.healthRatingEmoji)
+                Text(food.healthRatingSymbol)
                     .font(.title2)
+                    .foregroundColor(ratingColor)
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(food.name)
@@ -340,24 +306,19 @@ struct LeanEatView: View {
 
                 Spacer()
 
-                Text(food.healthRating)
+                Text(food.localizedHealthRating)
                     .font(AppTypography.caption)
                     .foregroundColor(.white)
                     .padding(.horizontal, AppSpacing.sm)
                     .padding(.vertical, 4)
-                    .background(
-                        food.healthRating == "优秀" ? Color.green :
-                        food.healthRating == "良好" ? Color.yellow :
-                        food.healthRating == "一般" ? Color.orange : Color.red
-                    )
+                    .background(ratingColor)
                     .cornerRadius(AppCornerRadius.sm)
             }
 
             Divider()
 
-            // Nutrition details
             HStack(spacing: AppSpacing.lg) {
-                miniNutritionItem(icon: "flame.fill", value: "\(food.calories)", unit: "千卡", color: .orange)
+                miniNutritionItem(icon: "flame.fill", value: "\(food.calories)", unit: "kcal", color: .orange)
                 miniNutritionItem(icon: "leaf.fill", value: String(format: "%.1f", food.protein), unit: "g", color: .green)
                 miniNutritionItem(icon: "drop.fill", value: String(format: "%.1f", food.fat), unit: "g", color: .yellow)
                 miniNutritionItem(icon: "sparkles", value: String(format: "%.1f", food.carbs), unit: "g", color: .blue)
@@ -376,27 +337,19 @@ struct LeanEatView: View {
                 .foregroundColor(color)
 
             HStack(spacing: 2) {
-                Text(value)
-                    .font(.system(size: 14, weight: .semibold))
-                Text(unit)
-                    .font(.system(size: 10))
+                Text(value).font(.system(size: 14, weight: .semibold))
+                Text(unit).font(.system(size: 10))
             }
             .foregroundColor(AppColors.textPrimary)
         }
         .frame(maxWidth: .infinity)
     }
 
-    // MARK: - Suggestions Card
-
     private func suggestionsCard(_ suggestions: [String]) -> some View {
         VStack(alignment: .leading, spacing: AppSpacing.md) {
-            HStack {
-                Image(systemName: "lightbulb.fill")
-                    .foregroundColor(AppColors.leanEat)
-                Text("营养建议")
-                    .font(AppTypography.headline)
-                    .foregroundColor(AppColors.textPrimary)
-            }
+            Label("leaneat.suggestions".localized, systemImage: "lightbulb.fill")
+                .font(AppTypography.headline)
+                .foregroundColor(AppColors.textPrimary)
 
             ForEach(Array(suggestions.enumerated()), id: \.offset) { index, suggestion in
                 HStack(alignment: .top, spacing: AppSpacing.sm) {
@@ -419,5 +372,15 @@ struct LeanEatView: View {
             RoundedRectangle(cornerRadius: AppCornerRadius.lg)
                 .stroke(AppColors.leanEat.opacity(0.3), lineWidth: 1)
         )
+    }
+
+    private func color(named name: String) -> Color {
+        switch name {
+        case "green": return .green
+        case "yellow": return .yellow
+        case "orange": return .orange
+        case "red": return .red
+        default: return .gray
+        }
     }
 }
