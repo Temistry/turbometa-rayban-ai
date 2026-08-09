@@ -27,7 +27,6 @@ class LanguageManager: ObservableObject {
     }
 
     // 기존 프로젝트의 zh-Hans 리소스 파일을 한국어 리소스 컨테이너로 재사용한다.
-    // 추후 ko.lproj를 추가하면 이 값만 ko로 변경하면 된다.
     nonisolated(unsafe) static var currentBundle: Bundle = .main
 
     private init() {
@@ -56,11 +55,14 @@ class LanguageManager: ObservableObject {
 
     var isChinese: Bool { false }
     var apiLanguageCode: String { "Korean" }
+
+    // Qwen 음성 모델용 기본값. 서버 음성 지원 여부와 무관하게 시스템 TTS는 ko-KR로 고정한다.
     var ttsVoice: String { "Cherry" }
 
     nonisolated static var staticIsChinese: Bool { false }
     nonisolated static var staticApiLanguageCode: String { "Korean" }
     nonisolated static var staticTtsVoice: String { "Cherry" }
+    nonisolated static var staticSystemVoiceLanguage: String { "ko-KR" }
 }
 
 extension String {
