@@ -1,13 +1,15 @@
 /*
  * OpenClaw Node Service
- * 将 Ray-Ban Meta 眼镜作为 OpenClaw 设备节点
- * 通过 WebSocket 连接到本地 Gateway，暴露摄像头和音频能力
+ *
+ * Ray-Ban Meta를 OpenClaw의 카메라 노드로 연결한다.
+ * 자격 증명은 기기 전용 Keychain에 저장하고, 로그에는 메시지 본문과 토큰을 남기지 않는다.
  */
 
 import Foundation
+import Security
 import UIKit
 
-// MARK: - Connection State
+// MARK: - Connection state
 
 enum OpenClawConnectionState: Equatable {
     case disconnected
@@ -23,27 +25,23 @@ enum OpenClawConnectionState: Equatable {
              (.waitingForPairing, .waitingForPairing),
              (.connected, .connected):
             return true
-        case (.error(let a), .error(let b)):
-            return a == b
+        case (.error(let first), .error(let second)):
+            return first == second
         default:
             return false
         }
     }
 }
 
-// MARK: - OpenClaw Node Service
+// MARK: - Service
 
-class OpenClawNodeService: NSObject, ObservableObject {
+final class OpenClawNodeService: NSObject, ObservableObject {
     static let shared = OpenClawNodeService()
-
-    // MARK: - Published State
 
     @Published var connectionState: OpenClawConnectionState = .disconnected
     @Published var isEnabled = UserDefaults.standard.bool(forKey: "openclaw_enabled")
     @Published var gatewayHost = UserDefaults.standard.string(forKey: "openclaw_host") ?? "127.0.0.1"
     @Published var gatewayPort = UserDefaults.standard.integer(forKey: "openclaw_port").nonZeroOrDefault(18789)
-
-    // MARK: - Private Properties
 
     private var webSocket: URLSessionWebSocketTask?
     private var urlSession: URLSession?
@@ -56,16 +54,15 @@ class OpenClawNodeService: NSObject, ObservableObject {
     private var reconnectAttempts = 0
     private lazy var deviceIdentity = OpenClawDeviceIdentityStore.loadOrCreate()
 
-    // Gateway token stored in Keychain
     private let keychainService = "com.smartview.glassai.openclaw"
     private let keychainAccount = "gateway_token"
 
-    // Protocol
     private static let protocolVersion = 3
     private static let tickInterval: TimeInterval = 15
     private static let maxReconnectAttempts = 5
+    private static let maximumWebSocketMessageSize = 8 * 1024 * 1024
+    private static let maximumImageUploadSize = 4 * 1024 * 1024
 
-    // Supported commands
     private static let commands = [
         "camera.snap",
         "camera.list",
@@ -73,44 +70,75 @@ class OpenClawNodeService: NSObject, ObservableObject {
         "device.info"
     ]
 
-    private static let caps = [
-        "camera"
-    ]
-
-    // MARK: - Init
+    private static let caps = ["camera"]
 
     private override init() {
-        // Generate stable device ID from device identifier
-        let deviceId = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
-        self.nodeId = "rayban-\(deviceId.prefix(8))".lowercased()
+        let deviceID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        self.nodeId = "rayban-\(deviceID.prefix(8))".lowercased()
         super.init()
+        hardenStoredToken()
     }
 
-    // MARK: - Public Methods
+    // MARK: - Public API
 
     func setCommandRouter(_ router: OpenClawCommandRouter) {
-        self.commandRouter = router
+        commandRouter = router
     }
 
     func connect() {
-        guard connectionState != .connected && connectionState != .connecting else { return }
+        guard connectionState != .connected && connectionState != .connecting else {
+            print("[OpenClaw][WARN] 이미 연결 중이거나 연결됨 state=\(connectionState)")
+            return
+        }
 
+        isEnabled = true
         shouldReconnect = true
+        reconnectAttempts = 0
         saveSettings()
         startConnection()
     }
 
-    /// Send chat message to OpenClaw AI (with optional image)
+    func disconnect() {
+        shouldReconnect = false
+        isEnabled = false
+        saveSettings()
+
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        tickTask?.cancel()
+        tickTask = nil
+
+        webSocket?.cancel(with: .goingAway, reason: nil)
+        webSocket = nil
+        urlSession?.invalidateAndCancel()
+        urlSession = nil
+
+        DispatchQueue.main.async {
+            self.connectionState = .disconnected
+        }
+        print("[OpenClaw][INFO] 사용자가 연결을 해제함")
+    }
+
     func sendChatMessage(_ text: String, image: UIImage? = nil) {
-        guard connectionState == .connected else { return }
+        guard connectionState == .connected else {
+            print("[OpenClaw][WARN] 연결되지 않아 채팅 전송 취소 textLength=\(text.count)")
+            return
+        }
 
         var attachments: [[String: Any]] = []
-        if let img = image, let jpegData = img.jpegData(compressionQuality: 0.7) {
-            attachments.append([
-                "type": "image",
-                "mimeType": "image/jpeg",
-                "content": jpegData.base64EncodedString()
-            ])
+        var imageBytes = 0
+
+        if let image {
+            if let jpegData = compressedImageData(image) {
+                imageBytes = jpegData.count
+                attachments.append([
+                    "type": "image",
+                    "mimeType": "image/jpeg",
+                    "content": jpegData.base64EncodedString()
+                ])
+            } else {
+                print("[OpenClaw][ERROR] 첨부 이미지를 제한 크기 이하로 압축하지 못해 텍스트만 전송")
+            }
         }
 
         var params: [String: Any] = [
@@ -122,95 +150,192 @@ class OpenClawNodeService: NSObject, ObservableObject {
             params["attachments"] = attachments
         }
 
-        let frame: [String: Any] = [
+        sendJSON([
             "type": "req",
             "id": UUID().uuidString,
             "method": "chat.send",
             "params": params
-        ]
-        sendJSON(frame)
-        print("[OpenClaw] Sent chat: \(text.prefix(50))")
+        ])
+
+        // 사용자 대화 내용은 로그에 남기지 않는다.
+        print("[OpenClaw][INFO] 채팅 전송 textLength=\(text.count) imageBytes=\(imageBytes)")
     }
 
-    /// Chat session key (reuse for context)
     private var chatSessionKey = "turbometa-chat"
-
-    /// Chat event callback
     var onChatEvent: ((String) -> Void)?
 
-    func disconnect() {
-        shouldReconnect = false
-        reconnectTask?.cancel()
-        reconnectTask = nil
-        tickTask?.cancel()
-        tickTask = nil
-        webSocket?.cancel(with: .goingAway, reason: nil)
-        webSocket = nil
-        urlSession?.invalidateAndCancel()
-        urlSession = nil
-        connectionState = .disconnected
-        print("[OpenClaw] Disconnected")
-    }
+    // MARK: - Gateway token
 
     func saveGatewayToken(_ token: String) {
-        let data = token.data(using: .utf8) ?? Data()
-        SecItemDelete([
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: keychainService,
-            kSecAttrAccount: keychainAccount
-        ] as CFDictionary)
+        let normalizedToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !token.isEmpty else { return }
-        SecItemAdd([
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: keychainService,
-            kSecAttrAccount: keychainAccount,
-            kSecValueData: data
-        ] as CFDictionary, nil)
-    }
+        let deleteQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount
+        ]
+        SecItemDelete(deleteQuery as CFDictionary)
 
-    func loadGatewayToken() -> String? {
-        var result: AnyObject?
-        let status = SecItemCopyMatching([
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: keychainService,
-            kSecAttrAccount: keychainAccount,
-            kSecReturnData: true
-        ] as CFDictionary, &result)
-        guard status == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
-    }
-
-    // MARK: - Connection Logic
-
-    private func startConnection() {
-        DispatchQueue.main.async { self.connectionState = .connecting }
-
-        let scheme = "ws"
-        var urlString = "\(scheme)://\(gatewayHost):\(gatewayPort)"
-        // Append token as query parameter if available
-        if let token = loadGatewayToken(), !token.isEmpty {
-            urlString += "?token=\(token)"
-        }
-        guard let url = URL(string: urlString) else {
-            connectionState = .error("Invalid gateway URL")
+        guard !normalizedToken.isEmpty,
+              let data = normalizedToken.data(using: .utf8) else {
+            print("[OpenClaw][INFO] Gateway 토큰 삭제 완료")
             return
         }
 
-        print("[OpenClaw] Connecting to \(scheme)://\(gatewayHost):\(gatewayPort)")
+        let addQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecValueData as String: data
+        ]
 
-        let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 10
-        // 绕过系统代理，直连局域网 Gateway
-        config.connectionProxyDictionary = [:]
+        let status = SecItemAdd(addQuery as CFDictionary, nil)
+        if status == errSecSuccess {
+            print("[OpenClaw][INFO] Gateway 토큰을 기기 전용 Keychain에 저장")
+        } else {
+            print("[OpenClaw][ERROR] Gateway 토큰 저장 실패 status=\(status)")
+        }
+    }
+
+    func loadGatewayToken() -> String? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess,
+              let data = result as? Data,
+              let token = String(data: data, encoding: .utf8) else {
+            if status != errSecItemNotFound {
+                print("[OpenClaw][WARN] Gateway 토큰 읽기 실패 status=\(status)")
+            }
+            return nil
+        }
+        return token
+    }
+
+    private func hardenStoredToken() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: keychainService,
+            kSecAttrAccount as String: keychainAccount
+        ]
+        let attributes: [String: Any] = [
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        ]
+        let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if status != errSecSuccess && status != errSecItemNotFound {
+            print("[OpenClaw][WARN] 기존 Gateway 토큰 접근 정책 강화 실패 status=\(status)")
+        }
+    }
+
+    // MARK: - Connection
+
+    private func startConnection() {
+        let url: URL
+        do {
+            url = try makeGatewayURL()
+        } catch {
+            let message = error.localizedDescription
+            DispatchQueue.main.async {
+                self.connectionState = .error(message)
+            }
+            shouldReconnect = false
+            print("[OpenClaw][ERROR] Gateway URL 검증 실패 description=\(message) host=\(gatewayHost) port=\(gatewayPort)")
+            return
+        }
+
+        DispatchQueue.main.async {
+            self.connectionState = .connecting
+        }
+
+        // 토큰은 URL 쿼리에 넣지 않는다. URL은 각종 프록시와 진단 로그에 남기 쉽기 때문이다.
+        print("[OpenClaw][INFO] Gateway 연결 시작 scheme=\(url.scheme ?? "-") host=\(url.host ?? "-") port=\(url.port ?? gatewayPort) tokenConfigured=\(loadGatewayToken() != nil)")
+
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 10
+        configuration.timeoutIntervalForResource = 30
+        configuration.waitsForConnectivity = false
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+
         let delegateQueue = OperationQueue()
         delegateQueue.name = "openclaw-ws"
-        urlSession = URLSession(configuration: config, delegate: self, delegateQueue: delegateQueue)
+        delegateQueue.maxConcurrentOperationCount = 1
+        urlSession = URLSession(configuration: configuration, delegate: self, delegateQueue: delegateQueue)
 
-        webSocket = urlSession?.webSocketTask(with: url)
-        webSocket?.maximumMessageSize = 16 * 1024 * 1024
-        webSocket?.resume()
-        // receiveMessage() is called in didOpen delegate
+        let task = urlSession?.webSocketTask(with: url)
+        task?.maximumMessageSize = Self.maximumWebSocketMessageSize
+        webSocket = task
+        task?.resume()
+    }
+
+    private func makeGatewayURL() throws -> URL {
+        let rawHost = gatewayHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !rawHost.isEmpty else {
+            throw OpenClawTransportError.invalidHost
+        }
+        guard (1...65_535).contains(gatewayPort) else {
+            throw OpenClawTransportError.invalidPort(gatewayPort)
+        }
+
+        let hasExplicitScheme = rawHost.contains("://")
+        let suppliedComponents = hasExplicitScheme ? URLComponents(string: rawHost) : nil
+        let host = suppliedComponents?.host ?? rawHost
+        guard !host.isEmpty else {
+            throw OpenClawTransportError.invalidHost
+        }
+
+        let requestedScheme = suppliedComponents?.scheme?.lowercased()
+        let scheme = requestedScheme ?? (Self.isLocalOrPrivateHost(host) ? "ws" : "wss")
+        guard scheme == "ws" || scheme == "wss" else {
+            throw OpenClawTransportError.unsupportedScheme(scheme)
+        }
+
+        // 평문 WebSocket은 루프백/사설망에서만 허용한다. 공인망 전송은 TLS가 필수다.
+        if scheme == "ws" && !Self.isLocalOrPrivateHost(host) {
+            throw OpenClawTransportError.insecurePublicWebSocket(host)
+        }
+
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.port = suppliedComponents?.port ?? gatewayPort
+        components.path = suppliedComponents?.path ?? ""
+
+        guard let url = components.url else {
+            throw OpenClawTransportError.invalidHost
+        }
+        return url
+    }
+
+    static func isLocalOrPrivateHost(_ host: String) -> Bool {
+        let normalized = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+
+        if normalized == "localhost" || normalized == "::1" || normalized.hasSuffix(".local") {
+            return true
+        }
+        if normalized.hasPrefix("127.") || normalized.hasPrefix("10.") || normalized.hasPrefix("192.168.") || normalized.hasPrefix("169.254.") {
+            return true
+        }
+
+        let parts = normalized.split(separator: ".").compactMap { Int($0) }
+        if parts.count == 4, parts[0] == 172, (16...31).contains(parts[1]) {
+            return true
+        }
+
+        // IPv6 unique-local(fc00::/7) and link-local(fe80::/10).
+        if normalized.hasPrefix("fc") || normalized.hasPrefix("fd") || normalized.hasPrefix("fe8") || normalized.hasPrefix("fe9") || normalized.hasPrefix("fea") || normalized.hasPrefix("feb") {
+            return true
+        }
+
+        return false
     }
 
     private func saveSettings() {
@@ -219,70 +344,95 @@ class OpenClawNodeService: NSObject, ObservableObject {
         UserDefaults.standard.set(gatewayPort, forKey: "openclaw_port")
     }
 
-    // MARK: - WebSocket Messaging
+    // MARK: - WebSocket messaging
 
     private func receiveMessage() {
-        webSocket?.receive { [weak self] result in
+        guard let webSocket else { return }
+        webSocket.receive { [weak self] result in
             switch result {
             case .success(let message):
                 self?.handleMessage(message)
                 self?.receiveMessage()
+
             case .failure(let error):
-                print("[OpenClaw] Receive error: \(error.localizedDescription)")
-                Task { @MainActor in
-                    self?.handleDisconnect()
+                guard let self else { return }
+                let nsError = error as NSError
+                let state = self.webSocket?.state
+                print("[OpenClaw][ERROR] 수신 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) socketState=\(String(describing: state)) reconnect=\(self.shouldReconnect)")
+
+                if state == .canceling || state == .completed || !self.shouldReconnect {
+                    return
                 }
+                self.scheduleDisconnectHandling()
             }
         }
     }
 
-    private func sendJSON(_ dict: [String: Any]) {
-        guard let data = try? JSONSerialization.data(withJSONObject: dict),
-              let text = String(data: data, encoding: .utf8) else { return }
+    private func sendJSON(_ dictionary: [String: Any]) {
+        guard let data = try? JSONSerialization.data(withJSONObject: dictionary),
+              let text = String(data: data, encoding: .utf8) else {
+            print("[OpenClaw][ERROR] 전송 JSON 직렬화 실패")
+            return
+        }
 
-        webSocket?.send(.string(text)) { error in
-            if let error {
-                print("[OpenClaw] Send error: \(error.localizedDescription)")
+        guard let webSocket, webSocket.state == .running else {
+            print("[OpenClaw][ERROR] WebSocket이 실행 중이 아니어서 전송 실패 state=\(String(describing: self.webSocket?.state))")
+            return
+        }
+
+        webSocket.send(.string(text)) { [weak self] error in
+            guard let error else { return }
+            let nsError = error as NSError
+            print("[OpenClaw][ERROR] 전송 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+            if self?.shouldReconnect == true {
+                self?.scheduleDisconnectHandling()
             }
         }
     }
 
-    // MARK: - Message Handling
+    // MARK: - Message handling
 
     private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
         let text: String
+        let byteCount: Int
+
         switch message {
-        case .string(let s):
-            text = s
-            print("[OpenClaw] RAW MSG: \(s.prefix(500))")
-        case .data(let d):
-            text = String(data: d, encoding: .utf8) ?? ""
-            print("[OpenClaw] RAW DATA: \(d.count) bytes")
-        @unknown default: return
+        case .string(let string):
+            text = string
+            byteCount = string.utf8.count
+        case .data(let data):
+            text = String(data: data, encoding: .utf8) ?? ""
+            byteCount = data.count
+        @unknown default:
+            print("[OpenClaw][WARN] 알 수 없는 WebSocket 메시지 유형")
+            return
         }
 
         guard let data = text.data(using: .utf8),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
+              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            print("[OpenClaw][ERROR] 수신 JSON 파싱 실패 bytes=\(byteCount)")
+            return
+        }
 
         let type = json["type"] as? String
         let method = json["method"] as? String
-
         let event = json["event"] as? String
+        print("[OpenClaw][INFO] 메시지 수신 type=\(type ?? "-") method=\(method ?? "-") event=\(event ?? "-") bytes=\(byteCount)")
 
-        // OpenClaw protocol: type="event", event="connect.challenge"
         if type == "event" && event == "connect.challenge" {
             if let payload = json["payload"] as? [String: Any],
                let nonce = payload["nonce"] as? String {
                 handleChallenge(nonce: nonce)
+            } else {
+                print("[OpenClaw][ERROR] 연결 challenge에 nonce가 없음")
             }
             return
         }
 
-        // Response frame
         if type == "res" {
             let ok = json["ok"] as? Bool ?? false
             if ok {
-                handleHelloOk(json: json)
+                handleHelloOK(json: json)
             } else {
                 handleResponse(json: json)
             }
@@ -297,31 +447,30 @@ class OpenClawNodeService: NSObject, ObservableObject {
         case "res", "response":
             handleResponse(json: json)
         default:
-            print("[OpenClaw] Unknown message type: \(type ?? "nil")")
+            print("[OpenClaw][WARN] 지원하지 않는 메시지 type=\(type ?? "nil")")
         }
     }
 
     // MARK: - Handshake
 
     private func handleChallenge(nonce: String) {
-        print("[OpenClaw] Received challenge, nonce: \(nonce.prefix(8))...")
+        print("[OpenClaw][INFO] 연결 challenge 수신 nonceLength=\(nonce.count)")
         pendingNonce = nonce
 
         let token = loadGatewayToken() ?? ""
         let role = "operator"
         let scopes = ["operator.read", "operator.write"]
-        let clientId = "openclaw-ios"
+        let clientID = "openclaw-ios"
         let clientMode = "node"
         let platform = "ios"
-        let signedAtMs = Int64(Date().timeIntervalSince1970 * 1000)
+        let signedAtMilliseconds = Int64(Date().timeIntervalSince1970 * 1_000)
 
-        // Build device signature (v3)
         let signature = deviceIdentity.sign(
-            clientId: clientId,
+            clientId: clientID,
             clientMode: clientMode,
             role: role,
             scopes: scopes,
-            signedAtMs: signedAtMs,
+            signedAtMs: signedAtMilliseconds,
             token: token.isEmpty ? nil : token,
             nonce: nonce,
             platform: platform,
@@ -337,13 +486,13 @@ class OpenClawNodeService: NSObject, ObservableObject {
             "minProtocol": Self.protocolVersion,
             "maxProtocol": Self.protocolVersion,
             "client": [
-                "id": clientId,
+                "id": clientID,
                 "displayName": "Ray-Ban Meta Glasses",
                 "version": "2.0.0",
                 "mode": clientMode,
                 "platform": platform,
                 "modelIdentifier": UIDevice.current.model
-            ] as [String: Any],
+            ],
             "role": role,
             "scopes": scopes,
             "caps": Self.caps,
@@ -353,58 +502,58 @@ class OpenClawNodeService: NSObject, ObservableObject {
                 "id": deviceIdentity.deviceId,
                 "publicKey": deviceIdentity.publicKeyBase64Url,
                 "signature": signature,
-                "signedAt": signedAtMs,
+                "signedAt": signedAtMilliseconds,
                 "nonce": nonce
-            ] as [String: Any]
-        ] as [String: Any]
+            ]
+        ]
 
-        let frame: [String: Any] = [
+        sendJSON([
             "type": "req",
             "id": UUID().uuidString,
             "method": "connect",
             "params": connectParams
-        ]
-
-        print("[OpenClaw] Sending connect request (node + device identity)...")
-        sendJSON(frame)
+        ])
+        print("[OpenClaw][INFO] 서명된 연결 요청 전송 tokenConfigured=\(!token.isEmpty)")
     }
 
-    private func handleHelloOk(json: [String: Any]) {
-        print("[OpenClaw] Connected to gateway!")
-
+    private func handleHelloOK(json: [String: Any]) {
         DispatchQueue.main.async {
             self.connectionState = .connected
             self.reconnectAttempts = 0
         }
-        self.startTickWatchdog()
+        print("[OpenClaw][INFO] Gateway 연결 성공")
+        startTickWatchdog()
     }
 
-    // MARK: - Event Handling
+    // MARK: - Events and requests
 
     private func handleEvent(method: String?, json: [String: Any]) {
         guard let method else { return }
 
         switch method {
         case "node.invoke.request", "node.invoke":
-            print("[OpenClaw] >>> INVOKE RECEIVED: \(method)")
+            print("[OpenClaw][INFO] 노드 명령 수신 method=\(method)")
             handleInvokeRequest(json: json)
+
         case "chat":
             if let payload = json["payload"] as? [String: Any],
                let state = payload["state"] as? String,
                let message = payload["message"] as? [String: Any],
                let content = message["content"] as? [[String: Any]] {
-                // Extract text from content array
                 let text = content.compactMap { $0["text"] as? String }.joined()
                 if !text.isEmpty {
                     DispatchQueue.main.async {
                         self.onChatEvent?(state == "final" ? "[[FINAL]]\(text)" : text)
                     }
+                    print("[OpenClaw][INFO] 채팅 응답 전달 state=\(state) textLength=\(text.count)")
                 }
             }
+
         case "tick", "health":
-            break // suppress noise
+            break
+
         default:
-            print("[OpenClaw] Event: \(method)")
+            print("[OpenClaw][INFO] 기타 이벤트 method=\(method)")
         }
     }
 
@@ -417,13 +566,14 @@ class OpenClawNodeService: NSObject, ObservableObject {
             if let params = json["params"] as? [String: Any] {
                 handleInvokeFromRequest(id: id, params: params)
             }
+
         default:
-            print("[OpenClaw] Request: \(method)")
+            print("[OpenClaw][WARN] 지원하지 않는 요청 method=\(method)")
             sendJSON([
                 "type": "res",
                 "id": id,
                 "ok": false,
-                "error": ["code": "UNSUPPORTED", "message": "Unknown method: \(method)"]
+                "error": ["code": "UNSUPPORTED", "message": "지원하지 않는 메서드: \(method)"]
             ])
         }
     }
@@ -431,48 +581,52 @@ class OpenClawNodeService: NSObject, ObservableObject {
     private func handleResponse(json: [String: Any]) {
         let id = json["id"] as? String ?? ""
         let ok = json["ok"] as? Bool ?? false
+        guard !ok else { return }
 
-        if !ok {
-            let error = json["error"] as? [String: Any]
-            let code = error?["code"] as? String ?? ""
-            let message = error?["message"] as? String ?? ""
-            print("[OpenClaw] Response error for \(id): \(code) - \(message)")
+        let error = json["error"] as? [String: Any]
+        let code = error?["code"] as? String ?? "UNKNOWN"
+        let message = error?["message"] as? String ?? "설명 없음"
+        print("[OpenClaw][ERROR] Gateway 응답 오류 requestID=\(id.prefix(8)) code=\(code) message=\(message)")
 
-            if code == "NOT_PAIRED" {
-                Task { @MainActor in
-                    self.connectionState = .waitingForPairing
-                }
+        if code == "NOT_PAIRED" {
+            DispatchQueue.main.async {
+                self.connectionState = .waitingForPairing
             }
         }
     }
 
-    // MARK: - Invoke Handling
+    // MARK: - Command invocation
 
     private func handleInvokeRequest(json: [String: Any]) {
         guard let params = json["params"] as? [String: Any] else { return }
-        let invokeId = params["id"] as? String ?? ""
-        handleInvokeFromRequest(id: invokeId, params: params)
+        let invokeID = params["id"] as? String ?? ""
+        handleInvokeFromRequest(id: invokeID, params: params)
     }
 
     private func handleInvokeFromRequest(id: String, params: [String: Any]) {
         let command = params["command"] as? String ?? ""
-        let cmdParams = params["params"] as? [String: Any]
-            ?? (params["paramsjson"] as? String).flatMap { str in
-                try? JSONSerialization.jsonObject(with: Data(str.utf8)) as? [String: Any]
+        let commandParams = params["params"] as? [String: Any]
+            ?? (params["paramsjson"] as? String).flatMap { value in
+                try? JSONSerialization.jsonObject(with: Data(value.utf8)) as? [String: Any]
             }
 
-        print("[OpenClaw] Invoke: \(command) (id: \(id.prefix(8)))")
+        guard Self.commands.contains(command) else {
+            print("[OpenClaw][WARN] 허용 목록에 없는 명령 거부 command=\(command)")
+            sendInvokeResult(makeErrorResult(id: id, code: "UNSUPPORTED", message: "허용되지 않은 명령입니다"))
+            return
+        }
 
+        print("[OpenClaw][INFO] 명령 실행 command=\(command) requestID=\(id.prefix(8))")
         let request = OpenClawNodeInvokeRequest(
             id: id,
             command: command,
-            params: cmdParams,
+            params: commandParams,
             timeoutMs: params["timeoutms"] as? Int ?? params["timeoutMs"] as? Int
         )
 
         Task { @MainActor in
             let result = await self.commandRouter?.handleCommand(request)
-                ?? self.makeErrorResult(id: id, code: "NO_ROUTER", message: "Command router not configured")
+                ?? self.makeErrorResult(id: id, code: "NO_ROUTER", message: "명령 라우터가 준비되지 않았습니다")
             self.sendInvokeResult(result)
         }
     }
@@ -484,19 +638,17 @@ class OpenClawNodeService: NSObject, ObservableObject {
             "ok": result.ok
         ]
 
-        if let p = result.payload {
-            // For large payloads (images), use payloadjson
-            if let data = try? JSONEncoder().encode(p),
-               let jsonStr = String(data: data, encoding: .utf8) {
-                payload["payloadjson"] = jsonStr
-            }
+        if let resultPayload = result.payload,
+           let data = try? JSONEncoder().encode(resultPayload),
+           let jsonString = String(data: data, encoding: .utf8) {
+            payload["payloadjson"] = jsonString
         }
 
         if let error = result.error {
-            var errDict: [String: Any] = [:]
-            if let code = error.code { errDict["code"] = code }
-            if let message = error.message { errDict["message"] = message }
-            payload["error"] = errDict
+            var errorDictionary: [String: Any] = [:]
+            if let code = error.code { errorDictionary["code"] = code }
+            if let message = error.message { errorDictionary["message"] = message }
+            payload["error"] = errorDictionary
         }
 
         sendJSON([
@@ -508,7 +660,7 @@ class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     private func makeErrorResult(id: String, code: String, message: String) -> OpenClawNodeInvokeResult {
-        return OpenClawNodeInvokeResult(
+        OpenClawNodeInvokeResult(
             id: id,
             nodeId: nodeId,
             ok: false,
@@ -517,7 +669,7 @@ class OpenClawNodeService: NSObject, ObservableObject {
         )
     }
 
-    // MARK: - Keepalive
+    // MARK: - Keepalive and reconnection
 
     private func startTickWatchdog() {
         tickTask?.cancel()
@@ -529,15 +681,20 @@ class OpenClawNodeService: NSObject, ObservableObject {
                     "type": "req",
                     "id": UUID().uuidString,
                     "method": "tick",
-                    "params": ["ts": Int64(Date().timeIntervalSince1970 * 1000)]
-                ] as [String: Any])
+                    "params": ["ts": Int64(Date().timeIntervalSince1970 * 1_000)]
+                ])
             }
         }
     }
 
-    // MARK: - Reconnection
+    private func scheduleDisconnectHandling() {
+        Task { @MainActor [weak self] in
+            self?.handleDisconnectOnMain()
+        }
+    }
 
-    private func handleDisconnect() {
+    @MainActor
+    private func handleDisconnectOnMain() {
         guard connectionState != .disconnected else { return }
 
         webSocket = nil
@@ -552,14 +709,16 @@ class OpenClawNodeService: NSObject, ObservableObject {
 
         reconnectAttempts += 1
         if reconnectAttempts > Self.maxReconnectAttempts {
-            print("[OpenClaw] Max reconnect attempts reached, giving up")
-            connectionState = .error("连接失败，已重试 \(Self.maxReconnectAttempts) 次")
+            print("[OpenClaw][ERROR] 최대 재연결 횟수 초과 attempts=\(Self.maxReconnectAttempts)")
+            connectionState = .error("연결에 실패했습니다. \(Self.maxReconnectAttempts)회 재시도했습니다")
             shouldReconnect = false
+            isEnabled = false
+            saveSettings()
             return
         }
 
-        let delay = min(Double(1 << reconnectAttempts), 30.0) // 2, 4, 8, 16, 30s
-        print("[OpenClaw] Reconnect attempt \(reconnectAttempts)/\(Self.maxReconnectAttempts) in \(delay)s")
+        let delay = min(Double(1 << reconnectAttempts), 30.0)
+        print("[OpenClaw][WARN] 재연결 예약 attempt=\(reconnectAttempts)/\(Self.maxReconnectAttempts) delay=\(delay)s")
         connectionState = .disconnected
         scheduleReconnect(delay: delay)
     }
@@ -570,51 +729,87 @@ class OpenClawNodeService: NSObject, ObservableObject {
             try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
             guard !Task.isCancelled else { return }
 
-            Task { @MainActor in
+            await MainActor.run {
                 guard let self, self.shouldReconnect else { return }
                 self.startConnection()
             }
         }
+    }
+
+    // MARK: - Image size control
+
+    private func compressedImageData(_ image: UIImage) -> Data? {
+        for quality in [0.70, 0.55, 0.40, 0.30] {
+            if let data = image.jpegData(compressionQuality: quality),
+               data.count <= Self.maximumImageUploadSize {
+                return data
+            }
+        }
+        return nil
     }
 }
 
 // MARK: - URLSessionWebSocketDelegate
 
 extension OpenClawNodeService: URLSessionWebSocketDelegate {
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        print("[OpenClaw] WebSocket opened, starting receive loop")
-        // Start receiving immediately
-        webSocketTask.receive { [weak self] result in
-            switch result {
-            case .success(let message):
-                self?.handleMessage(message)
-                self?.receiveMessage()
-            case .failure(let error):
-                print("[OpenClaw] First receive FAILED: \(error) | \(error.localizedDescription)")
-            }
-        }
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
+    ) {
+        print("[OpenClaw][INFO] WebSocket 열림 protocol=\(`protocol` ?? "-")")
+        receiveMessage()
     }
 
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        print("[OpenClaw] WebSocket closed: \(closeCode.rawValue)")
-        handleDisconnect()
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
+        let reasonText = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "-"
+        print("[OpenClaw][WARN] WebSocket 닫힘 code=\(closeCode.rawValue) reason=\(reasonText)")
+        scheduleDisconnectHandling()
     }
 
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: (any Error)?) {
-        if let error {
-            print("[OpenClaw] Connection error: \(error.localizedDescription)")
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let error else { return }
+        let nsError = error as NSError
+        print("[OpenClaw][ERROR] 연결 작업 종료 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+
+        if shouldReconnect {
             DispatchQueue.main.async {
-                self.connectionState = .error(error.localizedDescription)
+                self.connectionState = .error("Gateway 연결 오류: \(nsError.localizedDescription)")
             }
-            handleDisconnect()
+            scheduleDisconnectHandling()
         }
     }
 }
 
-// MARK: - Helpers
+// MARK: - Errors and helpers
+
+private enum OpenClawTransportError: LocalizedError {
+    case invalidHost
+    case invalidPort(Int)
+    case unsupportedScheme(String)
+    case insecurePublicWebSocket(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalidHost:
+            return "Gateway 호스트가 올바르지 않습니다"
+        case .invalidPort(let port):
+            return "Gateway 포트가 올바르지 않습니다: \(port)"
+        case .unsupportedScheme(let scheme):
+            return "지원하지 않는 연결 방식입니다: \(scheme)"
+        case .insecurePublicWebSocket(let host):
+            return "공인망 호스트 \(host)에는 암호화된 wss:// 연결만 사용할 수 있습니다"
+        }
+    }
+}
 
 private extension Int {
     func nonZeroOrDefault(_ defaultValue: Int) -> Int {
-        return self != 0 ? self : defaultValue
+        self != 0 ? self : defaultValue
     }
 }
