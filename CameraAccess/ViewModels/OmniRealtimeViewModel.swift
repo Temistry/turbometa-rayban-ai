@@ -253,7 +253,7 @@ final class OmniRealtimeViewModel: ObservableObject {
 
         let model = provider == .alibaba
             ? "qwen3-omni-flash-realtime"
-            : "gemini-2.0-flash-exp"
+            : "gemini-3.1-flash-live-preview"
 
         let record = ConversationRecord(
             messages: conversationHistory,
