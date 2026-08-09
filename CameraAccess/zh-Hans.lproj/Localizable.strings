@@ -1,398 +1,395 @@
 /*
- * 中文本地化字符串
- * Simplified Chinese Localization
+ * 한국어 전용 로컬라이제이션
+ * 기존 zh-Hans 리소스 컨테이너를 한국어 리소스로 재사용합니다.
  */
 
 // MARK: - App General
 "app.name" = "TurboMeta";
-"app.subtitle" = "RayBan Meta助手";
-"ok" = "确定";
-"cancel" = "取消";
-"close" = "关闭";
-"done" = "完成";
-"error" = "错误";
-"loading" = "加载中...";
-"save" = "保存";
-"delete" = "删除";
-"retry" = "重试";
-"back" = "返回";
+"app.subtitle" = "Ray-Ban Meta 도우미";
+"ok" = "확인";
+"cancel" = "취소";
+"close" = "닫기";
+"done" = "완료";
+"error" = "오류";
+"loading" = "불러오는 중...";
+"save" = "저장";
+"delete" = "삭제";
+"retry" = "다시 시도";
+"back" = "뒤로";
 
 // MARK: - Home Screen
-"home.title" = "首页";
+"home.title" = "홈";
 "home.liveai.title" = "Live AI";
-"home.liveai.subtitle" = "实时对话";
-"home.quickvision.title" = "快速识图";
-"home.quickvision.subtitle" = "Siri 语音触发";
-"home.translate.title" = "实时翻译";
-"home.translate.subtitle" = "即时翻译";
+"home.liveai.subtitle" = "실시간 대화";
+"home.quickvision.title" = "퀵비전";
+"home.quickvision.subtitle" = "Siri 음성 실행";
+"home.translate.title" = "실시간 번역";
+"home.translate.subtitle" = "즉시 번역";
 "home.leaneat.title" = "LeanEat";
-"home.leaneat.subtitle" = "卡路里识别";
+"home.leaneat.subtitle" = "칼로리 인식";
 "home.wordlearn.title" = "WordLearn";
-"home.wordlearn.subtitle" = "单词学习";
-"home.livestream.title" = "直播";
-"home.livestream.subtitle" = "抖音 · 快手 · 小红书";
-"home.rtmp.title" = "RTMP 推流";
-"home.rtmp.subtitle" = "YouTube · Twitch · B站";
-"home.experimental" = "实验性";
-"home.comingsoon" = "敬请期待";
+"home.wordlearn.subtitle" = "단어 학습";
+"home.livestream.title" = "라이브";
+"home.livestream.subtitle" = "Douyin · Kuaishou · Xiaohongshu";
+"home.rtmp.title" = "RTMP 송출";
+"home.rtmp.subtitle" = "YouTube · Twitch · Bilibili";
+"home.experimental" = "실험 기능";
+"home.comingsoon" = "준비 중";
 
 // MARK: - Live AI
 "liveai.title" = "Live AI";
-"liveai.connected" = "已连接";
-"liveai.connecting" = "连接中...";
-"liveai.disconnected" = "未连接";
-"liveai.speaking" = "AI 说话中";
-"liveai.listening" = "正在听...";
-"liveai.thinking" = "思考中...";
-"liveai.stop" = "停止";
-"liveai.start" = "开始";
-"liveai.device.notconnected.title" = "未连接RayBan Meta眼镜";
-"liveai.device.notconnected.message" = "请先在首页连接你的智能眼镜，\n然后再使用Live AI功能";
-"liveai.device.backtohome" = "返回首页";
+"liveai.connected" = "연결됨";
+"liveai.connecting" = "연결 중...";
+"liveai.disconnected" = "연결 안 됨";
+"liveai.speaking" = "AI가 말하는 중";
+"liveai.listening" = "듣는 중...";
+"liveai.thinking" = "생각 중...";
+"liveai.stop" = "중지";
+"liveai.start" = "시작";
+"liveai.device.notconnected.title" = "Ray-Ban Meta 안경이 연결되지 않았습니다";
+"liveai.device.notconnected.message" = "먼저 홈에서 스마트 안경을 연결한 뒤\nLive AI 기능을 사용하세요";
+"liveai.device.backtohome" = "홈으로 돌아가기";
 
 // MARK: - Quick Vision
-"quickvision.title" = "快速识图";
-"quickvision.recognizing" = "正在识别";
-"quickvision.result" = "识别结果";
-"quickvision.start" = "开始识图";
-"quickvision.processing" = "识别中...";
-"quickvision.glasses.notconnected" = "眼镜未连接";
-"quickvision.siri.tip.title" = "Siri 快捷指令";
-"quickvision.siri.tip.description" = "你可以通过以下方式触发快速识图：";
-"quickvision.siri.tip.voice" = "嘿 Siri，用 TurboMeta 识图";
-"quickvision.siri.tip.action" = "添加到快捷指令 App 的锁屏小组件";
-"quickvision.siri.support" = "支持 Siri 和快捷指令";
-"quickvision.stop.speaking" = "停止播报";
-"quickvision.replay" = "重新播报";
-"quickvision.error.nodevice" = "眼镜未连接，请先在 Meta View 中配对眼镜";
-"quickvision.error.streamfailed" = "视频流启动失败，请检查眼镜连接状态";
-"quickvision.error.timeout" = "等待视频帧超时，请重试";
-"quickvision.error.noimage" = "无法处理图片";
-"quickvision.error.apikey" = "请先在设置中配置 API Key";
+"quickvision.title" = "퀵비전";
+"quickvision.recognizing" = "인식 중";
+"quickvision.result" = "인식 결과";
+"quickvision.start" = "인식 시작";
+"quickvision.processing" = "인식 중...";
+"quickvision.glasses.notconnected" = "안경 연결 안 됨";
+"quickvision.siri.tip.title" = "Siri 단축어";
+"quickvision.siri.tip.description" = "다음 방법으로 퀵비전을 실행할 수 있습니다:";
+"quickvision.siri.tip.voice" = "Siri야, TurboMeta로 인식해줘";
+"quickvision.siri.tip.action" = "단축어 앱의 잠금 화면 위젯에 추가";
+"quickvision.siri.support" = "Siri 및 단축어 지원";
+"quickvision.stop.speaking" = "음성 중지";
+"quickvision.replay" = "다시 읽기";
+"quickvision.error.nodevice" = "안경이 연결되지 않았습니다. Meta View에서 먼저 안경을 페어링하세요";
+"quickvision.error.streamfailed" = "영상 스트림을 시작하지 못했습니다. 안경 연결 상태를 확인하세요";
+"quickvision.error.timeout" = "영상 프레임 대기 시간이 초과되었습니다. 다시 시도하세요";
+"quickvision.error.noimage" = "이미지를 처리할 수 없습니다";
+"quickvision.error.apikey" = "설정에서 API Key를 먼저 등록하세요";
 
-// MARK: - Stream View (Camera)
-"stream.title" = "拍照";
-"stream.stop" = "停止直播";
-"stream.photo" = "拍照";
-"stream.timer" = "定时器";
-"stream.ending" = "直播将在 %@ 后结束";
-"stream.device.notconnected.title" = "未连接RayBan Meta眼镜";
-"stream.device.notconnected.message" = "请先在首页连接你的智能眼镜，\n然后再使用直播功能";
-"stream.device.backtohome" = "返回首页";
-"stream.connecting" = "正在连接眼镜...";
-"stream.waiting" = "等待视频流...";
+// MARK: - Stream View
+"stream.title" = "촬영";
+"stream.stop" = "라이브 중지";
+"stream.photo" = "사진 촬영";
+"stream.timer" = "타이머";
+"stream.ending" = "라이브가 %@ 후 종료됩니다";
+"stream.device.notconnected.title" = "Ray-Ban Meta 안경이 연결되지 않았습니다";
+"stream.device.notconnected.message" = "먼저 홈에서 스마트 안경을 연결한 뒤\n라이브 기능을 사용하세요";
+"stream.device.backtohome" = "홈으로 돌아가기";
+"stream.connecting" = "안경에 연결 중...";
+"stream.waiting" = "영상 스트림 대기 중...";
 
 // MARK: - Photo Preview
-"photo.share" = "分享";
-"photo.ai" = "AI 识别";
-"photo.nutrition" = "营养分析";
-"photo.save" = "保存到相册";
-"photo.saved" = "已保存";
+"photo.share" = "공유";
+"photo.ai" = "AI 인식";
+"photo.nutrition" = "영양 분석";
+"photo.save" = "사진 앱에 저장";
+"photo.saved" = "저장됨";
 
-// MARK: - LeanEat (Nutrition Analysis)
-"leaneat.title" = "营养分析";
-"leaneat.analyzing" = "分析中...";
-"leaneat.healthscore" = "健康评分";
-"leaneat.totalnutrition" = "总营养";
-"leaneat.calories" = "热量";
-"leaneat.protein" = "蛋白质";
-"leaneat.fat" = "脂肪";
-"leaneat.carbs" = "碳水";
-"leaneat.fiber" = "膳食纤维";
-"leaneat.sugar" = "糖分";
-"leaneat.foods" = "食物详情";
-"leaneat.suggestions" = "营养建议";
-"leaneat.portion" = "份量";
-"leaneat.rating.excellent" = "优秀";
-"leaneat.rating.good" = "良好";
-"leaneat.rating.fair" = "一般";
-"leaneat.rating.poor" = "较差";
-"leaneat.healthscore.excellent" = "非常健康";
-"leaneat.healthscore.good" = "比较健康";
-"leaneat.healthscore.fair" = "还不错";
-"leaneat.healthscore.poor" = "需要改善";
-"leaneat.error.title" = "分析失败";
-"leaneat.retry" = "重试";
+// MARK: - LeanEat
+"leaneat.title" = "영양 분석";
+"leaneat.analyzing" = "분석 중...";
+"leaneat.healthscore" = "건강 점수";
+"leaneat.totalnutrition" = "총 영양 정보";
+"leaneat.calories" = "칼로리";
+"leaneat.protein" = "단백질";
+"leaneat.fat" = "지방";
+"leaneat.carbs" = "탄수화물";
+"leaneat.fiber" = "식이섬유";
+"leaneat.sugar" = "당류";
+"leaneat.foods" = "음식 상세";
+"leaneat.suggestions" = "영양 조언";
+"leaneat.portion" = "분량";
+"leaneat.rating.excellent" = "매우 좋음";
+"leaneat.rating.good" = "좋음";
+"leaneat.rating.fair" = "보통";
+"leaneat.rating.poor" = "주의";
+"leaneat.healthscore.excellent" = "매우 건강함";
+"leaneat.healthscore.good" = "건강한 편";
+"leaneat.healthscore.fair" = "무난함";
+"leaneat.healthscore.poor" = "개선 필요";
+"leaneat.error.title" = "분석 실패";
+"leaneat.retry" = "다시 시도";
 
 // MARK: - Vision Recognition
-"vision.title" = "AI 图像识别";
-"vision.analyzing" = "AI 分析中...";
-"vision.result" = "识别结果";
+"vision.title" = "AI 이미지 인식";
+"vision.analyzing" = "AI 분석 중...";
+"vision.result" = "인식 결과";
 
 // MARK: - Records
-"records.title" = "记录";
-"records.empty" = "暂无记录";
-"records.conversation" = "对话记录";
-"records.date" = "日期";
+"records.title" = "기록";
+"records.empty" = "기록이 없습니다";
+"records.conversation" = "대화 기록";
+"records.date" = "날짜";
 
 // MARK: - Gallery
-"gallery.title" = "图库";
-"gallery.empty" = "暂无照片";
+"gallery.title" = "갤러리";
+"gallery.empty" = "사진이 없습니다";
 
 // MARK: - Settings
-"settings.title" = "我的";
-"settings.device" = "设备管理";
-"settings.device.status" = "设备状态";
-"settings.device.online" = "在线";
-"settings.device.offline" = "离线";
-"settings.device.connected" = "已连接";
-"settings.device.notconnected" = "未连接";
-"settings.device.stream" = "视频流";
-"settings.device.stream.active" = "活跃";
-"settings.device.stream.inactive" = "未启动";
-"settings.ai" = "AI 设置";
+"settings.title" = "내 정보";
+"settings.device" = "기기 관리";
+"settings.device.status" = "기기 상태";
+"settings.device.online" = "온라인";
+"settings.device.offline" = "오프라인";
+"settings.device.connected" = "연결됨";
+"settings.device.notconnected" = "연결 안 됨";
+"settings.device.stream" = "영상 스트림";
+"settings.device.stream.active" = "활성";
+"settings.device.stream.inactive" = "시작 안 됨";
+"settings.ai" = "AI 설정";
 
 // API Provider
-"settings.provider" = "API 提供商";
-"settings.provider.select" = "选择 API 提供商";
-"settings.provider.description" = "选择用于 AI 识图的 API 服务提供商";
-"settings.provider.alibaba.desc" = "阿里云通义千问视觉模型";
-"settings.provider.openrouter.desc" = "统一接口，500+ AI 模型";
-"settings.provider.getapikey" = "获取 API Key";
+"settings.provider" = "API 제공자";
+"settings.provider.select" = "API 제공자 선택";
+"settings.provider.description" = "AI 이미지 인식에 사용할 API 서비스를 선택합니다";
+"settings.provider.alibaba.desc" = "Alibaba Cloud Qwen 비전 모델";
+"settings.provider.openrouter.desc" = "500개 이상의 AI 모델을 하나의 API로 사용";
+"settings.provider.getapikey" = "API Key 발급";
 
 // Model Settings
-"settings.model" = "模型设置";
-"settings.model.select" = "选择模型";
-"settings.model.current" = "当前使用";
-"settings.model.alibaba" = "阿里云模型";
-"settings.model.openrouter" = "OpenRouter 模型";
-"settings.model.qwen3vlplus.desc" = "高性能视觉理解模型";
-"settings.model.qwen3vlmax.desc" = "最强视觉理解模型";
-"settings.model.search" = "搜索模型...";
-"settings.model.visiononly" = "仅显示支持视觉的模型";
-"settings.model.loading" = "加载模型列表...";
-"settings.model.retry" = "重试";
-"settings.model.notfound" = "未找到匹配的模型";
+"settings.model" = "모델 설정";
+"settings.model.select" = "모델 선택";
+"settings.model.current" = "현재 사용";
+"settings.model.alibaba" = "Alibaba Cloud 모델";
+"settings.model.openrouter" = "OpenRouter 모델";
+"settings.model.qwen3vlplus.desc" = "고성능 비전 이해 모델";
+"settings.model.qwen3vlmax.desc" = "최상급 비전 이해 모델";
+"settings.model.search" = "모델 검색...";
+"settings.model.visiononly" = "비전 지원 모델만 표시";
+"settings.model.loading" = "모델 목록 불러오는 중...";
+"settings.model.retry" = "다시 시도";
+"settings.model.notfound" = "조건에 맞는 모델이 없습니다";
 
 // Endpoint Settings
-"settings.endpoint" = "服务区域";
-"settings.endpoint.beijing.desc" = "中国大陆用户使用";
-"settings.endpoint.singapore.desc" = "海外用户使用";
-"settings.endpoint.description" = "不同区域的 API Key 不能互通使用";
+"settings.endpoint" = "서비스 지역";
+"settings.endpoint.beijing.desc" = "중국 본토 사용자용";
+"settings.endpoint.singapore.desc" = "해외 사용자용";
+"settings.endpoint.description" = "지역마다 API Key가 다르며 서로 호환되지 않습니다";
 
 // Live AI Settings
 "settings.liveai" = "Live AI";
-"settings.liveai.provider" = "Live AI 提供商";
-"settings.liveai.provider.select" = "选择 Live AI 提供商";
-"settings.liveai.provider.description" = "选择用于实时语音对话的 AI 提供商";
-"settings.liveai.alibaba.desc" = "通义千问 Omni 实时音频模型";
-"settings.liveai.google.desc" = "Gemini Live 实时音频模型";
+"settings.liveai.provider" = "Live AI 제공자";
+"settings.liveai.provider.select" = "Live AI 제공자 선택";
+"settings.liveai.provider.description" = "실시간 음성 대화에 사용할 AI 제공자를 선택합니다";
+"settings.liveai.alibaba.desc" = "Qwen Omni 실시간 오디오 모델";
+"settings.liveai.google.desc" = "Gemini Live 실시간 오디오 모델";
 
-"settings.language" = "输出语言";
-"settings.language.select" = "选择输出语言";
-"settings.language.description" = "AI 将使用该语言进行语音输出和文字回复";
-"settings.applanguage" = "App 语言";
-"settings.applanguage.select" = "选择 App 语言";
-"settings.applanguage.description" = "更改 App 界面语言";
-"settings.applanguage.restart.title" = "需要重启";
-"settings.applanguage.restart.message" = "切换语言需要重启 App 才能生效";
-"settings.applanguage.restart.confirm" = "立即重启";
+"settings.language" = "출력 언어";
+"settings.language.select" = "출력 언어 선택";
+"settings.language.description" = "AI가 이 언어로 음성과 텍스트를 출력합니다";
+"settings.applanguage" = "앱 언어";
+"settings.applanguage.select" = "앱 언어 선택";
+"settings.applanguage.description" = "앱 화면의 표시 언어를 변경합니다";
+"settings.applanguage.restart.title" = "앱 재시작 필요";
+"settings.applanguage.restart.message" = "언어 변경을 적용하려면 앱을 다시 시작해야 합니다";
+"settings.applanguage.restart.confirm" = "지금 재시작";
 
 // API Key
-"settings.apikey" = "API Key 管理";
-"settings.apikey.manage" = "API Key 管理";
-"settings.apikey.status" = "API Key 状态";
-"settings.apikey.configured" = "已配置";
-"settings.apikey.notconfigured" = "未配置";
-"settings.apikey.placeholder" = "请输入 API Key";
-"settings.apikey.alibaba.help" = "请前往阿里云控制台获取您的 API Key";
-"settings.apikey.openrouter.help" = "请前往 OpenRouter 网站获取您的 API Key";
-"settings.apikey.google.help" = "请前往 Google AI Studio 获取您的 API Key";
-"settings.apikey.get" = "获取 API Key";
-"settings.apikey.delete" = "删除 API Key";
-"settings.apikey.saved" = "保存成功";
-"settings.apikey.saved.message" = "API Key 已安全保存";
-"settings.apikey.empty" = "API Key 不能为空";
-"settings.apikey.savefailed" = "保存失败，请重试";
-"settings.apikey.deletefailed" = "删除失败，请重试";
+"settings.apikey" = "API Key 관리";
+"settings.apikey.manage" = "API Key 관리";
+"settings.apikey.status" = "API Key 상태";
+"settings.apikey.configured" = "설정됨";
+"settings.apikey.notconfigured" = "설정 안 됨";
+"settings.apikey.placeholder" = "API Key를 입력하세요";
+"settings.apikey.alibaba.help" = "Alibaba Cloud 콘솔에서 API Key를 발급받으세요";
+"settings.apikey.openrouter.help" = "OpenRouter 웹사이트에서 API Key를 발급받으세요";
+"settings.apikey.google.help" = "Google AI Studio에서 API Key를 발급받으세요";
+"settings.apikey.get" = "API Key 발급";
+"settings.apikey.delete" = "API Key 삭제";
+"settings.apikey.saved" = "저장 완료";
+"settings.apikey.saved.message" = "API Key를 안전하게 저장했습니다";
+"settings.apikey.empty" = "API Key는 비워둘 수 없습니다";
+"settings.apikey.savefailed" = "저장에 실패했습니다. 다시 시도하세요";
+"settings.apikey.deletefailed" = "삭제에 실패했습니다. 다시 시도하세요";
 
-"settings.quality" = "视频画质";
-"settings.quality.select" = "选择视频画质";
-"settings.quality.description" = "更高的画质会消耗更多电量";
-"settings.quality.low" = "低画质";
-"settings.quality.low.desc" = "省电模式，适合长时间使用";
-"settings.quality.medium" = "中画质";
-"settings.quality.medium.desc" = "平衡模式（推荐）";
-"settings.quality.high" = "高画质";
-"settings.quality.high.desc" = "最佳画质，耗电较快";
-"settings.about" = "关于";
-"settings.version" = "版本";
-"settings.sdkversion" = "SDK 版本";
+"settings.quality" = "영상 화질";
+"settings.quality.select" = "영상 화질 선택";
+"settings.quality.description" = "화질이 높을수록 배터리 사용량이 증가합니다";
+"settings.quality.low" = "낮은 화질";
+"settings.quality.low.desc" = "절전 모드, 장시간 사용에 적합";
+"settings.quality.medium" = "중간 화질";
+"settings.quality.medium.desc" = "균형 모드, 권장";
+"settings.quality.high" = "높은 화질";
+"settings.quality.high.desc" = "최고 화질, 배터리 소모가 큼";
+"settings.about" = "정보";
+"settings.version" = "버전";
+"settings.sdkversion" = "SDK 버전";
 
 // MARK: - Tabs
-"tab.home" = "首页";
-"tab.records" = "记录";
-"tab.gallery" = "图库";
-"tab.settings" = "我的";
+"tab.home" = "홈";
+"tab.records" = "기록";
+"tab.gallery" = "갤러리";
+"tab.settings" = "내 정보";
 
 // MARK: - Errors
-"error.network" = "网络错误，请检查网络连接";
-"error.api" = "API 错误";
-"error.api.code" = "API 错误: %d";
-"error.permission.denied" = "权限被拒绝，请在设置中开启";
-"error.device.notfound" = "未找到设备";
-"error.device.notconnected" = "设备未连接";
-"error.timeout" = "操作超时，请重试";
-"error.unknown" = "未知错误";
-"error.invalidresponse" = "无效的响应";
-"error.noaudiodata" = "未收到音频数据";
-"error.playbackfailed" = "音频播放失败";
+"error.network" = "네트워크 오류입니다. 인터넷 연결을 확인하세요";
+"error.api" = "API 오류";
+"error.api.code" = "API 오류: %d";
+"error.permission.denied" = "권한이 거부되었습니다. iOS 설정에서 허용하세요";
+"error.device.notfound" = "기기를 찾을 수 없습니다";
+"error.device.notconnected" = "기기가 연결되지 않았습니다";
+"error.timeout" = "작업 시간이 초과되었습니다. 다시 시도하세요";
+"error.unknown" = "알 수 없는 오류";
+"error.invalidresponse" = "잘못된 응답입니다";
+"error.noaudiodata" = "오디오 데이터를 받지 못했습니다";
+"error.playbackfailed" = "오디오 재생에 실패했습니다";
 
 // MARK: - TTS
-"tts.speaking" = "播报中...";
-"tts.stopped" = "已停止";
+"tts.speaking" = "읽는 중...";
+"tts.stopped" = "중지됨";
 
 // MARK: - Units
-"unit.kcal" = "千卡";
-"unit.gram" = "克";
+"unit.kcal" = "kcal";
+"unit.gram" = "그램";
 "unit.g" = "g";
 
 // MARK: - AI Prompts
-"prompt.quickvision" = "你是一个智能眼镜AI助手。请用简洁的中文描述图片内容，适合语音播报。\n\n要求：\n1. 用1-2句话描述主要内容\n2. 语言自然、口语化\n3. 不要使用标点符号过多\n4. 总字数控制在50字以内\n5. 直接描述，不要说\"图片中\"或\"我看到\"";
-"prompt.liveai" = "你是RayBan Meta智能眼镜AI助手。\n\n【重要】必须始终用中文回答，无论用户说什么语言。\n\n回答要简练、口语化，像朋友聊天一样。用户戴着眼镜可以看到周围环境，根据画面快速给出有用的建议。不要啰嗦，直接说重点。";
+"prompt.quickvision" = "당신은 스마트 안경 AI 도우미입니다. 이미지의 핵심 내용을 자연스러운 한국어로 짧게 설명하세요. 음성으로 듣기 좋게 1~2문장, 50자 안팎으로 답하고 '이미지에서'나 '제가 보기에는' 같은 표현은 쓰지 마세요.";
+"prompt.liveai" = "당신은 Ray-Ban Meta 스마트 안경 AI 도우미입니다. 사용자가 어떤 언어로 말하더라도 항상 한국어로 답하세요. 답변은 짧고 자연스러운 구어체로 하며, 사용자가 보고 있는 화면을 바탕으로 필요한 정보를 바로 알려주세요.";
 
 // MARK: - Quick Vision Modes
-"prompt.quickvision.health" = "分析这个食品/饮料的健康程度。从以下角度科学分析：\n1. 营养成分是否均衡\n2. 添加剂和防腐剂情况\n3. 糖分/盐分/脂肪含量\n4. 对身体的潜在影响\n5. 给出健康建议\n\n用简洁口语化的方式回答，适合语音播报，控制在100字以内。";
-"prompt.quickvision.blind" = "为视障用户详细描述眼前的环境，包括：\n1. 周围有什么物体和人\n2. 大概的距离和方位\n3. 是否有障碍物或危险\n4. 环境的整体氛围（室内/室外、明暗等）\n5. 任何需要注意的细节\n\n描述要清晰、具体，使用方位词（前方、左侧等），控制在80字以内。";
-"prompt.quickvision.reading" = "识别并朗读图片中的文字内容。要求：\n1. 准确识别所有可见文字\n2. 按照阅读顺序组织内容\n3. 如果是菜单/标牌，说明类型\n4. 如果文字不清晰，说明情况\n\n直接朗读文字内容，不需要额外解释。";
-"prompt.quickvision.translate" = "识别图片中的文字，并翻译成{LANGUAGE}。要求：\n1. 准确识别所有可见文字\n2. 翻译要准确、自然\n3. 如果有多段文字，分段翻译\n4. 直接说翻译结果，不需要说明原文\n\n适合语音播报，控制在100字以内。";
-"prompt.quickvision.encyclopedia" = "识别图片中的物体、建筑、艺术品或生物，提供百科知识介绍。包括：\n1. 名称和分类\n2. 历史背景或来源\n3. 有趣的知识点\n4. 相关文化意义\n\n像博物馆讲解员一样，生动有趣，适合语音播报，控制在100字以内。";
+"prompt.quickvision.health" = "이 음식이나 음료의 건강성을 한국어로 분석하세요. 영양 균형, 첨가물, 당·나트륨·지방, 잠재적 영향, 건강 조언을 포함하되 음성으로 듣기 좋게 100자 안팎으로 간결하게 답하세요.";
+"prompt.quickvision.blind" = "시각장애 사용자를 위해 현재 환경을 한국어로 설명하세요. 주변 물체와 사람, 대략적인 거리와 방향, 장애물이나 위험, 실내·실외와 밝기, 주의할 점을 포함하고 앞·왼쪽·오른쪽 같은 방향 표현을 사용해 80자 안팎으로 답하세요.";
+"prompt.quickvision.reading" = "이미지 속 글자를 정확히 인식해 한국어로 읽어 주세요. 읽는 순서대로 구성하고 메뉴나 표지판이면 종류를 알려 주세요. 글자가 흐리면 그 사실을 말하고, 별도의 불필요한 설명 없이 내용 자체를 읽어 주세요.";
+"prompt.quickvision.translate" = "이미지 속 글자를 인식해 {LANGUAGE}로 번역하세요. 모든 보이는 글자를 정확히 읽고 자연스럽게 번역하며, 여러 문단은 나누어 번역하세요. 원문 설명 없이 번역 결과만 음성으로 듣기 좋게 100자 안팎으로 답하세요.";
+"prompt.quickvision.encyclopedia" = "이미지 속 물체, 건축물, 예술품 또는 생물을 식별하고 한국어로 간단한 백과 정보를 알려 주세요. 이름과 분류, 배경이나 유래, 흥미로운 사실, 문화적 의미를 포함해 박물관 해설처럼 100자 안팎으로 답하세요.";
 
-"quickvision.mode.standard" = "默认模式";
-"quickvision.mode.health" = "健康识图";
-"quickvision.mode.blind" = "盲人模式";
-"quickvision.mode.reading" = "阅读模式";
-"quickvision.mode.translate" = "翻译模式";
-"quickvision.mode.encyclopedia" = "百科模式";
-"quickvision.mode.custom" = "自定义提示词";
+"quickvision.mode.standard" = "기본 모드";
+"quickvision.mode.health" = "건강 분석";
+"quickvision.mode.blind" = "시각 보조";
+"quickvision.mode.reading" = "읽기 모드";
+"quickvision.mode.translate" = "번역 모드";
+"quickvision.mode.encyclopedia" = "백과 모드";
+"quickvision.mode.custom" = "사용자 지정 프롬프트";
 
-"quickvision.mode.standard.desc" = "通用图像描述";
-"quickvision.mode.health.desc" = "分析食品健康程度";
-"quickvision.mode.blind.desc" = "为视障用户描述环境";
-"quickvision.mode.reading.desc" = "识别并朗读文字";
-"quickvision.mode.translate.desc" = "识别并翻译文字";
-"quickvision.mode.encyclopedia.desc" = "百科知识介绍";
-"quickvision.mode.custom.desc" = "使用自定义提示词";
+"quickvision.mode.standard.desc" = "일반 이미지 설명";
+"quickvision.mode.health.desc" = "식품의 건강성 분석";
+"quickvision.mode.blind.desc" = "시각장애 사용자를 위한 환경 설명";
+"quickvision.mode.reading.desc" = "글자를 인식해 읽기";
+"quickvision.mode.translate.desc" = "글자를 인식해 번역";
+"quickvision.mode.encyclopedia.desc" = "대상에 대한 백과 정보";
+"quickvision.mode.custom.desc" = "직접 만든 프롬프트 사용";
 
-"quickvision.settings" = "识图设置";
-"quickvision.settings.mode" = "识图模式";
-"quickvision.settings.customprompt" = "自定义提示词";
-"quickvision.settings.targetlanguage" = "翻译目标语言";
-"quickvision.settings.history" = "识图历史";
-"quickvision.history" = "识图历史";
-"quickvision.history.empty" = "暂无识图记录";
-"quickvision.history.clear" = "清空历史";
-"quickvision.history.clear.confirm" = "确定要清空所有识图历史吗？";
-"quickvision.today" = "今天";
-"quickvision.yesterday" = "昨天";
-"quickvision.custom.default" = "请用简洁的语言描述图片内容，适合语音播报。";
-"quickvision.tab" = "快速识图";
-"quickvision.records.empty" = "暂无识图记录";
-"quickvision.records.empty.hint" = "使用快速识图功能后记录将显示在这里";
+"quickvision.settings" = "퀵비전 설정";
+"quickvision.settings.mode" = "인식 모드";
+"quickvision.settings.customprompt" = "사용자 지정 프롬프트";
+"quickvision.settings.targetlanguage" = "번역 대상 언어";
+"quickvision.settings.history" = "퀵비전 기록";
+"quickvision.history" = "퀵비전 기록";
+"quickvision.history.empty" = "인식 기록이 없습니다";
+"quickvision.history.clear" = "기록 삭제";
+"quickvision.history.clear.confirm" = "모든 퀵비전 기록을 삭제할까요?";
+"quickvision.today" = "오늘";
+"quickvision.yesterday" = "어제";
+"quickvision.custom.default" = "이미지의 내용을 음성으로 듣기 좋게 간결한 한국어로 설명해 주세요.";
+"quickvision.tab" = "퀵비전";
+"quickvision.records.empty" = "인식 기록이 없습니다";
+"quickvision.records.empty.hint" = "퀵비전을 사용하면 기록이 여기에 표시됩니다";
 
 // MARK: - Live AI Modes
-"liveai.mode.standard" = "默认模式";
-"liveai.mode.museum" = "博物馆模式";
-"liveai.mode.blind" = "盲人模式";
-"liveai.mode.reading" = "阅读模式";
-"liveai.mode.translate" = "翻译模式";
-"liveai.mode.custom" = "自定义提示词";
+"liveai.mode.standard" = "기본 모드";
+"liveai.mode.museum" = "박물관 모드";
+"liveai.mode.blind" = "시각 보조";
+"liveai.mode.reading" = "읽기 모드";
+"liveai.mode.translate" = "번역 모드";
+"liveai.mode.custom" = "사용자 지정 프롬프트";
 
-"liveai.mode.standard.desc" = "自由对话，语音触发时看图";
-"liveai.mode.museum.desc" = "博物馆讲解员，介绍展品知识";
-"liveai.mode.blind.desc" = "详细描述环境，辅助视障用户";
-"liveai.mode.reading.desc" = "识别并朗读文字内容";
-"liveai.mode.translate.desc" = "实时翻译看到的文字";
-"liveai.mode.custom.desc" = "使用自定义系统提示词";
+"liveai.mode.standard.desc" = "자유 대화, 음성 감지 시 화면 확인";
+"liveai.mode.museum.desc" = "전시품을 설명하는 박물관 해설";
+"liveai.mode.blind.desc" = "주변 환경을 자세히 설명";
+"liveai.mode.reading.desc" = "보이는 글자를 인식해 읽기";
+"liveai.mode.translate.desc" = "보이는 글자를 실시간 번역";
+"liveai.mode.custom.desc" = "사용자 지정 시스템 프롬프트 사용";
 
-"liveai.settings" = "对话模式";
-"liveai.settings.mode" = "对话模式";
-"liveai.settings.mode.footer" = "不同模式会改变 AI 的行为方式。重新连接后生效。";
-"liveai.settings.customprompt" = "自定义系统提示词";
-"liveai.settings.customprompt.footer" = "自定义 AI 的角色和行为，将在下次连接时生效。";
-"liveai.settings.targetlanguage" = "翻译目标语言";
-"liveai.custom.default" = "你是一个智能助手，帮助用户完成各种任务。请用简洁的语言回答问题。";
+"liveai.settings" = "대화 모드";
+"liveai.settings.mode" = "대화 모드";
+"liveai.settings.mode.footer" = "모드에 따라 AI 동작이 달라집니다. 다시 연결한 뒤 적용됩니다.";
+"liveai.settings.customprompt" = "사용자 지정 시스템 프롬프트";
+"liveai.settings.customprompt.footer" = "AI의 역할과 동작을 직접 지정합니다. 다음 연결부터 적용됩니다.";
+"liveai.settings.targetlanguage" = "번역 대상 언어";
+"liveai.custom.default" = "당신은 사용자의 작업을 돕는 AI 도우미입니다. 질문에 간결한 한국어로 답하세요.";
 
 // Live AI Mode Prompts
-"prompt.liveai.standard" = "你是RayBan Meta智能眼镜AI助手。\n\n【重要】必须始终用中文回答，无论用户说什么语言。\n\n回答要简练、口语化，像朋友聊天一样。用户戴着眼镜可以看到周围环境，根据画面快速给出有用的建议。不要啰嗦，直接说重点。";
-"prompt.liveai.museum" = "你是一位专业的博物馆讲解员AI助手。\n\n【重要】必须始终用中文回答。\n\n当用户看向展品时，请提供：\n1. 展品名称和基本信息\n2. 历史背景和文化意义\n3. 有趣的故事或知识点\n4. 与其他展品的关联\n\n像一位知识渊博又风趣的讲解员，让参观变得生动有趣。";
-"prompt.liveai.blind" = "你是视障用户的智能眼镜助手。\n\n【重要】必须始终用中文回答。\n\n你的任务是帮助用户理解周围环境：\n1. 详细描述周围的物体、人和环境\n2. 使用清晰的方位词（前方、左侧、右后方等）\n3. 指出可能的障碍物或危险\n4. 朗读标识、菜单等文字内容\n5. 提供安全、实用的导航建议\n\n说话清晰、有条理，优先说最重要的信息。";
-"prompt.liveai.reading" = "你是阅读辅助AI助手。\n\n【重要】必须始终用中文回答。\n\n你的任务是帮助用户阅读看到的文字：\n1. 准确识别并朗读所有可见文字\n2. 按照正确的阅读顺序组织内容\n3. 对于文档，说明文字的结构\n4. 对于外语，先读原文再翻译\n\n语速适中，吐字清晰，像一位专业的朗读者。";
-"prompt.liveai.translate" = "你是实时翻译AI助手。\n\n【重要】翻译结果必须使用{LANGUAGE}。\n\n你的任务是帮助用户理解看到的外语内容：\n1. 识别画面中的文字\n2. 翻译成{LANGUAGE}\n3. 如果是菜单或标识，说明其用途\n4. 对于专业术语，提供简单解释\n\n翻译要准确、自然、地道。";
+"prompt.liveai.standard" = "당신은 Ray-Ban Meta 스마트 안경 AI 도우미입니다. 사용자가 어떤 언어로 말하더라도 항상 한국어로 답하세요. 답변은 짧고 자연스럽게 하며 사용자가 보고 있는 장면을 바탕으로 바로 도움이 되는 정보를 주세요.";
+"prompt.liveai.museum" = "당신은 전문 박물관 해설 AI입니다. 항상 한국어로 답하세요. 사용자가 전시품을 바라보면 이름과 기본 정보, 역사적 배경과 문화적 의미, 흥미로운 이야기, 다른 전시품과의 연관성을 이해하기 쉽게 설명하세요.";
+"prompt.liveai.blind" = "당신은 시각장애 사용자를 돕는 스마트 안경 AI입니다. 항상 한국어로 답하세요. 주변 물체와 사람, 방향, 장애물과 위험, 표지판이나 메뉴의 글자, 안전한 이동에 필요한 정보를 중요한 순서대로 명확하게 알려 주세요.";
+"prompt.liveai.reading" = "당신은 읽기 보조 AI입니다. 항상 한국어로 답하세요. 보이는 모든 글자를 정확히 읽고 올바른 순서로 구성하며, 문서 구조를 설명하고 외국어는 원문을 읽은 뒤 한국어로 번역하세요.";
+"prompt.liveai.translate" = "당신은 실시간 번역 AI입니다. 번역 결과는 반드시 {LANGUAGE}로 출력하세요. 화면 속 글자를 인식해 자연스럽게 번역하고 메뉴나 표지판의 용도와 필요한 전문 용어 설명을 간단히 덧붙이세요.";
 
-// MARK: - RTMP 推流
-"rtmp.title" = "RTMP 推流";
-"rtmp.status.disconnected" = "未连接";
-"rtmp.status.connecting" = "连接中...";
-"rtmp.status.connected" = "已连接";
-"rtmp.status.streaming" = "推流中";
-"rtmp.connecting.video" = "正在连接视频流...";
-"rtmp.frames" = "帧数";
-"rtmp.time" = "时长";
-"rtmp.data" = "数据";
-"rtmp.start" = "开始推流";
-"rtmp.stop" = "停止推流";
-"rtmp.url.placeholder" = "RTMP 服务器地址";
-"rtmp.key.placeholder" = "推流密钥";
-"rtmp.settings" = "推流设置";
-"rtmp.settings.bitrate" = "码率";
-"rtmp.settings.bitrate.description" = "码率越高画质越好，但需要更多带宽";
-"rtmp.settings.platform" = "平台预设";
-"rtmp.settings.note" = "说明";
-"rtmp.settings.experimental" = "实验性功能";
-"rtmp.settings.experimental.description" = "RTMP 推流是实验性功能，部分平台可能需要额外配置。";
-"rtmp.recommended" = "推荐";
-"rtmp.platform.custom" = "自定义";
-"rtmp.error.invalidurl" = "请输入有效的 RTMP 地址";
+// MARK: - RTMP
+"rtmp.title" = "RTMP 송출";
+"rtmp.status.disconnected" = "연결 안 됨";
+"rtmp.status.connecting" = "연결 중...";
+"rtmp.status.connected" = "연결됨";
+"rtmp.status.streaming" = "송출 중";
+"rtmp.connecting.video" = "영상 스트림 연결 중...";
+"rtmp.frames" = "프레임";
+"rtmp.time" = "시간";
+"rtmp.data" = "데이터";
+"rtmp.start" = "송출 시작";
+"rtmp.stop" = "송출 중지";
+"rtmp.url.placeholder" = "RTMP 서버 주소";
+"rtmp.key.placeholder" = "스트림 키";
+"rtmp.settings" = "송출 설정";
+"rtmp.settings.bitrate" = "비트레이트";
+"rtmp.settings.bitrate.description" = "비트레이트가 높을수록 화질이 좋아지지만 더 많은 대역폭이 필요합니다";
+"rtmp.settings.platform" = "플랫폼 프리셋";
+"rtmp.settings.note" = "안내";
+"rtmp.settings.experimental" = "실험 기능";
+"rtmp.settings.experimental.description" = "RTMP 송출은 실험 기능이며 일부 플랫폼에서는 추가 설정이 필요할 수 있습니다.";
+"rtmp.recommended" = "권장";
+"rtmp.platform.custom" = "직접 설정";
+"rtmp.error.invalidurl" = "올바른 RTMP 주소를 입력하세요";
 
-// MARK: - Live Translate 实时翻译
-"livetranslate.title" = "实时翻译";
-"livetranslate.connected" = "已连接";
-"livetranslate.connecting" = "连接中...";
-"livetranslate.recording" = "录音中";
-"livetranslate.placeholder" = "按住录音按钮开始说话";
-"livetranslate.source" = "源语言";
-"livetranslate.target" = "目标语言";
-"livetranslate.clear" = "清除";
+// MARK: - Live Translate
+"livetranslate.title" = "실시간 번역";
+"livetranslate.connected" = "연결됨";
+"livetranslate.connecting" = "연결 중...";
+"livetranslate.recording" = "녹음 중";
+"livetranslate.placeholder" = "녹음 버튼을 누른 채 말하세요";
+"livetranslate.source" = "원본 언어";
+"livetranslate.target" = "대상 언어";
+"livetranslate.clear" = "지우기";
 
-// Live Translate Settings
-"livetranslate.settings.title" = "翻译设置";
-"livetranslate.settings.sourceLanguage" = "源语言";
-"livetranslate.settings.targetLanguage" = "目标语言";
-"livetranslate.settings.targetLanguage.footer" = "目标语言支持语音输出";
-"livetranslate.settings.voice" = "音色";
-"livetranslate.settings.voice.footer" = "不同音色支持不同的语种";
-"livetranslate.settings.output" = "输出设置";
-"livetranslate.settings.audioOutput" = "语音输出";
-"livetranslate.settings.imageEnhance" = "视觉增强";
-"livetranslate.settings.imageEnhance.footer" = "启用视觉增强可提高同音异义词的翻译准确性";
-"livetranslate.settings.history" = "翻译历史";
-"livetranslate.settings.clearHistory" = "清空历史";
-"livetranslate.settings.historyCount" = "共 %d 条翻译记录";
-"common.done" = "完成";
-"common.ok" = "确定";
+"livetranslate.settings.title" = "번역 설정";
+"livetranslate.settings.sourceLanguage" = "원본 언어";
+"livetranslate.settings.targetLanguage" = "대상 언어";
+"livetranslate.settings.targetLanguage.footer" = "대상 언어는 음성 출력도 지원합니다";
+"livetranslate.settings.voice" = "음성";
+"livetranslate.settings.voice.footer" = "음성마다 지원하는 언어가 다릅니다";
+"livetranslate.settings.output" = "출력 설정";
+"livetranslate.settings.audioOutput" = "음성 출력";
+"livetranslate.settings.imageEnhance" = "화면 정보 활용";
+"livetranslate.settings.imageEnhance.footer" = "화면 정보를 함께 사용하면 동음이의어 번역 정확도를 높일 수 있습니다";
+"livetranslate.settings.history" = "번역 기록";
+"livetranslate.settings.clearHistory" = "기록 삭제";
+"livetranslate.settings.historyCount" = "번역 기록 %d개";
+"common.done" = "완료";
+"common.ok" = "확인";
 
-// Live Translate Languages
-"livetranslate.lang.en" = "英语";
-"livetranslate.lang.zh" = "中文";
-"livetranslate.lang.ja" = "日语";
-"livetranslate.lang.ko" = "韩语";
-"livetranslate.lang.fr" = "法语";
-"livetranslate.lang.de" = "德语";
-"livetranslate.lang.ru" = "俄语";
-"livetranslate.lang.es" = "西班牙语";
-"livetranslate.lang.pt" = "葡萄牙语";
-"livetranslate.lang.it" = "意大利语";
-"livetranslate.lang.yue" = "粤语";
-"livetranslate.lang.id" = "印尼语";
-"livetranslate.lang.vi" = "越南语";
-"livetranslate.lang.th" = "泰语";
-"livetranslate.lang.ar" = "阿拉伯语";
-"livetranslate.lang.hi" = "印地语";
-"livetranslate.lang.el" = "希腊语";
-"livetranslate.lang.tr" = "土耳其语";
+"livetranslate.lang.en" = "영어";
+"livetranslate.lang.zh" = "중국어";
+"livetranslate.lang.ja" = "일본어";
+"livetranslate.lang.ko" = "한국어";
+"livetranslate.lang.fr" = "프랑스어";
+"livetranslate.lang.de" = "독일어";
+"livetranslate.lang.ru" = "러시아어";
+"livetranslate.lang.es" = "스페인어";
+"livetranslate.lang.pt" = "포르투갈어";
+"livetranslate.lang.it" = "이탈리아어";
+"livetranslate.lang.yue" = "광둥어";
+"livetranslate.lang.id" = "인도네시아어";
+"livetranslate.lang.vi" = "베트남어";
+"livetranslate.lang.th" = "태국어";
+"livetranslate.lang.ar" = "아랍어";
+"livetranslate.lang.hi" = "힌디어";
+"livetranslate.lang.el" = "그리스어";
+"livetranslate.lang.tr" = "튀르키예어";
 
-// Live Translate Voices
 "livetranslate.voice.cherry" = "Cherry";
 "livetranslate.voice.nofish" = "Nofish";
 "livetranslate.voice.jada" = "Jada";
@@ -402,49 +399,46 @@
 "livetranslate.voice.kiki" = "Kiki";
 "livetranslate.voice.eric" = "Eric";
 
-"livetranslate.voice.cherry.desc" = "温暖女声，支持多语种";
-"livetranslate.voice.nofish.desc" = "自然女声，支持多语种";
-"livetranslate.voice.jada.desc" = "活泼女声，仅支持中文";
-"livetranslate.voice.dylan.desc" = "磁性男声，仅支持中文";
-"livetranslate.voice.sunny.desc" = "阳光女声，仅支持中文";
-"livetranslate.voice.peter.desc" = "稳重男声，仅支持中文";
-"livetranslate.voice.kiki.desc" = "粤语女声，仅支持粤语";
-"livetranslate.voice.eric.desc" = "成熟男声，仅支持中文";
+"livetranslate.voice.cherry.desc" = "따뜻한 여성 음성, 다국어 지원";
+"livetranslate.voice.nofish.desc" = "자연스러운 여성 음성, 다국어 지원";
+"livetranslate.voice.jada.desc" = "경쾌한 여성 음성, 중국어 전용";
+"livetranslate.voice.dylan.desc" = "중저음 남성 음성, 중국어 전용";
+"livetranslate.voice.sunny.desc" = "밝은 여성 음성, 중국어 전용";
+"livetranslate.voice.peter.desc" = "차분한 남성 음성, 중국어 전용";
+"livetranslate.voice.kiki.desc" = "광둥어 여성 음성, 광둥어 전용";
+"livetranslate.voice.eric.desc" = "성숙한 남성 음성, 중국어 전용";
 
-// Live Translate Errors
-"livetranslate.error.title" = "翻译错误";
-"livetranslate.error.noApiKey" = "请先在设置中配置 API Key";
-"livetranslate.error.cannotSwap" = "当前语言组合不支持交换";
+"livetranslate.error.title" = "번역 오류";
+"livetranslate.error.noApiKey" = "설정에서 API Key를 먼저 등록하세요";
+"livetranslate.error.cannotSwap" = "현재 언어 조합은 서로 바꿀 수 없습니다";
 
-// Live Translate Microphone
-"livetranslate.settings.microphone" = "麦克风";
-"livetranslate.settings.usePhoneMic" = "使用 iPhone 麦克风";
-"livetranslate.settings.microphone.footer" = "开启后使用 iPhone 麦克风录音，适合翻译对方说的话；关闭则使用眼镜麦克风，适合翻译自己说的话";
+"livetranslate.settings.microphone" = "마이크";
+"livetranslate.settings.usePhoneMic" = "iPhone 마이크 사용";
+"livetranslate.settings.microphone.footer" = "켜면 iPhone 마이크로 상대방의 말을 녹음하고, 끄면 안경 마이크로 자신의 말을 녹음합니다";
 
-// Live Translate Home Card
-"home.translate.title" = "实时翻译";
-"home.translate.subtitle" = "18种语言互译";
+"home.translate.title" = "실시간 번역";
+"home.translate.subtitle" = "18개 언어 상호 번역";
 
 // OpenClaw Integration
-"settings.integrations" = "集成";
-"openclaw.status.connected" = "已连接";
-"openclaw.status.connecting" = "连接中...";
-"openclaw.status.pairing" = "等待配对";
-"openclaw.status.disconnected" = "未连接";
-"openclaw.connect" = "连接 Gateway";
-"openclaw.disconnect" = "断开连接";
-"openclaw.pairing.hint" = "请在 OpenClaw 终端执行 openclaw devices approve 完成配对";
-"openclaw.gateway.help" = "输入运行 OpenClaw Gateway 的设备地址和端口。本机默认为 127.0.0.1:18789";
-"openclaw.capabilities" = "设备能力";
-"openclaw.capabilities.desc" = "连接后，OpenClaw AI 可以通过眼镜拍照、获取设备状态等";
+"settings.integrations" = "연동";
+"openclaw.status.connected" = "연결됨";
+"openclaw.status.connecting" = "연결 중...";
+"openclaw.status.pairing" = "페어링 대기";
+"openclaw.status.disconnected" = "연결 안 됨";
+"openclaw.connect" = "Gateway 연결";
+"openclaw.disconnect" = "연결 해제";
+"openclaw.pairing.hint" = "OpenClaw 터미널에서 openclaw devices approve 명령을 실행해 페어링을 완료하세요";
+"openclaw.gateway.help" = "OpenClaw Gateway가 실행 중인 기기의 주소와 포트를 입력하세요. 로컬 기본값은 127.0.0.1:18789입니다";
+"openclaw.capabilities" = "기기 기능";
+"openclaw.capabilities.desc" = "연결 후 OpenClaw AI가 안경으로 사진을 찍거나 기기 상태를 확인할 수 있습니다";
 "home.openclaw.subtitle" = "OpenClaw";
-"home.openclaw.connected" = "已连接";
-"openclaw.chat.placeholder" = "输入消息...";
-"openclaw.chat.photoprompt" = "请看这张眼镜拍摄的照片";
-"openclaw.chat.snap" = "拍照发送";
-"openclaw.chat.sending" = "发送中...";
-"openclaw.chat.noframe" = "无法获取眼镜画面，请确认眼镜已连接";
-"openclaw.chat.noapikey" = "请先在设置中配置阿里云 API Key";
-"openclaw.chat.sendvoice" = "发送";
-"openclaw.chat.text" = "键盘";
-"openclaw.chat.listening" = "正在聆听...";
+"home.openclaw.connected" = "연결됨";
+"openclaw.chat.placeholder" = "메시지 입력...";
+"openclaw.chat.photoprompt" = "안경으로 촬영한 이 사진을 확인해 주세요";
+"openclaw.chat.snap" = "촬영 후 전송";
+"openclaw.chat.sending" = "전송 중...";
+"openclaw.chat.noframe" = "안경 화면을 가져올 수 없습니다. 안경 연결 상태를 확인하세요";
+"openclaw.chat.noapikey" = "설정에서 Alibaba Cloud API Key를 먼저 등록하세요";
+"openclaw.chat.sendvoice" = "전송";
+"openclaw.chat.text" = "키보드";
+"openclaw.chat.listening" = "듣는 중...";
