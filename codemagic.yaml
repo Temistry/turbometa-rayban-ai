@@ -1,6 +1,6 @@
-﻿workflows:
+workflows:
   ios-compile-check:
-    name: iOS Compile Check (No Signing)
+    name: iOS 컴파일 점검
     instance_type: mac_mini_m2
     max_build_duration: 120
 
@@ -26,22 +26,25 @@
         - $HOME/Library/Caches/org.swift.swiftpm
 
     scripts:
-      - name: Validate project and required variables
+      - name: 프로젝트와 필수 변수 확인
         script: |
           set -euo pipefail
           test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
           test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
-          : "${META_APP_ID:?Set META_APP_ID in the turbometa_secrets group}"
-          : "${CLIENT_TOKEN:?Set CLIENT_TOKEN in the turbometa_secrets group}"
+          : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
+          : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
 
-      - name: Resolve Swift packages
+      - name: 한국어 및 보안 정적 점검
+        script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
+
+      - name: Swift 패키지 의존성 확인
         script: |
           set -euo pipefail
           xcodebuild -resolvePackageDependencies \
             -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME"
 
-      - name: Compile Release without Apple signing
+      - name: Apple 서명 없이 Release 컴파일
         script: |
           set -euo pipefail
           mkdir -p "$CM_BUILD_DIR/build"
@@ -55,16 +58,18 @@
             CODE_SIGNING_REQUIRED=NO \
             CODE_SIGN_IDENTITY="" \
             DEVELOPMENT_TEAM="" \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS="INTERNAL_BUILD" \
             META_APP_ID="$META_APP_ID" \
             CLIENT_TOKEN="$CLIENT_TOKEN" \
             build | tee "$CM_BUILD_DIR/build/compile-check.log"
 
     artifacts:
+      - audit-report.txt
       - build/compile-check.log
       - build/DerivedData/Build/Products/Release-iphoneos/*.app
 
   ios-feature-build:
-    name: iOS Feature Build
+    name: iOS 기능 브랜치 IPA
     instance_type: mac_mini_m2
     max_build_duration: 120
 
@@ -88,33 +93,37 @@
         - $HOME/Library/Caches/org.swift.swiftpm
 
     scripts:
-      - name: Validate project and required variables
+      - name: 프로젝트와 필수 변수 확인
         script: |
           set -euo pipefail
           test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
           test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
-          : "${META_APP_ID:?Set META_APP_ID in the turbometa_secrets group}"
-          : "${CLIENT_TOKEN:?Set CLIENT_TOKEN in the turbometa_secrets group}"
+          : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
+          : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
 
-      - name: Resolve Swift packages
+      - name: 한국어 및 보안 정적 점검
+        script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
+
+      - name: Swift 패키지 의존성 확인
         script: |
           set -euo pipefail
           xcodebuild -resolvePackageDependencies \
             -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME"
 
-      - name: Apply App Store signing profiles
+      - name: App Store 서명 프로필 적용
         script: xcode-project use-profiles
 
-      - name: Build signed IPA
+      - name: 내부 테스트 IPA 빌드
         script: |
           set -euo pipefail
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
+            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD"
 
     artifacts:
+      - audit-report.txt
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
@@ -154,33 +163,37 @@
         - $HOME/Library/Caches/org.swift.swiftpm
 
     scripts:
-      - name: Validate project and required variables
+      - name: 프로젝트와 필수 변수 확인
         script: |
           set -euo pipefail
           test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
           test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
-          : "${META_APP_ID:?Set META_APP_ID in the turbometa_secrets group}"
-          : "${CLIENT_TOKEN:?Set CLIENT_TOKEN in the turbometa_secrets group}"
+          : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
+          : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
 
-      - name: Resolve Swift packages
+      - name: 한국어 및 보안 정적 점검
+        script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
+
+      - name: Swift 패키지 의존성 확인
         script: |
           set -euo pipefail
           xcodebuild -resolvePackageDependencies \
             -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME"
 
-      - name: Apply App Store signing profiles
+      - name: App Store 서명 프로필 적용
         script: xcode-project use-profiles
 
-      - name: Build signed IPA
+      - name: TestFlight IPA 빌드
         script: |
           set -euo pipefail
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
+            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD"
 
     artifacts:
+      - audit-report.txt
       - build/ios/ipa/*.ipa
       - /tmp/xcodebuild_logs/*.log
       - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
@@ -191,5 +204,3 @@
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: false
-
-
