@@ -27,10 +27,12 @@ struct TurboMetaApp: App {
   @StateObject private var wearablesViewModel: WearablesViewModel
 
   init() {
-    // TestFlight에서도 Xcode 없이 원인을 확인할 수 있도록 가장 먼저 로그를 캡처한다.
+    #if DEBUG || INTERNAL_BUILD
+    // Debug 및 내부 TestFlight 빌드에서만 기기 내 로그를 캡처한다.
     DeveloperConsole.shared.startCapturing()
+    #endif
 
-    // App Shortcut 문구나 파라미터가 바뀐 경우 시스템 등록 정보를 즉시 갱신한다.
+    // App Shortcut 문구나 파라미터가 바뀐 경우 시스템 등록 정보를 갱신한다.
     if #available(iOS 16.0, *) {
       TurboMetaShortcuts.updateAppShortcutParameters()
       print("[Siri][INFO] 한국어 App Shortcut 등록 정보 갱신 요청 완료")
@@ -61,16 +63,16 @@ struct TurboMetaApp: App {
             Text(wearablesViewModel.errorMessage)
           }
 
-        // DAT SDK 등록 및 권한 콜백을 처리하는 보이지 않는 뷰다.
         RegistrationView(viewModel: wearablesViewModel)
 
-        // 내부/TestFlight 진단용. 로그는 기기 메모리에만 보관되고 자격 증명은 마스킹된다.
+        #if DEBUG || INTERNAL_BUILD
+        // 로그는 메모리에만 보관되며 자격 증명과 대용량 payload는 마스킹된다.
         DeveloperConsoleButton(console: developerConsole)
           .padding(.trailing, 14)
           .padding(.bottom, 92)
+        #endif
 
         #if DEBUG
-        // 물리 안경 없이 테스트해야 할 때 사용하는 Meta Mock Device 메뉴다.
         DebugMenuView(debugMenuViewModel: debugMenuViewModel)
           .sheet(isPresented: $debugMenuViewModel.showDebugMenu) {
             MockDeviceKitView(viewModel: debugMenuViewModel.mockDeviceKitViewModel)
