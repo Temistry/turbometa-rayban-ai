@@ -24,7 +24,7 @@
 "home.quickvision.title" = "퀵비전";
 "home.quickvision.subtitle" = "Siri 음성 실행";
 "home.translate.title" = "실시간 번역";
-"home.translate.subtitle" = "즉시 번역";
+"home.translate.subtitle" = "18개 언어 상호 번역";
 "home.leaneat.title" = "LeanEat";
 "home.leaneat.subtitle" = "칼로리 인식";
 "home.wordlearn.title" = "WordLearn";
@@ -59,7 +59,7 @@
 "quickvision.glasses.notconnected" = "안경 연결 안 됨";
 "quickvision.siri.tip.title" = "Siri 단축어";
 "quickvision.siri.tip.description" = "다음 방법으로 퀵비전을 실행할 수 있습니다:";
-"quickvision.siri.tip.voice" = "Siri야, TurboMeta로 인식해줘";
+"quickvision.siri.tip.voice" = "Siri야, 터보메타 이거 뭐야";
 "quickvision.siri.tip.action" = "단축어 앱의 잠금 화면 위젯에 추가";
 "quickvision.siri.support" = "Siri 및 단축어 지원";
 "quickvision.stop.speaking" = "음성 중지";
@@ -415,9 +415,6 @@
 "livetranslate.settings.microphone" = "마이크";
 "livetranslate.settings.usePhoneMic" = "iPhone 마이크 사용";
 "livetranslate.settings.microphone.footer" = "켜면 iPhone 마이크로 상대방의 말을 녹음하고, 끄면 안경 마이크로 자신의 말을 녹음합니다";
-
-"home.translate.title" = "실시간 번역";
-"home.translate.subtitle" = "18개 언어 상호 번역";
 
 // OpenClaw Integration
 "settings.integrations" = "연동";
