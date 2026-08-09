@@ -112,7 +112,7 @@
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-xcargs "CURRENT_PROJECT_VERSION=$CM_BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
+            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -178,7 +178,7 @@
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-xcargs "CURRENT_PROJECT_VERSION=$CM_BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
+            --archive-xcargs "CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
 
     artifacts:
       - build/ios/ipa/*.ipa
@@ -191,4 +191,5 @@
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: false
+
 
