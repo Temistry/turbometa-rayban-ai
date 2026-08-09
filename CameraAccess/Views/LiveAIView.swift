@@ -13,8 +13,7 @@ struct LiveAIView: View {
 
     init(streamViewModel: StreamSessionViewModel, apiKey: String) {
         self.streamViewModel = streamViewModel
-        // 제공자별 Key가 없을 때 다른 서비스의 Key를 대신 쓰지 않는다.
-        // 키라는 것을 죄다 서로 바꿔 꽂는 인간의 습관은 대체로 장애 보고서로 끝난다.
+        // 선택한 제공자의 API Key만 사용하고 다른 서비스의 Key로 대체하지 않는다.
         self._viewModel = StateObject(
             wrappedValue: OmniRealtimeViewModel(apiKey: APIProviderManager.staticLiveAIAPIKey)
         )
