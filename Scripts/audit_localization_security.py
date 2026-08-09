@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import json
 import plistlib
 import re
 import sys
@@ -63,6 +64,59 @@ def korean_localization_files() -> list[Path]:
         for path in SOURCE_ROOT.rglob("Localizable.strings")
         if path.parent.name in SUPPORTED_KOREAN_RESOURCE_DIRECTORIES
     )
+
+
+def audit_package_resolution(findings: list[Finding]) -> None:
+    resolved_path = (
+        ROOT
+        / "CameraAccess.xcodeproj"
+        / "project.xcworkspace"
+        / "xcshareddata"
+        / "swiftpm"
+        / "Package.resolved"
+    )
+    expected_revisions = {
+        "haishinkit.swift": "8b18210cb2d1c939cd28fa4896217db54907c550",
+        "meta-wearables-dat-ios": "2ea30fa228359315baf71c404aec821472e994c1",
+    }
+
+    if not resolved_path.exists():
+        findings.append(Finding("치명", relative(resolved_path), 1, "Package.resolved가 없습니다"))
+        return
+
+    try:
+        payload = json.loads(resolved_path.read_text(encoding="utf-8"))
+        pins = {
+            pin.get("identity"): pin.get("state", {})
+            for pin in payload.get("pins", [])
+            if isinstance(pin, dict)
+        }
+        for identity, expected_revision in expected_revisions.items():
+            state = pins.get(identity)
+            if not state:
+                findings.append(Finding("치명", relative(resolved_path), 1, f"고정 패키지가 없습니다: {identity}"))
+                continue
+            actual_revision = state.get("revision")
+            if actual_revision != expected_revision:
+                findings.append(
+                    Finding(
+                        "치명",
+                        relative(resolved_path),
+                        1,
+                        f"{identity} revision 불일치: {actual_revision or '없음'}",
+                    )
+                )
+    except Exception as exc:  # noqa: BLE001
+        findings.append(Finding("치명", relative(resolved_path), 1, f"Package.resolved 파싱 실패: {exc}"))
+
+    enforcement_files = {
+        ".github/workflows/ios-validate.yml": "-onlyUsePackageVersionsFromResolvedFile",
+        "codemagic.yaml": "-onlyUsePackageVersionsFromResolvedFile",
+    }
+    for path_text, marker in enforcement_files.items():
+        path = ROOT / path_text
+        if not path.exists() or marker not in path.read_text(encoding="utf-8", errors="replace"):
+            findings.append(Finding("치명", path_text, 1, "고정된 패키지 버전 강제 옵션이 없습니다"))
 
 
 def audit_secrets_and_transport(findings: list[Finding]) -> None:
@@ -350,6 +404,7 @@ def write_report(findings: list[Finding]) -> None:
 
 if __name__ == "__main__":
     findings: list[Finding] = []
+    audit_package_resolution(findings)
     audit_secrets_and_transport(findings)
     audit_localization_strings(findings)
     audit_swift_strings(findings)
