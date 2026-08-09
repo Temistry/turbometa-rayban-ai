@@ -51,6 +51,12 @@ final class ConversationStorage {
         }
 
         save(conversations, reason: "대화 추가")
+
+        // 지식 로그 서비스는 MainActor에서 UI 상태와 동기화 상태를 관리한다.
+        // 질문·답변 본문은 진단 콘솔에 출력하지 않고 보호된 Markdown/JSONL에만 기록한다.
+        Task { @MainActor in
+            KnowledgeLogService.shared.appendConversation(record)
+        }
     }
 
     // MARK: - Load Conversations
