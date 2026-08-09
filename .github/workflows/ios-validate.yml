@@ -8,6 +8,7 @@ on:
     paths:
       - "CameraAccess/**"
       - "CameraAccess.xcodeproj/**"
+      - "Scripts/audit_localization_security.py"
       - "Package.resolved"
       - ".github/workflows/ios-validate.yml"
   workflow_dispatch:
@@ -39,6 +40,9 @@ jobs:
           xcodebuild -version
           xcodebuild -list -project CameraAccess.xcodeproj
 
+      - name: 한국어 및 보안 정적 점검
+        run: python3 Scripts/audit_localization_security.py
+
       - name: Swift 패키지 의존성 확인
         run: |
           xcodebuild \
@@ -59,11 +63,13 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             clean build 2>&1 | tee xcodebuild.log
 
-      - name: 빌드 로그 업로드
+      - name: 검증 결과 업로드
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ios-xcodebuild-log
-          path: xcodebuild.log
+          name: ios-validation-results
+          path: |
+            xcodebuild.log
+            audit-report.txt
           if-no-files-found: ignore
           retention-days: 7
