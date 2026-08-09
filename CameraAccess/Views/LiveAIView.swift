@@ -1,6 +1,5 @@
 /*
- * Live AI View
- * 自动启动的实时 AI 对话界面
+ * 자동 시작형 실시간 AI 대화 화면
  */
 
 import SwiftUI
@@ -9,27 +8,25 @@ struct LiveAIView: View {
     @StateObject private var viewModel: OmniRealtimeViewModel
     @ObservedObject var streamViewModel: StreamSessionViewModel
     @Environment(\.dismiss) private var dismiss
-    @State private var showConversation = true // 控制对话内容显示/隐藏
+    @State private var showConversation = true
     @State private var frameTimer: Timer?
 
     init(streamViewModel: StreamSessionViewModel, apiKey: String) {
         self.streamViewModel = streamViewModel
-        // Use the Live AI API key based on selected provider
-        let liveAIApiKey = APIProviderManager.staticLiveAIAPIKey
-        self._viewModel = StateObject(wrappedValue: OmniRealtimeViewModel(apiKey: liveAIApiKey.isEmpty ? apiKey : liveAIApiKey))
+        // 제공자별 Key가 없을 때 다른 서비스의 Key를 대신 쓰지 않는다.
+        // 키라는 것을 죄다 서로 바꿔 꽂는 인간의 습관은 대체로 장애 보고서로 끝난다.
+        self._viewModel = StateObject(
+            wrappedValue: OmniRealtimeViewModel(apiKey: APIProviderManager.staticLiveAIAPIKey)
+        )
     }
 
     var body: some View {
         ZStack {
-            // Black background
-            Color.black
-                .ignoresSafeArea()
+            Color.black.ignoresSafeArea()
 
-            // 未连接设备提醒
             if !streamViewModel.hasActiveDevice {
                 deviceNotConnectedView
             } else {
-                // Video feed (full opacity, no white mask)
                 if let videoFrame = streamViewModel.currentVideoFrame {
                     GeometryReader { geometry in
                         Image(uiImage: videoFrame)
@@ -42,73 +39,65 @@ struct LiveAIView: View {
                 }
 
                 VStack(spacing: 0) {
-                // Header (紧贴状态栏)
-                headerView
-                    .padding(.top, 8) // 状态栏下方一点点
+                    headerView
+                        .padding(.top, 8)
 
-                // Conversation history (可隐藏)
-                if showConversation {
-                    ScrollViewReader { proxy in
-                        ScrollView {
-                            LazyVStack(spacing: 12) {
-                                ForEach(viewModel.conversationHistory) { message in
-                                    MessageBubble(message: message)
-                                        .id(message.id)
-                                }
+                    if showConversation {
+                        ScrollViewReader { proxy in
+                            ScrollView {
+                                LazyVStack(spacing: 12) {
+                                    ForEach(viewModel.conversationHistory) { message in
+                                        MessageBubble(message: message)
+                                            .id(message.id)
+                                    }
 
-                                // Current AI response (streaming)
-                                if !viewModel.currentTranscript.isEmpty {
-                                    MessageBubble(
-                                        message: ConversationMessage(
-                                            role: .assistant,
-                                            content: viewModel.currentTranscript
+                                    if !viewModel.currentTranscript.isEmpty {
+                                        MessageBubble(
+                                            message: ConversationMessage(
+                                                role: .assistant,
+                                                content: viewModel.currentTranscript
+                                            )
                                         )
-                                    )
-                                    .id("current")
+                                        .id("current")
+                                    }
+                                }
+                                .padding()
+                            }
+                            .onChange(of: viewModel.conversationHistory.count) { _ in
+                                if let lastMessage = viewModel.conversationHistory.last {
+                                    withAnimation {
+                                        proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                    }
                                 }
                             }
-                            .padding()
-                        }
-                        .onChange(of: viewModel.conversationHistory.count) { _ in
-                            if let lastMessage = viewModel.conversationHistory.last {
+                            .onChange(of: viewModel.currentTranscript) { _ in
                                 withAnimation {
-                                    proxy.scrollTo(lastMessage.id, anchor: .bottom)
+                                    proxy.scrollTo("current", anchor: .bottom)
                                 }
                             }
                         }
-                        .onChange(of: viewModel.currentTranscript) { _ in
-                            withAnimation {
-                                proxy.scrollTo("current", anchor: .bottom)
-                            }
-                        }
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                    } else {
+                        Spacer()
                     }
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    Spacer()
-                }
 
-                // Status and stop button
-                controlsView
+                    controlsView
                 }
             }
         }
         .onAppear {
-            // 只有设备连接时才启动功能
             guard streamViewModel.hasActiveDevice else {
-                print("⚠️ LiveAIView: 未连接RayBan Meta眼镜，跳过启动")
+                print("[LiveAIView][WARN] Ray-Ban Meta 안경이 연결되지 않아 시작 생략")
                 return
             }
 
-            // 启动视频流
             Task {
-                print("🎥 LiveAIView: 启动视频流")
+                print("[LiveAIView][INFO] 안경 영상 스트림 시작 요청")
                 await streamViewModel.handleStartStreaming()
             }
 
-            // 自动连接并开始录音
             viewModel.connect()
 
-            // 更新视频帧
             frameTimer?.invalidate()
             frameTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
                 if let frame = streamViewModel.currentVideoFrame {
@@ -117,11 +106,11 @@ struct LiveAIView: View {
             }
         }
         .onDisappear {
-            // 停止 AI 对话和视频流
-            print("🎥 LiveAIView: 停止 AI 对话和视频流")
+            print("[LiveAIView][INFO] 실시간 AI 대화 및 영상 스트림 종료")
             frameTimer?.invalidate()
             frameTimer = nil
             viewModel.disconnect()
+
             Task {
                 if streamViewModel.streamingStatus != .stopped {
                     await streamViewModel.stopSession()
@@ -144,8 +133,6 @@ struct LiveAIView: View {
         }
     }
 
-    // MARK: - Header
-
     private var headerView: some View {
         HStack {
             Text("liveai.title".localized)
@@ -154,7 +141,6 @@ struct LiveAIView: View {
 
             Spacer()
 
-            // Hide/show conversation button
             Button {
                 withAnimation(.easeInOut(duration: 0.3)) {
                     showConversation.toggle()
@@ -165,8 +151,8 @@ struct LiveAIView: View {
                     .foregroundColor(.white.opacity(0.8))
                     .frame(width: 32, height: 32)
             }
+            .accessibilityLabel(showConversation ? "대화 내용 숨기기" : "대화 내용 보기")
 
-            // Connection status
             HStack(spacing: AppSpacing.xs) {
                 Circle()
                     .fill(viewModel.isConnected ? Color.green : Color.red)
@@ -176,7 +162,6 @@ struct LiveAIView: View {
                     .foregroundColor(.white)
             }
 
-            // Speaking indicator
             if viewModel.isSpeaking {
                 HStack(spacing: AppSpacing.xs) {
                     Image(systemName: "waveform")
@@ -191,49 +176,32 @@ struct LiveAIView: View {
         .background(Color.black.opacity(0.7))
     }
 
-    // MARK: - Controls
-
     private var controlsView: some View {
         VStack(spacing: AppSpacing.md) {
-            // Recording status
             HStack(spacing: AppSpacing.sm) {
-                if viewModel.isRecording {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                    Text("liveai.listening".localized)
-                        .font(AppTypography.caption)
-                        .foregroundColor(.white)
-                } else {
-                    Circle()
-                        .fill(Color.gray)
-                        .frame(width: 8, height: 8)
-                    Text("liveai.stop".localized)
-                        .font(AppTypography.caption)
-                        .foregroundColor(.white)
-                }
+                Circle()
+                    .fill(viewModel.isRecording ? Color.red : Color.gray)
+                    .frame(width: 8, height: 8)
+                Text(viewModel.isRecording ? "liveai.listening".localized : "liveai.stop".localized)
+                    .font(AppTypography.caption)
+                    .foregroundColor(.white)
             }
             .padding(.horizontal, AppSpacing.md)
             .padding(.vertical, AppSpacing.sm)
             .background(Color.black.opacity(0.6))
             .cornerRadius(AppCornerRadius.xl)
 
-            // Stop button (only button)
             Button {
                 viewModel.disconnect()
                 dismiss()
             } label: {
-                HStack(spacing: AppSpacing.sm) {
-                    Image(systemName: "stop.fill")
-                        .font(.title2)
-                    Text("liveai.stop".localized)
-                        .font(AppTypography.headline)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.md)
-                .background(Color.red)
-                .foregroundColor(.white)
-                .cornerRadius(AppCornerRadius.lg)
+                Label("liveai.stop".localized, systemImage: "stop.fill")
+                    .font(AppTypography.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.md)
+                    .background(Color.red)
+                    .foregroundColor(.white)
+                    .cornerRadius(AppCornerRadius.lg)
             }
             .padding(.horizontal, AppSpacing.lg)
         }
@@ -246,8 +214,6 @@ struct LiveAIView: View {
             )
         )
     }
-
-    // MARK: - Device Not Connected View
 
     private var deviceNotConnectedView: some View {
         VStack(spacing: AppSpacing.xl) {
@@ -271,20 +237,16 @@ struct LiveAIView: View {
 
             Spacer()
 
-            // Back button
             Button {
                 dismiss()
             } label: {
-                HStack(spacing: AppSpacing.sm) {
-                    Image(systemName: "chevron.left")
-                    Text("liveai.device.backtohome".localized)
-                        .font(AppTypography.headline)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, AppSpacing.md)
-                .background(AppColors.primary)
-                .foregroundColor(.white)
-                .cornerRadius(AppCornerRadius.lg)
+                Label("liveai.device.backtohome".localized, systemImage: "chevron.left")
+                    .font(AppTypography.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.md)
+                    .background(AppColors.primary)
+                    .foregroundColor(.white)
+                    .cornerRadius(AppCornerRadius.lg)
             }
             .padding(.horizontal, AppSpacing.xl)
             .padding(.bottom, AppSpacing.xl)
