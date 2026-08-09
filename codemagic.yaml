@@ -1,4 +1,4 @@
-workflows:
+﻿workflows:
   ios-compile-check:
     name: iOS Compile Check (No Signing)
     instance_type: mac_mini_m2
@@ -69,7 +69,7 @@ workflows:
     max_build_duration: 120
 
     integrations:
-      app_store_connect: turbometa-app-store-connect
+      app_store_connect: codemagic
 
     environment:
       groups:
@@ -135,7 +135,7 @@ workflows:
       cancel_previous_builds: true
 
     integrations:
-      app_store_connect: turbometa-app-store-connect
+      app_store_connect: codemagic
 
     environment:
       groups:
@@ -191,3 +191,4 @@ workflows:
         auth: integration
         submit_to_testflight: false
         submit_to_app_store: false
+
