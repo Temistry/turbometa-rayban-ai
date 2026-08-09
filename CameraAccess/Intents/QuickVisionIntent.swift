@@ -232,7 +232,10 @@ final class QuickVisionManager: ObservableObject {
 
     func setStreamViewModel(_ viewModel: StreamSessionViewModel) {
         streamViewModel = viewModel
-        print("[QuickVision][INFO] StreamViewModel 연결 완료 hasActiveDevice=\(viewModel.hasActiveDevice) streamingStatus=\(viewModel.streamingStatus)")
+        print(
+            "[QuickVision][INFO] StreamViewModel 연결 완료 "
+            + "hasActiveDevice=\(viewModel.hasActiveDevice) streamingStatus=\(viewModel.streamingStatus)"
+        )
     }
 
     @objc private func handleQuickVisionTrigger(_ notification: Notification) {
@@ -253,7 +256,7 @@ final class QuickVisionManager: ObservableObject {
         guard let streamViewModel else {
             let message = "이미지 인식 기능이 아직 준비되지 않았습니다. 앱을 연 뒤 다시 시도하세요"
             errorMessage = message
-            print("[QuickVision][ERROR] StreamViewModel 없음. App Intent가 UI 초기화 전에 실행됐을 가능성이 있습니다")
+            print("[QuickVision][ERROR] StreamViewModel 없음")
             tts.speak(message)
             return
         }
@@ -264,21 +267,23 @@ final class QuickVisionManager: ObservableObject {
         lastImage = nil
         lastMode = mode
 
-        let provider = APIProviderManager.staticCurrentProvider
-        let model = APIProviderManager.staticCurrentModel
-        let endpoint = APIProviderManager.staticAlibabaEndpoint
-        print("[QuickVision][INFO] 시작 mode=\(mode.rawValue) provider=\(provider.displayName) model=\(model) endpoint=\(endpoint.rawValue) hasDevice=\(streamViewModel.hasActiveDevice) streamStatus=\(streamViewModel.streamingStatus)")
+        let model = GeminiModelCatalog.quickVision
+        print(
+            "[QuickVision][INFO] 시작 mode=\(mode.rawValue) provider=Google Gemini "
+            + "model=\(model) hasDevice=\(streamViewModel.hasActiveDevice) "
+            + "streamStatus=\(streamViewModel.streamingStatus)"
+        )
 
-        guard let apiKey = APIKeyManager.shared.getAPIKey(), !apiKey.isEmpty else {
-            let message = "설정에서 API Key를 먼저 등록하세요"
+        guard let apiKey = APIKeyManager.shared.getGoogleAPIKey(), !apiKey.isEmpty else {
+            let message = "설정에서 Google Gemini API Key를 먼저 등록하세요"
             errorMessage = message
-            print("[QuickVision][ERROR] 현재 제공자의 API Key가 없음 provider=\(provider.displayName) endpoint=\(endpoint.rawValue)")
+            print("[QuickVision][ERROR] Google Gemini 인증 설정 없음")
             tts.speak(message)
             isProcessing = false
             return
         }
 
-        tts.speak("인식 중입니다", apiKey: apiKey)
+        tts.speak("인식 중입니다")
         let prompt = customPrompt ?? QuickVisionModeManager.shared.getPrompt(for: mode)
 
         do {
@@ -296,7 +301,10 @@ final class QuickVisionManager: ObservableObject {
                     streamWaitCount += 1
                 }
 
-                print("[QuickVision][INFO] 스트림 대기 종료 elapsedMs=\(streamWaitCount * 100) status=\(streamViewModel.streamingStatus)")
+                print(
+                    "[QuickVision][INFO] 스트림 대기 종료 elapsedMs=\(streamWaitCount * 100) "
+                    + "status=\(streamViewModel.streamingStatus)"
+                )
                 guard streamViewModel.streamingStatus == .streaming else {
                     throw QuickVisionError.streamNotReady
                 }
@@ -316,39 +324,52 @@ final class QuickVisionManager: ObservableObject {
             let photo: UIImage
             if let capturedPhoto = streamViewModel.capturedPhoto {
                 photo = capturedPhoto
-                print("[QuickVision][INFO] 촬영 사진 사용 size=\(capturedPhoto.size.width)x\(capturedPhoto.size.height) elapsedMs=\(photoWaitCount * 100)")
+                print(
+                    "[QuickVision][INFO] 촬영 사진 사용 size=\(capturedPhoto.size.width)x\(capturedPhoto.size.height) "
+                    + "elapsedMs=\(photoWaitCount * 100)"
+                )
             } else if let videoFrame = streamViewModel.currentVideoFrame {
                 photo = videoFrame
-                print("[QuickVision][WARN] 촬영 사진이 없어 최신 영상 프레임 사용 size=\(videoFrame.size.width)x\(videoFrame.size.height)")
+                print(
+                    "[QuickVision][WARN] 촬영 사진이 없어 최신 영상 프레임 사용 "
+                    + "size=\(videoFrame.size.width)x\(videoFrame.size.height)"
+                )
             } else {
                 throw QuickVisionError.frameTimeout
             }
 
             lastImage = photo
 
-            // 영상 스트림의 오디오 세션이 TTS 출력을 덮지 않도록 먼저 TTS 세션을 준비한다.
             tts.prepareAudioSession()
             await streamViewModel.stopSession()
-            print("[QuickVision][INFO] 영상 스트림 중지 완료. 이미지 분석 요청 시작")
+            print("[QuickVision][INFO] 영상 스트림 중지 완료. Gemini 이미지 분석 요청 시작")
 
-            let service = QuickVisionService(apiKey: apiKey)
+            let service = QuickVisionService(apiKey: apiKey, model: model)
             let result = try await service.analyzeImage(photo, customPrompt: prompt)
             lastResult = result
             saveToHistory(mode: mode, prompt: prompt, result: result, image: photo)
             print("[QuickVision][INFO] 인식 성공 resultLength=\(result.count)")
-            tts.speak(result, apiKey: apiKey)
+            tts.speak(result)
         } catch let error as QuickVisionError {
             errorMessage = error.localizedDescription
             let nsError = error as NSError
-            print("[QuickVision][ERROR] 단계 실패 type=QuickVisionError domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) mode=\(mode.rawValue) provider=\(provider.displayName) model=\(model)")
-            tts.speak(error.localizedDescription, apiKey: apiKey)
+            print(
+                "[QuickVision][ERROR] 단계 실패 type=QuickVisionError domain=\(nsError.domain) "
+                + "code=\(nsError.code) description=\(nsError.localizedDescription) "
+                + "mode=\(mode.rawValue) model=\(model)"
+            )
+            tts.speak(error.localizedDescription)
             await streamViewModel.stopSession()
         } catch {
             let nsError = error as NSError
             let message = "인식에 실패했습니다. \(error.localizedDescription)"
             errorMessage = message
-            print("[QuickVision][ERROR] 예상하지 못한 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) userInfo=\(nsError.userInfo) mode=\(mode.rawValue) provider=\(provider.displayName) model=\(model)")
-            tts.speak(message, apiKey: apiKey)
+            print(
+                "[QuickVision][ERROR] 예상하지 못한 실패 domain=\(nsError.domain) "
+                + "code=\(nsError.code) description=\(nsError.localizedDescription) "
+                + "mode=\(mode.rawValue) model=\(model)"
+            )
+            tts.speak(message)
             await streamViewModel.stopSession()
         }
 
@@ -357,15 +378,28 @@ final class QuickVisionManager: ObservableObject {
     }
 
     func performQuickVision(customPrompt: String? = nil) async {
-        await performQuickVisionWithMode(QuickVisionModeManager.staticCurrentMode, customPrompt: customPrompt)
+        await performQuickVisionWithMode(
+            QuickVisionModeManager.staticCurrentMode,
+            customPrompt: customPrompt
+        )
     }
 
     func performQuickVisionFromIntent(customPrompt: String? = nil) async {
         await performQuickVision(customPrompt: customPrompt)
     }
 
-    private func saveToHistory(mode: QuickVisionMode, prompt: String, result: String, image: UIImage) {
-        let record = QuickVisionRecord(mode: mode, prompt: prompt, result: result, thumbnail: image)
+    private func saveToHistory(
+        mode: QuickVisionMode,
+        prompt: String,
+        result: String,
+        image: UIImage
+    ) {
+        let record = QuickVisionRecord(
+            mode: mode,
+            prompt: prompt,
+            result: result,
+            thumbnail: image
+        )
         QuickVisionStorage.shared.saveRecord(record)
     }
 
