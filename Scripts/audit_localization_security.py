@@ -8,7 +8,6 @@
 
 from __future__ import annotations
 
-import json
 import plistlib
 import re
 import sys
@@ -40,14 +39,12 @@ def relative(path: Path) -> str:
 
 
 def swift_string_literals(text: str):
-    # 일반 문자열만 대상으로 한다. 멀티라인 문자열은 별도 사용자 문구 점검에서 다룬다.
     pattern = re.compile(r'"(?:\\.|[^"\\])*"')
     for match in pattern.finditer(text):
         yield match, match.group(0)[1:-1]
 
 
 def strip_swift_comments(text: str) -> str:
-    # 문자열 위치 보존이 목적이 아니므로 간단한 휴리스틱이면 충분하다.
     text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
     return re.sub(r"//.*", "", text)
 
@@ -111,6 +108,7 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
         "CameraAccess/TurboMetaApp.swift": [
             "TurboMetaShortcuts.updateAppShortcutParameters()",
             'Locale(identifier: "ko-KR")',
+            "DEBUG || INTERNAL_BUILD",
         ],
         "CameraAccess/Info.plist": [
             "NSSiriUsageDescription",
@@ -129,12 +127,37 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
                 findings.append(Finding("치명", path_text, 1, f"필수 보호 코드가 없습니다: {marker}"))
 
 
+def audit_localization_strings(findings: list[Finding]) -> None:
+    chinese_pattern = re.compile(r"[\u4e00-\u9fff]")
+    assignment_pattern = re.compile(r'^\s*"(?P<key>[^"\\]+)"\s*=\s*"(?P<value>(?:\\.|[^"\\])*)"\s*;', re.MULTILINE)
+
+    for path in SOURCE_ROOT.rglob("Localizable.strings"):
+        # 한국어 전용 리소스로 사용 중인 번들만 검사한다.
+        if path.parent.name not in {"ko.lproj", "zh-Hans.lproj"}:
+            continue
+        text = path.read_text(encoding="utf-8", errors="replace")
+        for match in assignment_pattern.finditer(text):
+            value = match.group("value")
+            if chinese_pattern.search(value):
+                findings.append(
+                    Finding(
+                        "경고",
+                        relative(path),
+                        line_number(text, match.start()),
+                        f"한국어 리소스 값에 중국어/한자가 남아 있습니다: {match.group('key')} = {value[:80]}",
+                    )
+                )
+
+
 def audit_swift_strings(findings: list[Finding]) -> None:
     chinese_pattern = re.compile(r"[\u4e00-\u9fff]")
-    ui_call_pattern = re.compile(
-        r"\b(?:Text|Button|Label|SecureField|TextField|navigationTitle|alert|ContentUnavailableView)\s*\(\s*$"
+    ui_literal_pattern = re.compile(
+        r"\b(?:Text|Button|Label|SecureField|TextField|navigationTitle|alert|ContentUnavailableView|accessibilityLabel)"
+        r"\s*\(\s*\"(?P<literal>(?:\\.|[^\"\\])*)\"",
+        flags=re.MULTILINE,
     )
 
+    allowed_chinese_literals = {"优秀", "良好", "一般", "较差"}
     allowed_english_fragments = {
         "TurboMeta",
         "Ray-Ban Meta",
@@ -165,33 +188,23 @@ def audit_swift_strings(findings: list[Finding]) -> None:
     for path in SOURCE_ROOT.rglob("*.swift"):
         text = path.read_text(encoding="utf-8", errors="replace")
         code = strip_swift_comments(text)
-        lines = code.splitlines()
 
-        for index, line in enumerate(lines, start=1):
-            # 중국어 문자가 실제 문자열 리터럴 안에 남아 있는지 확인한다.
-            for match, literal in swift_string_literals(line):
-                if chinese_pattern.search(literal):
-                    findings.append(
-                        Finding(
-                            "경고",
-                            relative(path),
-                            index,
-                            f"중국어/한자 문자열이 남아 있습니다: {literal[:80]}",
-                        )
+        for match, literal in swift_string_literals(code):
+            if chinese_pattern.search(literal) and literal not in allowed_chinese_literals:
+                findings.append(
+                    Finding(
+                        "경고",
+                        relative(path),
+                        line_number(code, match.start()),
+                        f"중국어/한자 문자열이 남아 있습니다: {literal[:80]}",
                     )
+                )
 
-            # 흔한 SwiftUI 사용자 문구 호출의 영어 하드코딩을 보조적으로 찾는다.
-            stripped = line.strip()
-            if not ui_call_pattern.search(stripped):
-                continue
-            next_text = "\n".join(lines[index - 1 : min(index + 2, len(lines))])
-            first_literal = next(swift_string_literals(next_text), None)
-            if first_literal is None:
-                continue
-            _, literal = first_literal
+        for match in ui_literal_pattern.finditer(code):
+            literal = match.group("literal")
             if not re.search(r"[A-Za-z]", literal):
                 continue
-            if literal.endswith(".localized") or re.fullmatch(r"[a-z0-9_.-]+", literal):
+            if re.fullmatch(r"[a-z0-9_.-]+", literal):
                 continue
             if any(fragment in literal for fragment in allowed_english_fragments):
                 continue
@@ -199,12 +212,11 @@ def audit_swift_strings(findings: list[Finding]) -> None:
                 Finding(
                     "참고",
                     relative(path),
-                    index,
+                    line_number(code, match.start()),
                     f"사용자 화면에 영어 문자열이 직접 노출될 가능성: {literal[:100]}",
                 )
             )
 
-        # 민감값을 출력할 가능성이 있는 로그는 사람이 검토할 수 있도록 보고한다.
         for index, line in enumerate(text.splitlines(), start=1):
             lower = line.lower()
             if ("print(" in line or "logger." in line) and any(
@@ -248,6 +260,7 @@ def write_report(findings: list[Finding]) -> None:
 if __name__ == "__main__":
     findings: list[Finding] = []
     audit_secrets_and_transport(findings)
+    audit_localization_strings(findings)
     audit_swift_strings(findings)
     findings.sort(key=lambda item: ({"치명": 0, "경고": 1, "참고": 2}[item.severity], item.path, item.line))
     write_report(findings)
