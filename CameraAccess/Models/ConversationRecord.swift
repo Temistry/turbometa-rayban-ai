@@ -1,6 +1,5 @@
 /*
- * Conversation Record Model
- * 对话记录数据模型
+ * 대화 기록 데이터 모델
  */
 
 import Foundation
@@ -17,7 +16,7 @@ struct ConversationRecord: Identifiable, Codable {
         timestamp: Date = Date(),
         messages: [ConversationMessage],
         aiModel: String = "qwen3-omni-flash-realtime",
-        language: String = "zh-CN"
+        language: String = "ko-KR"
     ) {
         self.id = id
         self.timestamp = timestamp
@@ -26,13 +25,12 @@ struct ConversationRecord: Identifiable, Codable {
         self.language = language
     }
 
-    // Computed properties
     var title: String {
         if let firstUserMessage = messages.first(where: { $0.role == .user }) {
             let content = firstUserMessage.content
             return content.count > 30 ? String(content.prefix(30)) + "..." : content
         }
-        return "AI 对话"
+        return "AI 대화"
     }
 
     var summary: String {
@@ -44,19 +42,20 @@ struct ConversationRecord: Identifiable, Codable {
     }
 
     var messageCount: Int {
-        return messages.count
+        messages.count
     }
 
     var formattedDate: String {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
         let calendar = Calendar.current
 
         if calendar.isDateInToday(timestamp) {
             formatter.dateFormat = "HH:mm"
-            return "今天 " + formatter.string(from: timestamp)
+            return "오늘 " + formatter.string(from: timestamp)
         } else if calendar.isDateInYesterday(timestamp) {
             formatter.dateFormat = "HH:mm"
-            return "昨天 " + formatter.string(from: timestamp)
+            return "어제 " + formatter.string(from: timestamp)
         } else if calendar.isDate(timestamp, equalTo: Date(), toGranularity: .weekOfYear) {
             formatter.dateFormat = "EEEE HH:mm"
             return formatter.string(from: timestamp)
@@ -67,7 +66,6 @@ struct ConversationRecord: Identifiable, Codable {
     }
 }
 
-// Make ConversationMessage Codable
 extension ConversationMessage: Codable {
     enum CodingKeys: String, CodingKey {
         case id, role, content, timestamp
@@ -97,7 +95,6 @@ extension ConversationMessage: Codable {
     }
 }
 
-// Add timestamp to ConversationMessage if not present
 extension ConversationMessage {
     init(id: UUID = UUID(), role: MessageRole, content: String, timestamp: Date = Date()) {
         self.init(role: role, content: content)
