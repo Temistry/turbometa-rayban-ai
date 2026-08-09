@@ -1,6 +1,5 @@
 /*
- * Live Translate ViewModel
- * 实时翻译状态管理
+ * 실시간 번역 상태 관리자
  */
 
 import Foundation
@@ -8,23 +7,18 @@ import SwiftUI
 import UIKit
 
 @MainActor
-class LiveTranslateViewModel: ObservableObject {
-
-    // MARK: - Connection State
+final class LiveTranslateViewModel: ObservableObject {
     @Published var isConnected = false
     @Published var isRecording = false
 
-    // MARK: - Translation State
-    @Published var currentTranslation = ""       // 当前翻译结果
-    @Published var currentOriginal = ""          // 当前原文（暂不支持，保留字段）
-    @Published var streamingTranslation = ""     // 流式翻译片段
+    @Published var currentTranslation = ""
+    @Published var currentOriginal = ""
+    @Published var streamingTranslation = ""
     @Published var translationHistory: [TranslateRecord] = []
 
-    // MARK: - Error State
     @Published var errorMessage: String?
     @Published var showError = false
 
-    // MARK: - Settings (持久化)
     @Published var sourceLanguage: TranslateLanguage {
         didSet {
             UserDefaults.standard.set(sourceLanguage.rawValue, forKey: "translate_source_language")
@@ -59,144 +53,130 @@ class LiveTranslateViewModel: ObservableObject {
         }
     }
 
-    /// 使用 iPhone 麦克风（而非眼镜麦克风）
-    /// 眼镜麦克风适合翻译自己说的话，iPhone 麦克风适合翻译对方说的话
     @Published var usePhoneMic: Bool {
         didSet {
             UserDefaults.standard.set(usePhoneMic, forKey: "translate_use_phone_mic")
         }
     }
 
-    // MARK: - Video Frame (for image enhancement)
     var currentVideoFrame: UIImage?
 
-    // MARK: - Private
     private var translateService: LiveTranslateService?
     private var imageTimer: Timer?
-
-    // MARK: - Init
+    private var isDisconnecting = false
 
     init() {
-        // 从 UserDefaults 加载设置
-        let savedSource = UserDefaults.standard.string(forKey: "translate_source_language") ?? "en"
-        self.sourceLanguage = TranslateLanguage(rawValue: savedSource) ?? .en
+        let savedSource = UserDefaults.standard.string(forKey: "translate_source_language") ?? TranslateLanguage.en.rawValue
+        sourceLanguage = TranslateLanguage(rawValue: savedSource) ?? .en
 
-        let savedTarget = UserDefaults.standard.string(forKey: "translate_target_language") ?? "zh"
-        self.targetLanguage = TranslateLanguage(rawValue: savedTarget) ?? .zh
+        let savedTarget = UserDefaults.standard.string(forKey: "translate_target_language") ?? TranslateLanguage.ko.rawValue
+        targetLanguage = TranslateLanguage(rawValue: savedTarget) ?? .ko
 
-        let savedVoice = UserDefaults.standard.string(forKey: "translate_voice") ?? "Cherry"
-        self.selectedVoice = TranslateVoice(rawValue: savedVoice) ?? .cherry
+        let savedVoice = UserDefaults.standard.string(forKey: "translate_voice") ?? TranslateVoice.cherry.rawValue
+        selectedVoice = TranslateVoice(rawValue: savedVoice) ?? .cherry
 
-        self.audioOutputEnabled = UserDefaults.standard.object(forKey: "translate_audio_enabled") as? Bool ?? true
-        self.imageEnhanceEnabled = UserDefaults.standard.object(forKey: "translate_image_enhance") as? Bool ?? false
-        self.usePhoneMic = UserDefaults.standard.object(forKey: "translate_use_phone_mic") as? Bool ?? false
+        audioOutputEnabled = UserDefaults.standard.object(forKey: "translate_audio_enabled") as? Bool ?? true
+        imageEnhanceEnabled = UserDefaults.standard.object(forKey: "translate_image_enhance") as? Bool ?? false
+        usePhoneMic = UserDefaults.standard.object(forKey: "translate_use_phone_mic") as? Bool ?? false
+
+        // 기존 중국어 기본값을 사용자가 명시적으로 저장하지 않은 개발 빌드는 한국어로 교정한다.
+        if UserDefaults.standard.object(forKey: "translate_target_language") == nil {
+            targetLanguage = .ko
+            UserDefaults.standard.set(TranslateLanguage.ko.rawValue, forKey: "translate_target_language")
+        }
+
+        ensureVoiceSupportsTargetLanguage()
+        print("[TranslateVM][INFO] 초기화 source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue) voice=\(selectedVoice.rawValue)")
     }
-
-    // MARK: - Connection
 
     func connect() {
         let apiKey = APIProviderManager.staticLiveAIAPIKey
         guard !apiKey.isEmpty else {
-            errorMessage = "livetranslate.error.noApiKey".localized
-            showError = true
+            presentError("livetranslate.error.noApiKey".localized)
             return
         }
 
+        isDisconnecting = false
         translateService = LiveTranslateService(apiKey: apiKey)
         setupCallbacks()
-
-        translateService?.updateSettings(
-            sourceLanguage: sourceLanguage,
-            targetLanguage: targetLanguage,
-            voice: selectedVoice,
-            audioEnabled: audioOutputEnabled
-        )
-
+        updateServiceSettings()
+        print("[TranslateVM][INFO] 연결 요청 source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue) voice=\(selectedVoice.rawValue)")
         translateService?.connect()
     }
 
     func disconnect() {
+        guard !isDisconnecting else { return }
+        isDisconnecting = true
         stopImageTimer()
         translateService?.disconnect()
         translateService = nil
         isConnected = false
         isRecording = false
+        print("[TranslateVM][INFO] 연결 종료")
     }
 
-    // MARK: - Recording
-
     func toggleRecording() {
-        if isRecording {
-            stopRecording()
-        } else {
-            startRecording()
-        }
+        isRecording ? stopRecording() : startRecording()
     }
 
     func startRecording() {
+        guard isConnected else {
+            presentError("번역 서버에 연결된 뒤 녹음을 시작하세요")
+            return
+        }
         translateService?.startRecording(usePhoneMic: usePhoneMic)
         isRecording = true
+        print("[TranslateVM][INFO] 녹음 시작 microphone=\(usePhoneMic ? "iphone" : "glasses")")
 
-        // 如果启用图像增强，开始定时发送图片
-        if imageEnhanceEnabled {
-            startImageTimer()
-        }
+        if imageEnhanceEnabled { startImageTimer() }
     }
 
     func stopRecording() {
         translateService?.stopRecording()
         isRecording = false
         stopImageTimer()
+        print("[TranslateVM][INFO] 녹음 중지 translationLength=\(currentTranslation.count)")
 
-        // 保存当前翻译到历史
         if !currentTranslation.isEmpty {
-            let record = TranslateRecord(
-                sourceLanguage: sourceLanguage,
-                targetLanguage: targetLanguage,
-                originalText: currentOriginal,
-                translatedText: currentTranslation
+            translationHistory.insert(
+                TranslateRecord(
+                    sourceLanguage: sourceLanguage,
+                    targetLanguage: targetLanguage,
+                    originalText: currentOriginal,
+                    translatedText: currentTranslation
+                ),
+                at: 0
             )
-            translationHistory.insert(record, at: 0)
-
-            // 限制历史记录数量
             if translationHistory.count > 50 {
                 translationHistory = Array(translationHistory.prefix(50))
             }
         }
     }
 
-    // MARK: - Language Swap
-
     func swapLanguages() {
-        // 只有当两种语言都支持作为目标语言时才能交换
         guard sourceLanguage.supportsAudioOutput && targetLanguage.supportsAudioOutput else {
-            errorMessage = "livetranslate.error.cannotSwap".localized
-            showError = true
+            presentError("livetranslate.error.cannotSwap".localized)
             return
         }
 
-        let temp = sourceLanguage
+        let previousSource = sourceLanguage
         sourceLanguage = targetLanguage
-        targetLanguage = temp
-
-        // 清空当前翻译
-        currentTranslation = ""
-        streamingTranslation = ""
+        targetLanguage = previousSource
+        ensureVoiceSupportsTargetLanguage()
+        clearTranslation()
+        print("[TranslateVM][INFO] 언어 교환 source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue)")
     }
-
-    // MARK: - Video Frame
 
     func updateVideoFrame(_ frame: UIImage) {
         currentVideoFrame = frame
     }
 
-    // MARK: - Private Methods
-
     private func setupCallbacks() {
         translateService?.onConnected = { [weak self] in
             DispatchQueue.main.async {
-                self?.isConnected = true
-                print("✅ [TranslateVM] 已连接")
+                guard let self, !self.isDisconnecting else { return }
+                self.isConnected = true
+                print("[TranslateVM][INFO] 번역 세션 연결 완료")
             }
         }
 
@@ -210,24 +190,30 @@ class LiveTranslateViewModel: ObservableObject {
             DispatchQueue.main.async {
                 self?.currentTranslation = text
                 self?.streamingTranslation = ""
+                print("[TranslateVM][INFO] 번역 문장 완료 length=\(text.count)")
             }
         }
 
-        translateService?.onAudioDone = { [weak self] in
+        translateService?.onAudioDone = {
             DispatchQueue.main.async {
-                print("🔊 [TranslateVM] 音频播放完成")
+                print("[TranslateVM][INFO] 번역 음성 재생 완료")
             }
         }
 
         translateService?.onError = { [weak self] error in
             DispatchQueue.main.async {
-                self?.errorMessage = error
-                self?.showError = true
+                guard let self else { return }
+                if self.isDisconnecting {
+                    print("[TranslateVM][INFO] 종료 중 오류 콜백 무시 description=\(error)")
+                    return
+                }
+                self.presentError(error)
             }
         }
     }
 
     private func updateServiceSettings() {
+        ensureVoiceSupportsTargetLanguage()
         translateService?.updateSettings(
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
@@ -236,7 +222,11 @@ class LiveTranslateViewModel: ObservableObject {
         )
     }
 
-    // MARK: - Image Timer
+    private func ensureVoiceSupportsTargetLanguage() {
+        if !selectedVoice.supports(language: targetLanguage) {
+            selectedVoice = .cherry
+        }
+    }
 
     private func startImageTimer() {
         stopImageTimer()
@@ -253,11 +243,9 @@ class LiveTranslateViewModel: ObservableObject {
     }
 
     private func sendCurrentFrame() {
-        guard imageEnhanceEnabled, let frame = currentVideoFrame else { return }
-        translateService?.sendImageFrame(frame)
+        guard imageEnhanceEnabled, let currentVideoFrame else { return }
+        translateService?.sendImageFrame(currentVideoFrame)
     }
-
-    // MARK: - Clear
 
     func clearTranslation() {
         currentTranslation = ""
@@ -267,5 +255,11 @@ class LiveTranslateViewModel: ObservableObject {
 
     func clearHistory() {
         translationHistory.removeAll()
+    }
+
+    private func presentError(_ message: String) {
+        errorMessage = message
+        showError = true
+        print("[TranslateVM][ERROR] 사용자 오류 표시 description=\(message)")
     }
 }
