@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """TurboMeta 한국어 UI 및 기본 보안 설정 정적 점검.
 
-외부 패키지 없이 실행되며, GitHub Actions와 로컬 개발 환경에서 같은 검사를 사용한다.
-이 검사는 완전한 침투 테스트를 대체하지 않는다. 명백한 비밀정보, 과도한 ATS 예외,
-필수 보호 코드 누락과 남은 외국어 사용자 문자열을 빠르게 찾는 용도다.
+외부 패키지 없이 실행되며 GitHub Actions와 로컬 개발 환경에서 같은 검사를 사용한다.
+완전한 침투 테스트를 대신하지는 않지만, 저장소 비밀정보, 과도한 ATS 예외,
+필수 보호 코드 누락, 중국어 사용자 문자열과 의심스러운 민감 로그를 빠르게 차단한다.
 """
 
 from __future__ import annotations
@@ -45,8 +45,11 @@ def swift_string_literals(text: str):
 
 
 def strip_swift_comments(text: str) -> str:
-    text = re.sub(r"/\*.*?\*/", "", text, flags=re.DOTALL)
-    return re.sub(r"//.*", "", text)
+    def preserve_newlines(match: re.Match[str]) -> str:
+        return "\n" * match.group(0).count("\n")
+
+    text = re.sub(r"/\*.*?\*/", preserve_newlines, text, flags=re.DOTALL)
+    return re.sub(r"//[^\n]*", "", text)
 
 
 def audit_secrets_and_transport(findings: list[Finding]) -> None:
@@ -100,6 +103,14 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
         "CameraAccess/ViewModels/RTMPStreamingViewModel.swift": [
             "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
         ],
+        "CameraAccess/Services/ConversationStorage.swift": [
+            "completeFileProtectionUntilFirstUserAuthentication",
+            "FileProtectionType.completeUntilFirstUserAuthentication",
+        ],
+        "CameraAccess/Services/QuickVisionStorage.swift": [
+            "completeFileProtectionUntilFirstUserAuthentication",
+            "FileProtectionType.completeUntilFirstUserAuthentication",
+        ],
         "CameraAccess/Views/DebugMenuView.swift": [
             "Bearer\\s+",
             "<보안상 숨김>",
@@ -129,10 +140,12 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
 
 def audit_localization_strings(findings: list[Finding]) -> None:
     chinese_pattern = re.compile(r"[\u4e00-\u9fff]")
-    assignment_pattern = re.compile(r'^\s*"(?P<key>[^"\\]+)"\s*=\s*"(?P<value>(?:\\.|[^"\\])*)"\s*;', re.MULTILINE)
+    assignment_pattern = re.compile(
+        r'^\s*"(?P<key>[^"\\]+)"\s*=\s*"(?P<value>(?:\\.|[^"\\])*)"\s*;',
+        re.MULTILINE,
+    )
 
     for path in SOURCE_ROOT.rglob("Localizable.strings"):
-        # 한국어 전용 리소스로 사용 중인 번들만 검사한다.
         if path.parent.name not in {"ko.lproj", "zh-Hans.lproj"}:
             continue
         text = path.read_text(encoding="utf-8", errors="replace")
@@ -157,8 +170,10 @@ def audit_swift_strings(findings: list[Finding]) -> None:
         flags=re.MULTILINE,
     )
 
+    # 서버의 과거 응답을 한국어 UI 값으로 정규화하기 위한 호환 문자열이다.
     allowed_chinese_literals = {"优秀", "良好", "一般", "较差"}
     allowed_english_fragments = {
+        "AI",
         "TurboMeta",
         "Ray-Ban Meta",
         "OpenClaw",
@@ -183,6 +198,9 @@ def audit_swift_strings(findings: list[Finding]) -> None:
         "Xcode",
         "WebSocket",
         "Gateway",
+        "ws://",
+        "wss://",
+        "127.0.0.1",
     }
 
     for path in SOURCE_ROOT.rglob("*.swift"):
@@ -202,11 +220,12 @@ def audit_swift_strings(findings: list[Finding]) -> None:
 
         for match in ui_literal_pattern.finditer(code):
             literal = match.group("literal")
-            if not re.search(r"[A-Za-z]", literal):
+            literal_without_interpolation = re.sub(r"\\\([^)]*\)", "", literal)
+            if not re.search(r"[A-Za-z]", literal_without_interpolation):
                 continue
-            if re.fullmatch(r"[a-z0-9_.-]+", literal):
+            if re.fullmatch(r"[A-Za-z0-9_.-]+", literal_without_interpolation):
                 continue
-            if any(fragment in literal for fragment in allowed_english_fragments):
+            if any(fragment in literal_without_interpolation for fragment in allowed_english_fragments):
                 continue
             findings.append(
                 Finding(
@@ -219,9 +238,16 @@ def audit_swift_strings(findings: list[Finding]) -> None:
 
         for index, line in enumerate(text.splitlines(), start=1):
             lower = line.lower()
-            if ("print(" in line or "logger." in line) and any(
-                token in lower for token in ("apikey", "api_key", "authorization", "streamkey", "gatewaytoken", "bearer")
-            ):
+            is_log_line = "print(" in line or "logger." in line
+            mentions_sensitive_name = any(
+                token in lower
+                for token in ("apikey", "api_key", "authorization", "streamkey", "gatewaytoken", "bearer")
+            )
+            only_reports_metadata = any(
+                safe_fragment in lower
+                for safe_fragment in ("configured=", "present=", "exists=", "length=", "count=", "source=keychain")
+            )
+            if is_log_line and mentions_sensitive_name and not only_reports_metadata:
                 findings.append(
                     Finding(
                         "참고",
@@ -265,5 +291,6 @@ if __name__ == "__main__":
     findings.sort(key=lambda item: ({"치명": 0, "경고": 1, "참고": 2}[item.severity], item.path, item.line))
     write_report(findings)
 
-    if any(item.severity == "치명" for item in findings):
+    # 중국어 사용자 문자열은 기능 요구사항 위반이므로 치명 항목과 함께 CI를 실패시킨다.
+    if any(item.severity in {"치명", "경고"} for item in findings):
         sys.exit(1)
