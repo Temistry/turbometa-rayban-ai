@@ -1,5 +1,5 @@
 /*
- * 실시간 번역 상태 관리자
+ * Google Gemini Live 기반 실시간 번역 상태 관리자
  */
 
 import Foundation
@@ -64,16 +64,20 @@ final class LiveTranslateViewModel: ObservableObject {
     private var translateService: LiveTranslateService?
     private var imageTimer: Timer?
     private var isDisconnecting = false
+    private var lastStoredTranslationSignature = ""
 
     init() {
-        let savedSource = UserDefaults.standard.string(forKey: "translate_source_language") ?? TranslateLanguage.en.rawValue
+        let savedSource = UserDefaults.standard.string(forKey: "translate_source_language")
+            ?? TranslateLanguage.en.rawValue
         sourceLanguage = TranslateLanguage(rawValue: savedSource) ?? .en
 
-        let savedTarget = UserDefaults.standard.string(forKey: "translate_target_language") ?? TranslateLanguage.ko.rawValue
+        let savedTarget = UserDefaults.standard.string(forKey: "translate_target_language")
+            ?? TranslateLanguage.ko.rawValue
         targetLanguage = TranslateLanguage(rawValue: savedTarget) ?? .ko
 
-        let savedVoice = UserDefaults.standard.string(forKey: "translate_voice") ?? TranslateVoice.cherry.rawValue
-        selectedVoice = TranslateVoice(rawValue: savedVoice) ?? .cherry
+        let savedVoice = UserDefaults.standard.string(forKey: "translate_voice")
+            ?? TranslateVoice.aoede.rawValue
+        selectedVoice = TranslateVoice(rawValue: savedVoice) ?? .aoede
 
         audioOutputEnabled = UserDefaults.standard.object(forKey: "translate_audio_enabled") as? Bool ?? true
         imageEnhanceEnabled = UserDefaults.standard.object(forKey: "translate_image_enhance") as? Bool ?? false
@@ -84,16 +88,16 @@ final class LiveTranslateViewModel: ObservableObject {
             UserDefaults.standard.set(TranslateLanguage.ko.rawValue, forKey: "translate_target_language")
         }
 
-        ensureVoiceSupportsTargetLanguage()
-        print("[TranslateVM][INFO] 초기화 source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue) voice=\(selectedVoice.rawValue)")
+        print(
+            "[TranslateVM][INFO] 초기화 provider=Google model=\(GeminiModelCatalog.liveTranslate) "
+            + "source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue) voice=\(selectedVoice.rawValue)"
+        )
     }
 
     func connect() {
-        // 실시간 번역은 Live AI 제공자 선택과 무관하게 Alibaba 전용 모델을 사용한다.
-        let endpoint = APIProviderManager.staticAlibabaEndpoint
-        let apiKey = APIKeyManager.shared.getAPIKey(for: .alibaba, endpoint: endpoint) ?? ""
+        let apiKey = APIKeyManager.shared.getGoogleAPIKey() ?? ""
         guard !apiKey.isEmpty else {
-            presentError("Alibaba \(endpoint.displayName) API Key를 먼저 설정하세요")
+            presentError("Google Gemini API Key를 먼저 설정하세요")
             return
         }
 
@@ -101,7 +105,10 @@ final class LiveTranslateViewModel: ObservableObject {
         translateService = LiveTranslateService(apiKey: apiKey)
         setupCallbacks()
         updateServiceSettings()
-        print("[TranslateVM][INFO] 연결 요청 endpoint=\(endpoint.rawValue) source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue) voice=\(selectedVoice.rawValue)")
+        print(
+            "[TranslateVM][INFO] Gemini 연결 요청 source=\(sourceLanguage.rawValue) "
+            + "target=\(targetLanguage.rawValue) voice=\(selectedVoice.rawValue)"
+        )
         translateService?.connect()
     }
 
@@ -113,7 +120,7 @@ final class LiveTranslateViewModel: ObservableObject {
         translateService = nil
         isConnected = false
         isRecording = false
-        print("[TranslateVM][INFO] 연결 종료")
+        print("[TranslateVM][INFO] Gemini 번역 연결 종료")
     }
 
     func toggleRecording() {
@@ -125,9 +132,15 @@ final class LiveTranslateViewModel: ObservableObject {
             presentError("번역 서버에 연결된 뒤 녹음을 시작하세요")
             return
         }
+
+        currentOriginal = ""
+        currentTranslation = ""
+        streamingTranslation = ""
+        lastStoredTranslationSignature = ""
+
         translateService?.startRecording(usePhoneMic: usePhoneMic)
         isRecording = true
-        print("[TranslateVM][INFO] 녹음 시작 microphone=\(usePhoneMic ? "iphone" : "glasses")")
+        print("[TranslateVM][INFO] 녹음 시작 microphone=\(usePhoneMic ? "iphone" : "bluetooth")")
 
         if imageEnhanceEnabled { startImageTimer() }
     }
@@ -136,34 +149,16 @@ final class LiveTranslateViewModel: ObservableObject {
         translateService?.stopRecording()
         isRecording = false
         stopImageTimer()
-        print("[TranslateVM][INFO] 녹음 중지 translationLength=\(currentTranslation.count)")
-
-        if !currentTranslation.isEmpty {
-            translationHistory.insert(
-                TranslateRecord(
-                    sourceLanguage: sourceLanguage,
-                    targetLanguage: targetLanguage,
-                    originalText: currentOriginal,
-                    translatedText: currentTranslation
-                ),
-                at: 0
-            )
-            if translationHistory.count > 50 {
-                translationHistory = Array(translationHistory.prefix(50))
-            }
-        }
+        print(
+            "[TranslateVM][INFO] 녹음 중지 originalLength=\(currentOriginal.count) "
+            + "translationLength=\(currentTranslation.count)"
+        )
     }
 
     func swapLanguages() {
-        guard sourceLanguage.supportsAudioOutput && targetLanguage.supportsAudioOutput else {
-            presentError("livetranslate.error.cannotSwap".localized)
-            return
-        }
-
         let previousSource = sourceLanguage
         sourceLanguage = targetLanguage
         targetLanguage = previousSource
-        ensureVoiceSupportsTargetLanguage()
         clearTranslation()
         print("[TranslateVM][INFO] 언어 교환 source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue)")
     }
@@ -177,7 +172,14 @@ final class LiveTranslateViewModel: ObservableObject {
             DispatchQueue.main.async {
                 guard let self, !self.isDisconnecting else { return }
                 self.isConnected = true
-                print("[TranslateVM][INFO] 번역 세션 연결 완료")
+                print("[TranslateVM][INFO] Gemini 번역 세션 연결 완료")
+            }
+        }
+
+        translateService?.onOriginalText = { [weak self] text in
+            DispatchQueue.main.async {
+                self?.currentOriginal = text
+                print("[TranslateVM][INFO] 원문 자막 수신 length=\(text.count)")
             }
         }
 
@@ -189,8 +191,10 @@ final class LiveTranslateViewModel: ObservableObject {
 
         translateService?.onTranslationText = { [weak self] text in
             DispatchQueue.main.async {
-                self?.currentTranslation = text
-                self?.streamingTranslation = ""
+                guard let self else { return }
+                self.currentTranslation = text
+                self.streamingTranslation = ""
+                self.storeCompletedTranslation(text)
                 print("[TranslateVM][INFO] 번역 문장 완료 length=\(text.count)")
             }
         }
@@ -205,7 +209,7 @@ final class LiveTranslateViewModel: ObservableObject {
             DispatchQueue.main.async {
                 guard let self else { return }
                 if self.isDisconnecting {
-                    print("[TranslateVM][INFO] 종료 중 오류 콜백 무시 description=\(error)")
+                    print("[TranslateVM][INFO] 종료 중 오류 콜백 무시")
                     return
                 }
                 self.presentError(error)
@@ -213,20 +217,41 @@ final class LiveTranslateViewModel: ObservableObject {
         }
     }
 
+    private func storeCompletedTranslation(_ text: String) {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+
+        let signature = "\(currentOriginal)|\(normalized)|\(sourceLanguage.rawValue)|\(targetLanguage.rawValue)"
+        guard signature != lastStoredTranslationSignature else { return }
+        lastStoredTranslationSignature = signature
+
+        let record = TranslateRecord(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            originalText: currentOriginal,
+            translatedText: normalized
+        )
+        translationHistory.insert(record, at: 0)
+        if translationHistory.count > 50 {
+            translationHistory = Array(translationHistory.prefix(50))
+        }
+
+        KnowledgeLogService.shared.appendTranslation(
+            original: currentOriginal,
+            translated: normalized,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage,
+            model: GeminiModelCatalog.liveTranslate
+        )
+    }
+
     private func updateServiceSettings() {
-        ensureVoiceSupportsTargetLanguage()
         translateService?.updateSettings(
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
             voice: selectedVoice,
             audioEnabled: audioOutputEnabled
         )
-    }
-
-    private func ensureVoiceSupportsTargetLanguage() {
-        if !selectedVoice.supports(language: targetLanguage) {
-            selectedVoice = .cherry
-        }
     }
 
     private func startImageTimer() {
@@ -252,6 +277,7 @@ final class LiveTranslateViewModel: ObservableObject {
         currentTranslation = ""
         streamingTranslation = ""
         currentOriginal = ""
+        lastStoredTranslationSignature = ""
     }
 
     func clearHistory() {
@@ -261,6 +287,6 @@ final class LiveTranslateViewModel: ObservableObject {
     private func presentError(_ message: String) {
         errorMessage = message
         showError = true
-        print("[TranslateVM][ERROR] 사용자 오류 표시 description=\(message)")
+        print("[TranslateVM][ERROR] 사용자 오류 표시 messageLength=\(message.count)")
     }
 }
