@@ -51,6 +51,15 @@ final class QuickVisionStorage {
         }
 
         save(records, reason: "퀵비전 기록 추가")
+
+        // 사진 원본과 썸네일은 외부 지식 로그로 보내지 않는다.
+        // 질문과 한국어 답변 텍스트만 사전 마스킹 후 Markdown/JSONL에 기록한다.
+        Task { @MainActor in
+            KnowledgeLogService.shared.appendQuickVision(
+                record,
+                model: GeminiModelCatalog.quickVision
+            )
+        }
     }
 
     // MARK: - Load Records
