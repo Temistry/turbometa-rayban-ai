@@ -51,7 +51,7 @@ jobs:
           set -o pipefail
           xcodebuild \
             -project CameraAccess.xcodeproj \
-            -scheme CameraAccess \
+            -scheme TurboMeta \
             -configuration Debug \
             -destination 'generic/platform=iOS Simulator' \
             CODE_SIGNING_ALLOWED=NO \
