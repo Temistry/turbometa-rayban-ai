@@ -1,6 +1,5 @@
 /*
- * Gallery View
- * 图库 - 显示拍摄的照片
+ * 촬영 사진 갤러리
  */
 
 import SwiftUI
@@ -10,7 +9,7 @@ struct GalleryView: View {
     @State private var selectedPhoto: GalleryPhoto?
     @State private var showPhotoDetail = false
 
-    let columns = [
+    private let columns = [
         GridItem(.flexible(), spacing: AppSpacing.sm),
         GridItem(.flexible(), spacing: AppSpacing.sm),
         GridItem(.flexible(), spacing: AppSpacing.sm)
@@ -19,22 +18,19 @@ struct GalleryView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // Background
-                AppColors.secondaryBackground
-                    .ignoresSafeArea()
+                AppColors.secondaryBackground.ignoresSafeArea()
 
                 if photos.isEmpty {
-                    // Empty state
                     VStack(spacing: AppSpacing.lg) {
                         Image(systemName: "photo.on.rectangle.angled")
                             .font(.system(size: 60))
                             .foregroundColor(AppColors.textTertiary)
 
-                        Text("暂无照片")
+                        Text("gallery.empty".localized)
                             .font(AppTypography.title2)
                             .foregroundColor(AppColors.textPrimary)
 
-                        Text("使用 Live AI 拍摄照片后将显示在这里")
+                        Text("안경으로 촬영한 사진을 저장하면 여기에 표시됩니다")
                             .font(AppTypography.subheadline)
                             .foregroundColor(AppColors.textSecondary)
                             .multilineTextAlignment(.center)
@@ -55,26 +51,22 @@ struct GalleryView: View {
                     }
                 }
             }
-            .navigationTitle("图库")
+            .navigationTitle("gallery.title".localized)
             .sheet(isPresented: $showPhotoDetail) {
-                if let photo = selectedPhoto {
-                    PhotoDetailView(photo: photo)
+                if let selectedPhoto {
+                    PhotoDetailView(photo: selectedPhoto)
                 }
             }
         }
-        .onAppear {
-            loadPhotos()
-        }
+        .onAppear { loadPhotos() }
     }
 
     private func loadPhotos() {
-        // TODO: Load photos from storage
-        // For now, using placeholder data
+        // 저장소 연동 전까지 빈 상태를 표시한다.
         photos = []
+        print("[Gallery][INFO] 갤러리 저장소 연동 전 상태")
     }
 }
-
-// MARK: - Gallery Photo Model
 
 struct GalleryPhoto: Identifiable {
     let id = UUID()
@@ -82,8 +74,6 @@ struct GalleryPhoto: Identifiable {
     let timestamp: Date
     let aiDescription: String?
 }
-
-// MARK: - Photo Grid Item
 
 struct PhotoGridItem: View {
     let photo: GalleryPhoto
@@ -106,8 +96,6 @@ struct PhotoGridItem: View {
     }
 }
 
-// MARK: - Photo Detail View
-
 struct PhotoDetailView: View {
     let photo: GalleryPhoto
     @Environment(\.dismiss) private var dismiss
@@ -115,27 +103,23 @@ struct PhotoDetailView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.black
-                    .ignoresSafeArea()
+                Color.black.ignoresSafeArea()
 
                 VStack(spacing: 0) {
-                    // Photo
                     Image(uiImage: photo.image)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-                    // AI Description (if available)
                     if let description = photo.aiDescription {
                         VStack(alignment: .leading, spacing: AppSpacing.sm) {
-                            Text("AI 识别")
+                            Text("AI 인식")
                                 .font(AppTypography.headline)
                                 .foregroundColor(.white)
 
                             Text(description)
                                 .font(AppTypography.body)
                                 .foregroundColor(.white.opacity(0.9))
-                                .lineLimit(nil)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(AppSpacing.lg)
@@ -149,32 +133,30 @@ struct PhotoDetailView: View {
                     Button {
                         dismiss()
                     } label: {
-                        Image(systemName: "xmark")
-                            .foregroundColor(.white)
+                        Image(systemName: "xmark").foregroundColor(.white)
                     }
+                    .accessibilityLabel("닫기")
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        sharePhoto()
-                    } label: {
-                        Image(systemName: "square.and.arrow.up")
-                            .foregroundColor(.white)
+                    Button { sharePhoto() } label: {
+                        Image(systemName: "square.and.arrow.up").foregroundColor(.white)
                     }
+                    .accessibilityLabel("사진 공유")
                 }
             }
         }
     }
 
     private func sharePhoto() {
-        let activityVC = UIActivityViewController(
+        let activityViewController = UIActivityViewController(
             activityItems: [photo.image],
             applicationActivities: nil
         )
 
         if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
            let rootViewController = windowScene.windows.first?.rootViewController {
-            rootViewController.present(activityVC, animated: true)
+            rootViewController.present(activityViewController, animated: true)
         }
     }
 }
