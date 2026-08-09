@@ -292,13 +292,21 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             throw OpenClawTransportError.invalidHost
         }
 
+        // 주소 입력란에 자격 증명을 넣으면 URL/프록시 로그에 새어 나가기 쉽다.
+        guard suppliedComponents?.user == nil,
+              suppliedComponents?.password == nil,
+              suppliedComponents?.query == nil,
+              suppliedComponents?.fragment == nil else {
+            throw OpenClawTransportError.credentialsOrQueryNotAllowed
+        }
+
         let requestedScheme = suppliedComponents?.scheme?.lowercased()
         let scheme = requestedScheme ?? (Self.isLocalOrPrivateHost(host) ? "ws" : "wss")
         guard scheme == "ws" || scheme == "wss" else {
             throw OpenClawTransportError.unsupportedScheme(scheme)
         }
 
-        // 평문 WebSocket은 루프백/사설망에서만 허용한다. 공인망 전송은 TLS가 필수다.
+        // 평문 WebSocket은 엄격히 검증된 루프백/사설 IP 또는 .local 호스트에서만 허용한다.
         if scheme == "ws" && !Self.isLocalOrPrivateHost(host) {
             throw OpenClawTransportError.insecurePublicWebSocket(host)
         }
@@ -316,26 +324,72 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     static func isLocalOrPrivateHost(_ host: String) -> Bool {
-        let normalized = host.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        var normalized = host
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+
+        // Fully-qualified hostnames may legally end in a dot.
+        if normalized.hasSuffix(".") {
+            normalized.removeLast()
+        }
 
         if normalized == "localhost" || normalized == "::1" || normalized.hasSuffix(".local") {
             return true
         }
-        if normalized.hasPrefix("127.") || normalized.hasPrefix("10.") || normalized.hasPrefix("192.168.") || normalized.hasPrefix("169.254.") {
-            return true
+
+        if let octets = strictIPv4Octets(normalized) {
+            switch octets[0] {
+            case 10, 127:
+                return true
+            case 169:
+                return octets[1] == 254
+            case 172:
+                return (16...31).contains(octets[1])
+            case 192:
+                return octets[1] == 168
+            default:
+                return false
+            }
         }
 
-        let parts = normalized.split(separator: ".").compactMap { Int($0) }
-        if parts.count == 4, parts[0] == 172, (16...31).contains(parts[1]) {
-            return true
+        // Hostname prefixes such as "10.attacker.example" must never be treated as an IP.
+        // IPv6 private/link-local checks only run for actual colon-containing literals.
+        guard normalized.contains(":") else {
+            return false
         }
 
-        // IPv6 unique-local(fc00::/7) and link-local(fe80::/10).
-        if normalized.hasPrefix("fc") || normalized.hasPrefix("fd") || normalized.hasPrefix("fe8") || normalized.hasPrefix("fe9") || normalized.hasPrefix("fea") || normalized.hasPrefix("feb") {
-            return true
+        if normalized.hasPrefix("fc") || normalized.hasPrefix("fd") {
+            return true // IPv6 unique-local fc00::/7
+        }
+
+        let firstHextet = normalized.split(separator: ":", omittingEmptySubsequences: true).first
+            .flatMap { UInt16($0, radix: 16) }
+        if let firstHextet,
+           (firstHextet & 0xffc0) == 0xfe80 {
+            return true // IPv6 link-local fe80::/10
         }
 
         return false
+    }
+
+    private static func strictIPv4Octets(_ value: String) -> [Int]? {
+        let components = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard components.count == 4 else { return nil }
+
+        var octets: [Int] = []
+        octets.reserveCapacity(4)
+
+        for component in components {
+            guard !component.isEmpty,
+                  component.allSatisfy({ $0.isNumber }),
+                  let octet = Int(component),
+                  (0...255).contains(octet) else {
+                return nil
+            }
+            octets.append(octet)
+        }
+        return octets
     }
 
     private func saveSettings() {
@@ -793,6 +847,7 @@ private enum OpenClawTransportError: LocalizedError {
     case invalidPort(Int)
     case unsupportedScheme(String)
     case insecurePublicWebSocket(String)
+    case credentialsOrQueryNotAllowed
 
     var errorDescription: String? {
         switch self {
@@ -804,6 +859,8 @@ private enum OpenClawTransportError: LocalizedError {
             return "지원하지 않는 연결 방식입니다: \(scheme)"
         case .insecurePublicWebSocket(let host):
             return "공인망 호스트 \(host)에는 암호화된 wss:// 연결만 사용할 수 있습니다"
+        case .credentialsOrQueryNotAllowed:
+            return "Gateway 주소에는 사용자 정보, 토큰, 쿼리 문자열 또는 프래그먼트를 넣을 수 없습니다"
         }
     }
 }
