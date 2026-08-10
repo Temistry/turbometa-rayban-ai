@@ -1,4 +1,42 @@
 workflows:
+  ios-swiftpm-lockfile-refresh:
+    name: SwiftPM 잠금 파일 생성
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+
+    environment:
+      vars:
+        XCODE_PROJECT: "CameraAccess.xcodeproj"
+        XCODE_SCHEME: "TurboMeta"
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+
+    scripts:
+      - name: 프로젝트와 잠금 파일 경로 확인
+        script: |
+          set -euo pipefail
+          test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+
+      - name: SwiftPM 잠금 파일 생성
+        script: |
+          set -euo pipefail
+          lockfile="$CM_BUILD_DIR/$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+          xcodebuild -version
+          xcodebuild -resolvePackageDependencies \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
+          python3 -m json.tool "$lockfile" >/dev/null
+          mkdir -p "$CM_BUILD_DIR/build/swiftpm"
+          cp "$lockfile" "$CM_BUILD_DIR/build/swiftpm/Package.resolved"
+          shasum -a 256 "$CM_BUILD_DIR/build/swiftpm/Package.resolved"
+
+    artifacts:
+      - build/swiftpm/Package.resolved
+
   ios-compile-check:
     name: iOS 컴파일 점검
     instance_type: mac_mini_m2

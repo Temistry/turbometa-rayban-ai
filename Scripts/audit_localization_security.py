@@ -80,7 +80,7 @@ def audit_package_resolution(findings: list[Finding]) -> None:
         findings.append(Finding("치명", relative(resolved_path), 1, "Package.resolved가 없습니다"))
         return
 
-    expected_remote_packages = {
+    expected_direct_packages = {
         "haishinkit.swift": "https://github.com/Turbo1123/HaishinKit.swift",
         "meta-wearables-dat-ios": "https://github.com/facebook/meta-wearables-dat-ios",
     }
@@ -119,14 +119,14 @@ def audit_package_resolution(findings: list[Finding]) -> None:
                     ):
                         findings.append(Finding("치명", relative(resolved_path), 1, f"원격 패키지 revision이 올바르지 않습니다: {identity}"))
 
-            for identity, location in expected_remote_packages.items():
+            for identity, location in expected_direct_packages.items():
                 if remote_packages.get(identity) != location:
                     findings.append(
                         Finding(
                             "치명",
                             relative(resolved_path),
                             1,
-                            f"필수 원격 패키지 또는 location이 올바르지 않습니다: {identity}",
+                            f"필수 직접 원격 패키지 또는 location이 올바르지 않습니다: {identity}",
                         )
                     )
     except Exception as exc:  # noqa: BLE001
