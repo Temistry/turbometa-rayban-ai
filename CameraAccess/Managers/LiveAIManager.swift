@@ -177,7 +177,10 @@ class LiveAIManager: ObservableObject {
             omniService = OmniRealtimeService(apiKey: apiKey)
             setupOmniCallbacks()
         case .google:
-            geminiService = GeminiLiveService(apiKey: apiKey)
+            geminiService = GeminiLiveService(
+                apiKey: apiKey,
+                model: APIProviderManager.staticLiveAIModel
+            )
             setupGeminiCallbacks()
         }
     }
@@ -389,7 +392,7 @@ class LiveAIManager: ObservableObject {
         case .alibaba:
             aiModel = "qwen3-omni-flash-realtime"
         case .google:
-            aiModel = "gemini-2.0-flash-exp"
+            aiModel = APIProviderManager.staticLiveAIModel
         }
 
         let record = ConversationRecord(

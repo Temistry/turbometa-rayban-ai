@@ -10,6 +10,7 @@ import UIKit
 
 final class LiveTranslateService {
     private let apiKey: String
+    private let model: String
 
     private var sourceLanguage: TranslateLanguage = .en
     private var targetLanguage: TranslateLanguage = .ko
@@ -26,8 +27,9 @@ final class LiveTranslateService {
     var onAudioDone: (() -> Void)?
     var onError: ((String) -> Void)?
 
-    init(apiKey: String) {
+    init(apiKey: String, model: String = APIProviderManager.staticLiveAIModel) {
         self.apiKey = apiKey
+        self.model = model
     }
 
     func connect() {
@@ -43,7 +45,7 @@ final class LiveTranslateService {
 
         let service = GeminiLiveService(
             apiKey: apiKey,
-            model: GeminiModelCatalog.liveTranslate,
+            model: model,
             systemInstruction: translationInstruction,
             voiceName: voice.rawValue,
             audioOutputEnabled: audioOutputEnabled
@@ -52,7 +54,7 @@ final class LiveTranslateService {
         configureCallbacks(for: service)
 
         print(
-            "[Translate][INFO] Gemini 번역 연결 시작 model=\(GeminiModelCatalog.liveTranslate) "
+            "[Translate][INFO] Gemini 번역 연결 시작 model=\(model) "
             + "source=\(sourceLanguage.rawValue) target=\(targetLanguage.rawValue) "
             + "voice=\(voice.rawValue) audio=\(audioOutputEnabled)"
         )
@@ -102,6 +104,16 @@ final class LiveTranslateService {
     }
 
     private var translationInstruction: String {
+        Self.translationInstruction(
+            sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage
+        )
+    }
+
+    static func translationInstruction(
+        sourceLanguage: TranslateLanguage,
+        targetLanguage: TranslateLanguage
+    ) -> String {
         """
         당신은 스마트 안경용 실시간 통역사입니다.
         입력 언어는 \(sourceLanguage.displayName), 출력 언어는 \(targetLanguage.displayName)입니다.

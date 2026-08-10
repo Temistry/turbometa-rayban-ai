@@ -9,6 +9,55 @@ import AVFoundation
 import Foundation
 import UIKit
 
+/// Raw v1beta Gemini Live WebSocket messages. Dictionary keys are intentionally
+/// lower camel case because JSONSerialization does not transform Swift names.
+enum GeminiLiveMessageBuilder {
+    static func setup(
+        model: String,
+        systemInstruction: String,
+        voiceName: String,
+        audioOutputEnabled: Bool
+    ) -> [String: Any] {
+        let generationConfig: [String: Any] = [
+            "responseModalities": ["AUDIO"],
+            "speechConfig": [
+                "voiceConfig": [
+                    "prebuiltVoiceConfig": [
+                        "voiceName": voiceName
+                    ]
+                ]
+            ]
+        ]
+
+        return [
+            "setup": [
+                "model": "models/\(model)",
+                "generationConfig": generationConfig,
+                "systemInstruction": [
+                    "parts": [
+                        ["text": systemInstruction]
+                    ]
+                ],
+                "inputAudioTranscription": [:] as [String: Any],
+                "outputAudioTranscription": [:] as [String: Any]
+            ] as [String: Any]
+        ]
+    }
+
+    static func realtimeInput(data: Data, mimeType: String) -> [String: Any] {
+        [
+            "realtimeInput": [
+                "mediaChunks": [
+                    [
+                        "mimeType": mimeType,
+                        "data": data.base64EncodedString()
+                    ]
+                ]
+            ] as [String: Any]
+        ]
+    }
+}
+
 final class GeminiLiveService: NSObject {
     private var webSocket: URLSessionWebSocketTask?
     private var urlSession: URLSession?
@@ -53,6 +102,7 @@ final class GeminiLiveService: NSObject {
     private var isRecording = false
     private var hasAudioBeenSent = false
     private var isSessionConfigured = false
+    private var currentResponseTranscript = ""
     private var isIntentionalDisconnect = false
     private var receiveLoopID = UUID()
 
@@ -191,6 +241,7 @@ final class GeminiLiveService: NSObject {
 
         isIntentionalDisconnect = false
         isSessionConfigured = false
+        currentResponseTranscript = ""
         receiveLoopID = UUID()
 
         var components = URLComponents(
@@ -232,6 +283,7 @@ final class GeminiLiveService: NSObject {
         guard !isIntentionalDisconnect else { return }
         isIntentionalDisconnect = true
         isSessionConfigured = false
+        currentResponseTranscript = ""
         receiveLoopID = UUID()
 
         print("[Gemini][INFO] 사용자가 연결 종료 요청 socketState=\(String(describing: webSocket?.state))")
@@ -249,26 +301,12 @@ final class GeminiLiveService: NSObject {
     private func configureSession() {
         guard !isSessionConfigured else { return }
 
-        let setupMessage: [String: Any] = [
-            "setup": [
-                "model": "models/\(model)",
-                "responseModalities": ["AUDIO"],
-                "speechConfig": [
-                    "voiceConfig": [
-                        "prebuiltVoiceConfig": [
-                            "voiceName": voiceName
-                        ]
-                    ]
-                ],
-                "systemInstruction": [
-                    "parts": [
-                        ["text": systemInstruction]
-                    ]
-                ],
-                "inputAudioTranscription": [:] as [String: Any],
-                "outputAudioTranscription": [:] as [String: Any]
-            ] as [String: Any]
-        ]
+        let setupMessage = GeminiLiveMessageBuilder.setup(
+            model: model,
+            systemInstruction: systemInstruction,
+            voiceName: voiceName,
+            audioOutputEnabled: audioOutputEnabled
+        )
 
         print(
             "[Gemini][INFO] 세션 설정 전송 model=\(model) voice=\(voiceName) "
@@ -371,14 +409,13 @@ final class GeminiLiveService: NSObject {
             return
         }
 
-        sendJSON([
-            "realtimeInput": [
-                "audio": [
-                    "data": pcm16Data.base64EncodedString(),
-                    "mimeType": "audio/pcm;rate=16000"
-                ]
-            ]
-        ], messageType: "realtimeInput.audio")
+        sendJSON(
+            GeminiLiveMessageBuilder.realtimeInput(
+                data: pcm16Data,
+                mimeType: "audio/pcm;rate=16000"
+            ),
+            messageType: "realtimeInput.audio"
+        )
 
         if !hasAudioBeenSent {
             hasAudioBeenSent = true
@@ -478,14 +515,13 @@ final class GeminiLiveService: NSObject {
             return
         }
 
-        sendJSON([
-            "realtimeInput": [
-                "video": [
-                    "data": imageData.base64EncodedString(),
-                    "mimeType": "image/jpeg"
-                ]
-            ]
-        ], messageType: "realtimeInput.video")
+        sendJSON(
+            GeminiLiveMessageBuilder.realtimeInput(
+                data: imageData,
+                mimeType: "image/jpeg"
+            ),
+            messageType: "realtimeInput.image"
+        )
         print("[Gemini][INFO] 현재 안경 프레임 전송 imageBytes=\(imageData.count)")
     }
 
@@ -607,7 +643,7 @@ final class GeminiLiveService: NSObject {
             let code = error["code"].map { String(describing: $0) } ?? "-"
             let message = safeMessage(error["message"] as? String ?? "설명 없는 서버 오류")
             print("[Gemini][ERROR] 서버 오류 code=\(code) messageLength=\(message.count)")
-            onError?("Gemini 서버 오류: \(message) (코드 \(code))")
+            onError?(liveErrorMessage(message, code: code))
         }
 
         if let goAway = json["goAway"] as? [String: Any] {
@@ -627,6 +663,7 @@ final class GeminiLiveService: NSObject {
         if let outputTranscription = content["outputTranscription"] as? [String: Any],
            let text = outputTranscription["text"] as? String,
            !text.isEmpty {
+            appendResponseTranscript(text)
             print("[Gemini][INFO] AI 출력 자막 수신 length=\(text.count)")
             onTranscriptDelta?(text)
         }
@@ -652,6 +689,7 @@ final class GeminiLiveService: NSObject {
                 }
 
                 if let text = part["text"] as? String, !text.isEmpty {
+                    appendResponseTranscript(text)
                     print("[Gemini][INFO] AI 텍스트 조각 수신 length=\(text.count)")
                     onTranscriptDelta?(text)
                 }
@@ -665,10 +703,16 @@ final class GeminiLiveService: NSObject {
         }
 
         if content["turnComplete"] as? Bool == true {
+            let completedTranscript = currentResponseTranscript
+            currentResponseTranscript = ""
             finishAudioResponse()
             onSpeechStopped?()
-            onTranscriptDone?("")
+            onTranscriptDone?(completedTranscript)
         }
+    }
+
+    private func appendResponseTranscript(_ text: String) {
+        currentResponseTranscript += text
     }
 
     // MARK: - Audio playback
@@ -765,6 +809,19 @@ final class GeminiLiveService: NSObject {
     }
 
     // MARK: - Error sanitization
+
+    private func liveErrorMessage(_ serverMessage: String, code: String) -> String {
+        let normalized = serverMessage.lowercased()
+        if normalized.contains("unknown name")
+            || normalized.contains("invalid json payload") {
+            return "Gemini Live 세션 설정 형식이 지원되지 않습니다. 앱을 최신 버전으로 업데이트한 뒤 다시 시도하세요."
+        }
+        if normalized.contains("model")
+            && (normalized.contains("not found") || normalized.contains("not supported")) {
+            return "선택한 Gemini Live 모델을 사용할 수 없습니다. 설정에서 지원되는 Live 모델을 선택하세요."
+        }
+        return "Gemini 서버 오류: \(serverMessage) (코드 \(code))"
+    }
 
     private func safeMessage(_ input: String) -> String {
         var output = input

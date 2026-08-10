@@ -34,7 +34,10 @@ final class OmniRealtimeViewModel: ObservableObject {
         case .alibaba:
             omniService = OmniRealtimeService(apiKey: apiKey)
         case .google:
-            geminiService = GeminiLiveService(apiKey: apiKey)
+            geminiService = GeminiLiveService(
+                apiKey: apiKey,
+                model: APIProviderManager.staticLiveAIModel
+            )
         }
 
         setupCallbacks()
@@ -253,7 +256,7 @@ final class OmniRealtimeViewModel: ObservableObject {
 
         let model = provider == .alibaba
             ? "qwen3-omni-flash-realtime"
-            : "gemini-3.1-flash-live-preview"
+            : APIProviderManager.staticLiveAIModel
 
         let record = ConversationRecord(
             messages: conversationHistory,

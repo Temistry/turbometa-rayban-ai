@@ -102,7 +102,10 @@ final class LiveTranslateViewModel: ObservableObject {
         }
 
         isDisconnecting = false
-        translateService = LiveTranslateService(apiKey: apiKey)
+        translateService = LiveTranslateService(
+            apiKey: apiKey,
+            model: APIProviderManager.staticLiveAIModel
+        )
         setupCallbacks()
         updateServiceSettings()
         print(
@@ -241,7 +244,7 @@ final class LiveTranslateViewModel: ObservableObject {
             translated: normalized,
             sourceLanguage: sourceLanguage,
             targetLanguage: targetLanguage,
-            model: GeminiModelCatalog.liveTranslate
+            model: APIProviderManager.staticLiveAIModel
         )
     }
 

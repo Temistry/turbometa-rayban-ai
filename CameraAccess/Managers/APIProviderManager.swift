@@ -242,19 +242,33 @@ final class APIProviderManager: ObservableObject {
     @Published var modelsError: String?
 
     private init() {
-        let savedEndpoint = UserDefaults.standard.string(forKey: alibabaEndpointKey)
+        let defaults = UserDefaults.standard
+        let savedEndpoint = defaults.string(forKey: alibabaEndpointKey)
             ?? AlibabaEndpoint.beijing.rawValue
         alibabaEndpoint = AlibabaEndpoint(rawValue: savedEndpoint) ?? .beijing
 
         currentProvider = .google
         selectedModel = GeminiModelCatalog.quickVision
         liveAIProvider = .google
-        liveAIModel = GeminiModelCatalog.live
 
-        UserDefaults.standard.set(APIProvider.google.rawValue, forKey: providerKey)
-        UserDefaults.standard.set(GeminiModelCatalog.quickVision, forKey: selectedModelKey)
-        UserDefaults.standard.set(LiveAIProvider.google.rawValue, forKey: liveAIProviderKey)
-        UserDefaults.standard.set(GeminiModelCatalog.live, forKey: liveAIModelKey)
+        let storedLiveModel = defaults.string(forKey: liveAIModelKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        liveAIModel = Self.normalizedLiveAIModel(storedLiveModel)
+
+        defaults.set(APIProvider.google.rawValue, forKey: providerKey)
+        defaults.set(GeminiModelCatalog.quickVision, forKey: selectedModelKey)
+        defaults.set(LiveAIProvider.google.rawValue, forKey: liveAIProviderKey)
+        defaults.set(liveAIModel, forKey: liveAIModelKey)
+    }
+
+    nonisolated static func normalizedLiveAIModel(_ storedModel: String?) -> String {
+        let model = storedModel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        switch model {
+        case "", "gemini-2.0-flash-exp":
+            return GeminiModelCatalog.live
+        default:
+            return model
+        }
     }
 
     var liveAIWebSocketURL: String {
@@ -373,6 +387,10 @@ extension APIProviderManager {
 
     nonisolated static var staticLiveAIAPIKey: String {
         APIKeyManager.shared.getGoogleAPIKey() ?? ""
+    }
+
+    nonisolated static var staticLiveAIModel: String {
+        normalizedLiveAIModel(UserDefaults.standard.string(forKey: "liveai_model"))
     }
 
     nonisolated static var staticCurrentModel: String {
