@@ -1,6 +1,6 @@
 /*
  * 한국어 전용 로컬라이제이션
- * 기존 zh-Hans 리소스 컨테이너를 한국어 리소스로 재사용합니다.
+ * 한국어 리소스 번들입니다.
  */
 
 // MARK: - App General
@@ -435,7 +435,4 @@
 "openclaw.chat.snap" = "촬영 후 전송";
 "openclaw.chat.sending" = "전송 중...";
 "openclaw.chat.noframe" = "안경 화면을 가져올 수 없습니다. 안경 연결 상태를 확인하세요";
-"openclaw.chat.noapikey" = "설정에서 Alibaba Cloud API Key를 먼저 등록하세요";
-"openclaw.chat.sendvoice" = "전송";
 "openclaw.chat.text" = "키보드";
-"openclaw.chat.listening" = "듣는 중...";

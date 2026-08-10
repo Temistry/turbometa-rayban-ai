@@ -62,56 +62,14 @@ struct KnowledgeLogEvent: Codable, Identifiable {
         self.timestamp = timestamp
         self.source = source
         self.sessionID = sessionID
-        self.question = KnowledgeLogRedactor.redact(question)
-        self.answer = KnowledgeLogRedactor.redact(answer)
-        self.model = KnowledgeLogRedactor.redact(model)
+        self.question = SensitiveDataRedactor.redactKnowledgeLogText(question)
+        self.answer = SensitiveDataRedactor.redactKnowledgeLogText(answer)
+        self.model = SensitiveDataRedactor.redactKnowledgeLogText(model)
         self.language = language
-        self.tags = tags.map(KnowledgeLogRedactor.redact)
+        self.tags = tags.map(SensitiveDataRedactor.redactKnowledgeLogText)
         self.metadata = metadata.reduce(into: [:]) { result, pair in
-            result[KnowledgeLogRedactor.redact(pair.key)] = KnowledgeLogRedactor.redact(pair.value)
+            result[SensitiveDataRedactor.redactKnowledgeLogText(pair.key)] = SensitiveDataRedactor.redactKnowledgeLogText(pair.value)
         }
-    }
-}
-
-// MARK: - Sensitive text removal
-
-private enum KnowledgeLogRedactor {
-    private static let maximumTextLength = 20_000
-
-    private static let rules: [(NSRegularExpression, String)] = {
-        let definitions: [(String, String)] = [
-            (#"(?i)(Bearer\s+)[A-Za-z0-9._~+\-/=]+"#, "$1<보안상 숨김>"),
-            (#"(?i)((?:api[_ -]?key|apikey|client[_ -]?token|gateway[_ -]?token|access[_ -]?token|authorization|token|stream[_ -]?key|streamkey)\s*[:=]\s*)[\"']?[^\s,\"'&]+"#, "$1<보안상 숨김>"),
-            (#"(?i)([?&](?:token|key|api_key|apikey|access_token)=)[^&\s]+"#, "$1<보안상 숨김>"),
-            (#"\bsk-[A-Za-z0-9_-]{8,}\b"#, "<보안상 숨김>"),
-            (#"\bAIza[0-9A-Za-z_-]{20,}\b"#, "<보안상 숨김>"),
-            (#"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b"#, "<보안상 숨김>"),
-            (#"data:(?:image|audio)/[^;\s]+;base64,[A-Za-z0-9+/=]+"#, "<대용량 데이터 생략>"),
-            (#"(?<![A-Za-z0-9])[A-Za-z0-9+/]{256,}={0,2}(?![A-Za-z0-9])"#, "<대용량 데이터 생략>")
-        ]
-
-        return definitions.compactMap { pattern, replacement in
-            guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-            return (regex, replacement)
-        }
-    }()
-
-    static func redact(_ input: String) -> String {
-        var output = input.trimmingCharacters(in: .whitespacesAndNewlines)
-        if output.count > maximumTextLength {
-            output = String(output.prefix(maximumTextLength)) + "\n<최대 기록 길이 초과로 생략>"
-        }
-
-        for (regex, replacement) in rules {
-            let range = NSRange(output.startIndex..<output.endIndex, in: output)
-            output = regex.stringByReplacingMatches(
-                in: output,
-                options: [],
-                range: range,
-                withTemplate: replacement
-            )
-        }
-        return output
     }
 }
 

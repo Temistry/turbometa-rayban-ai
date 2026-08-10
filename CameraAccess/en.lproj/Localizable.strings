@@ -444,7 +444,4 @@
 "openclaw.chat.snap" = "Snap & Send";
 "openclaw.chat.sending" = "Sending...";
 "openclaw.chat.noframe" = "Cannot get glasses frame, please check connection";
-"openclaw.chat.noapikey" = "Please configure Alibaba API Key in Settings first";
-"openclaw.chat.sendvoice" = "Send";
 "openclaw.chat.text" = "Text";
-"openclaw.chat.listening" = "Listening...";

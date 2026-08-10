@@ -1,7 +1,7 @@
 /*
  * OpenClaw Chat View
- * 与 OpenClaw AI 聊天
- * 支持: 语音转录、眼镜拍照、文字输入
+ * OpenClaw AI와 대화
+ * 지원: 안경 사진과 텍스트 입력
  */
 
 import SwiftUI
@@ -24,12 +24,7 @@ struct OpenClawChatView: View {
     @State private var pendingResponse = ""
     @State private var isSending = false
 
-    // ASR states
-    @State private var isListening = false
-    @State private var asrText = ""           // accumulated final sentences
-    @State private var asrPartial = ""        // current partial
-    @State private var asrService: OpenClawASRService?
-    @State private var showTextInput = false  // toggle between voice/text mode
+    @State private var showTextInput = false
 
     var body: some View {
         NavigationView {
@@ -72,51 +67,6 @@ struct OpenClawChatView: View {
 
                 // Bottom control area
                 VStack(spacing: 12) {
-                    // ASR transcription preview (when listening or has text to send)
-                    if isListening || !asrText.isEmpty {
-                        VStack(alignment: .leading, spacing: 8) {
-                            // Transcribed text
-                            Text(displayASRText)
-                                .font(.system(size: 15))
-                                .foregroundColor(.primary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(12)
-                                .background(Color(.systemGray6))
-                                .cornerRadius(12)
-
-                            // Send / Cancel buttons after stopping
-                            if !isListening && !asrText.isEmpty {
-                                HStack(spacing: 12) {
-                                    Button {
-                                        asrText = ""
-                                        asrPartial = ""
-                                    } label: {
-                                        Text("cancel".localized)
-                                            .font(.system(size: 15, weight: .medium))
-                                            .foregroundColor(.gray)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 12)
-                                            .background(Color(.systemGray5))
-                                            .cornerRadius(10)
-                                    }
-
-                                    Button {
-                                        sendASRText()
-                                    } label: {
-                                        Text("openclaw.chat.sendvoice".localized)
-                                            .font(.system(size: 15, weight: .semibold))
-                                            .foregroundColor(.white)
-                                            .frame(maxWidth: .infinity)
-                                            .padding(.vertical, 12)
-                                            .background(Color.purple)
-                                            .cornerRadius(10)
-                                    }
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                    }
-
                     // Main action buttons
                     HStack(spacing: 16) {
                         // Camera snap
@@ -133,36 +83,6 @@ struct OpenClawChatView: View {
                             .frame(width: 60, height: 60)
                         }
                         .disabled(isSending || openClawService.connectionState != .connected)
-
-                        // Big mic button
-                        Button {
-                            toggleListening()
-                        } label: {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        isListening
-                                            ? LinearGradient(colors: [.red, .orange], startPoint: .top, endPoint: .bottom)
-                                            : LinearGradient(colors: [.purple, .indigo], startPoint: .top, endPoint: .bottom)
-                                    )
-                                    .frame(width: 72, height: 72)
-                                    .shadow(color: isListening ? .red.opacity(0.4) : .purple.opacity(0.3), radius: 10)
-
-                                if isListening {
-                                    // Pulsing animation
-                                    Circle()
-                                        .stroke(Color.red.opacity(0.3), lineWidth: 3)
-                                        .frame(width: 88, height: 88)
-                                        .scaleEffect(isListening ? 1.1 : 1.0)
-                                        .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isListening)
-                                }
-
-                                Image(systemName: isListening ? "stop.fill" : "mic.fill")
-                                    .font(.system(size: isListening ? 24 : 28))
-                                    .foregroundColor(.white)
-                            }
-                        }
-                        .disabled(openClawService.connectionState != .connected)
 
                         // Text input toggle
                         Button {
@@ -234,22 +154,12 @@ struct OpenClawChatView: View {
             }
         }
         .onDisappear {
-            stopListening()
             if !pendingResponse.isEmpty {
                 messages.append(OpenClawChatMessage(role: "assistant", text: pendingResponse, image: nil))
                 pendingResponse = ""
             }
             openClawService.onChatEvent = nil
         }
-    }
-
-    // MARK: - Computed
-
-    private var displayASRText: String {
-        if asrText.isEmpty && asrPartial.isEmpty {
-            return isListening ? "openclaw.chat.listening".localized : ""
-        }
-        return asrText + (asrPartial.isEmpty ? "" : asrPartial)
     }
 
     // MARK: - Chat Events
@@ -307,62 +217,6 @@ struct OpenClawChatView: View {
         openClawService.sendChatMessage(text, image: frame)
 
         if needsStreamStop { await streamViewModel.stopSession() }
-    }
-
-    // MARK: - Voice (ASR)
-
-    private func toggleListening() {
-        if isListening {
-            stopListening()
-        } else {
-            startListening()
-        }
-    }
-
-    private func startListening() {
-        guard let apiKey = APIKeyManager.shared.getAPIKey(for: .alibaba), !apiKey.isEmpty else {
-            messages.append(OpenClawChatMessage(role: "assistant", text: "openclaw.chat.noapikey".localized, image: nil))
-            return
-        }
-
-        asrText = ""
-        asrPartial = ""
-        let service = OpenClawASRService(apiKey: apiKey)
-        self.asrService = service
-
-        service.onPartialResult = { text in
-            asrPartial = text
-        }
-
-        service.onFinalResult = { text in
-            asrText += text
-            asrPartial = ""
-        }
-
-        service.onError = { error in
-            isListening = false
-            print("[ASR] Error: \(error)")
-        }
-
-        service.start()
-        isListening = true
-    }
-
-    private func stopListening() {
-        asrService?.stop()
-        asrService = nil
-        isListening = false
-        asrPartial = ""
-        // Keep asrText for user to review & send
-    }
-
-    private func sendASRText() {
-        let text = asrText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        messages.append(OpenClawChatMessage(role: "user", text: text, image: nil))
-        flushPendingResponse()
-        openClawService.sendChatMessage(text)
-        asrText = ""
     }
 
     private func flushPendingResponse() {

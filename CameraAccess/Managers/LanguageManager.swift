@@ -26,7 +26,7 @@ class LanguageManager: ObservableObject {
         }
     }
 
-    // 기존 프로젝트의 zh-Hans 리소스 파일을 한국어 리소스 컨테이너로 재사용한다.
+    // 앱에 포함된 한국어 리소스 번들을 사용한다.
     nonisolated(unsafe) static var currentBundle: Bundle = .main
 
     private init() {
@@ -36,7 +36,7 @@ class LanguageManager: ObservableObject {
     }
 
     private func updateBundle() {
-        if let path = Bundle.main.path(forResource: "zh-Hans", ofType: "lproj"),
+        if let path = Bundle.main.path(forResource: "ko", ofType: "lproj"),
            let bundle = Bundle(path: path) {
             LanguageManager.currentBundle = bundle
         } else {

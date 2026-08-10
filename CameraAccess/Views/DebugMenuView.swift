@@ -83,26 +83,6 @@ final class DeveloperConsole: ObservableObject {
   private var previousSessionLikelyUnclean = false
   private var notificationTokens: [NSObjectProtocol] = []
 
-  private static let redactionRules: [(NSRegularExpression, String)] = {
-    let definitions: [(String, String)] = [
-      (#"(?i)(Bearer\s+)[A-Za-z0-9._~+\-/=]+"#, "$1<보안상 숨김>"),
-      (#"(?i)((?:api[_ -]?key|apikey|client[_ -]?token|gateway[_ -]?token|access[_ -]?token|authorization|token|stream[_ -]?key|streamkey)\s*[:=]\s*)[\"']?[^\s,\"'&]+"#, "$1<보안상 숨김>"),
-      (#"(?i)([?&](?:token|key|api_key|apikey|access_token)=)[^&\s]+"#, "$1<보안상 숨김>"),
-      (#"\bsk-[A-Za-z0-9_-]{8,}\b"#, "<보안상 숨김>"),
-      (#"\bAIza[0-9A-Za-z_-]{20,}\b"#, "<보안상 숨김>"),
-      (#"(?i)(https?://)[^/\s:@]+:[^@\s/]+@"#, "$1<인증정보 숨김>@"),
-      (#"(?i)(rtmps?://[^/\s]+)(?:/[^\s]*)?"#, "$1/<송출 경로 숨김>"),
-      (#"data:image/[^;\s]+;base64,[A-Za-z0-9+/=]+"#, "<이미지 데이터 생략>"),
-      (#"(?i)(\"(?:audio|image|data)\"\s*:\s*\")[A-Za-z0-9+/=]{80,}(\")"#, "$1<대용량 데이터 생략>$2"),
-      (#"(?<![A-Za-z0-9])[A-Za-z0-9+/]{256,}={0,2}(?![A-Za-z0-9])"#, "<대용량 데이터 생략>")
-    ]
-
-    return definitions.compactMap { pattern, replacement in
-      guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
-      return (regex, replacement)
-    }
-  }()
-
   private init() {}
 
   deinit {
@@ -286,7 +266,7 @@ final class DeveloperConsole: ObservableObject {
       """
       [보안 안내]
       API Key, Bearer 토큰, Gateway 토큰, RTMP 송출 경로와 대용량 Base64 데이터는 자동으로 마스킹됩니다.
-      오류 문구, AI 응답, 음성 인식 결과 등 재현에 필요한 사용자 콘텐츠는 포함될 수 있습니다.
+      MetricKit 진단과 오류 문구에는 재현에 필요한 사용자 화면의 텍스트 또는 AI 응답이 포함될 수 있습니다.
       이 파일은 사용자가 공유 버튼을 누를 때만 외부로 전달됩니다.
       """
     )
@@ -326,7 +306,7 @@ final class DeveloperConsole: ObservableObject {
       )
     }
 
-    let report = sections.joined(separator: "\n\n") + "\n"
+    let report = SensitiveDataRedactor.redact(sections.joined(separator: "\n\n") + "\n")
     try report.write(to: reportURL, atomically: true, encoding: .utf8)
     applyFileProtection(to: reportURL)
     cleanupOldExports()
@@ -370,7 +350,7 @@ final class DeveloperConsole: ObservableObject {
     let trimmed = rawLine.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
 
-    let redacted = Self.redact(trimmed)
+    let redacted = SensitiveDataRedactor.redact(trimmed)
     let limited: String
     if redacted.count > maximumLineLength {
       limited = String(redacted.prefix(maximumLineLength)) + " … <한 줄 최대 길이 초과로 생략>"
@@ -400,15 +380,6 @@ final class DeveloperConsole: ObservableObject {
     if level == .error && !isPresented {
       unreadErrorCount += 1
     }
-  }
-
-  private static func redact(_ input: String) -> String {
-    var output = input
-    for (regex, replacement) in redactionRules {
-      let range = NSRange(output.startIndex..<output.endIndex, in: output)
-      output = regex.stringByReplacingMatches(in: output, range: range, withTemplate: replacement)
-    }
-    return output
   }
 
   private static func classify(_ text: String) -> DeveloperLogLevel {
@@ -707,7 +678,7 @@ final class DeveloperConsole: ObservableObject {
 
   private func persistUncaughtException(_ exception: NSException) {
     let stack = exception.callStackSymbols.joined(separator: " | ")
-    let message = Self.redact(
+    let message = SensitiveDataRedactor.redact(
       "[UncaughtException][ERROR] name=\(exception.name.rawValue) reason=\(exception.reason ?? "-") stack=\(stack)"
     )
     persistEmergencyLine(message)
@@ -755,6 +726,7 @@ final class DeveloperConsole: ObservableObject {
       }
       .suffix(8)
       .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+      .map(SensitiveDataRedactor.redact)
   }
 
   // MARK: Diagnostic metadata
@@ -939,12 +911,17 @@ private final class DeveloperMetricKitSubscriber: NSObject, MXMetricManagerSubsc
     let fileManager = FileManager.default
 
     for (index, payload) in payloads.enumerated() {
+      guard let text = String(data: payload, encoding: .utf8),
+            let redactedPayload = SensitiveDataRedactor.redact(text).data(using: .utf8) else {
+        continue
+      }
+
       let timestamp = formatter.string(from: Date())
         .replacingOccurrences(of: ":", with: "-")
       let url = directoryURL
         .appendingPathComponent("\(prefix)-\(timestamp)-\(index).json")
 
-      try? payload.write(to: url, options: .atomic)
+      try? redactedPayload.write(to: url, options: .atomic)
       try? fileManager.setAttributes(
         [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
         ofItemAtPath: url.path
@@ -1089,7 +1066,7 @@ struct DeveloperLogView: View {
         }
         Button("취소", role: .cancel) {}
       } message: {
-        Text("비밀 키와 대용량 데이터는 자동으로 숨깁니다. 오류 문구와 AI 응답은 재현을 위해 포함될 수 있으며, 파일은 자동 전송되지 않습니다.")
+        Text("비밀 키와 대용량 데이터는 자동으로 숨깁니다. MetricKit 진단과 오류 문구에는 사용자 화면의 텍스트 또는 AI 응답이 포함될 수 있으며, 파일은 자동 전송되지 않습니다.")
       }
       .alert("진단 파일 생성 실패", isPresented: $showExportError) {
         Button("확인", role: .cancel) {}

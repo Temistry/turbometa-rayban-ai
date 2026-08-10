@@ -10,7 +10,9 @@ struct UnifiedSettingsView: View {
     @ObservedObject private var quickVisionModeManager = QuickVisionModeManager.shared
     @ObservedObject private var liveAIModeManager = LiveAIModeManager.shared
     @ObservedObject private var openClawService = OpenClawNodeService.shared
+    #if DEBUG || INTERNAL_BUILD
     @ObservedObject private var developerConsole = DeveloperConsole.shared
+    #endif
     @ObservedObject private var knowledgeLog = KnowledgeLogService.shared
 
     @State private var showGoogleAPIKeySettings = false
@@ -34,7 +36,9 @@ struct UnifiedSettingsView: View {
                 googleAISection
                 knowledgeLogSection
                 integrationSection
+                #if DEBUG || INTERNAL_BUILD
                 developerSection
+                #endif
                 aboutSection
             }
             .navigationTitle("settings.title".localized)
@@ -253,6 +257,7 @@ struct UnifiedSettingsView: View {
         }
     }
 
+    #if DEBUG || INTERNAL_BUILD
     private var developerSection: some View {
         Section {
             Button {
@@ -281,6 +286,7 @@ struct UnifiedSettingsView: View {
             Text("개발자 진단")
         }
     }
+    #endif
 
     private var aboutSection: some View {
         Section {

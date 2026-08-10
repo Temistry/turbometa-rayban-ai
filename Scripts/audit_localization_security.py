@@ -18,7 +18,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE_ROOT = ROOT / "CameraAccess"
 REPORT_PATH = ROOT / "audit-report.txt"
-SUPPORTED_KOREAN_RESOURCE_DIRECTORIES = {"ko.lproj", "zh-Hans.lproj"}
+SUPPORTED_KOREAN_RESOURCE_DIRECTORIES = {"ko.lproj"}
 STRINGS_ASSIGNMENT_PATTERN = re.compile(
     r'^\s*"(?P<key>[^"\\]+)"\s*=\s*"(?P<value>(?:\\.|[^"\\])*)"\s*;',
     re.MULTILINE,
@@ -75,37 +75,60 @@ def audit_package_resolution(findings: list[Finding]) -> None:
         / "swiftpm"
         / "Package.resolved"
     )
-    expected_revisions = {
-        "haishinkit.swift": "8b18210cb2d1c939cd28fa4896217db54907c550",
-        "meta-wearables-dat-ios": "2ea30fa228359315baf71c404aec821472e994c1",
-    }
 
     if not resolved_path.exists():
         findings.append(Finding("치명", relative(resolved_path), 1, "Package.resolved가 없습니다"))
         return
 
+    expected_remote_packages = {
+        "haishinkit.swift": "https://github.com/Turbo1123/HaishinKit.swift",
+        "meta-wearables-dat-ios": "https://github.com/facebook/meta-wearables-dat-ios",
+    }
+
     try:
         payload = json.loads(resolved_path.read_text(encoding="utf-8"))
-        pins = {
-            pin.get("identity"): pin.get("state", {})
-            for pin in payload.get("pins", [])
-            if isinstance(pin, dict)
-        }
-        for identity, expected_revision in expected_revisions.items():
-            state = pins.get(identity)
-            if not state:
-                findings.append(Finding("치명", relative(resolved_path), 1, f"고정 패키지가 없습니다: {identity}"))
-                continue
-            actual_revision = state.get("revision")
-            if actual_revision != expected_revision:
-                findings.append(
-                    Finding(
-                        "치명",
-                        relative(resolved_path),
-                        1,
-                        f"{identity} revision 불일치: {actual_revision or '없음'}",
+        pins = payload.get("pins")
+        if not isinstance(pins, list) or not pins:
+            findings.append(Finding("치명", relative(resolved_path), 1, "Package.resolved에 고정 패키지가 없습니다"))
+        else:
+            identities: set[str] = set()
+            remote_packages: dict[str, str] = {}
+            for pin in pins:
+                if not isinstance(pin, dict):
+                    findings.append(Finding("치명", relative(resolved_path), 1, "Package.resolved pin 형식이 올바르지 않습니다"))
+                    continue
+                identity = pin.get("identity")
+                if not isinstance(identity, str) or not identity:
+                    findings.append(Finding("치명", relative(resolved_path), 1, "Package.resolved pin에 identity가 없습니다"))
+                    continue
+                if identity in identities:
+                    findings.append(Finding("치명", relative(resolved_path), 1, f"Package.resolved에 중복 identity가 있습니다: {identity}"))
+                identities.add(identity)
+
+                state = pin.get("state")
+                if pin.get("kind") == "remoteSourceControl":
+                    location = pin.get("location")
+                    if not isinstance(location, str) or not location:
+                        findings.append(Finding("치명", relative(resolved_path), 1, f"원격 패키지 location이 없습니다: {identity}"))
+                    else:
+                        remote_packages[identity] = location.rstrip("/")
+                    if (
+                        not isinstance(state, dict)
+                        or not isinstance(state.get("revision"), str)
+                        or not re.fullmatch(r"[0-9a-fA-F]{40}", state["revision"])
+                    ):
+                        findings.append(Finding("치명", relative(resolved_path), 1, f"원격 패키지 revision이 올바르지 않습니다: {identity}"))
+
+            for identity, location in expected_remote_packages.items():
+                if remote_packages.get(identity) != location:
+                    findings.append(
+                        Finding(
+                            "치명",
+                            relative(resolved_path),
+                            1,
+                            f"필수 원격 패키지 또는 location이 올바르지 않습니다: {identity}",
+                        )
                     )
-                )
     except Exception as exc:  # noqa: BLE001
         findings.append(Finding("치명", relative(resolved_path), 1, f"Package.resolved 파싱 실패: {exc}"))
 
@@ -117,6 +140,78 @@ def audit_package_resolution(findings: list[Finding]) -> None:
         path = ROOT / path_text
         if not path.exists() or marker not in path.read_text(encoding="utf-8", errors="replace"):
             findings.append(Finding("치명", path_text, 1, "고정된 패키지 버전 강제 옵션이 없습니다"))
+
+    if (SOURCE_ROOT / "zh-Hans.lproj").exists():
+        findings.append(Finding("치명", "CameraAccess/zh-Hans.lproj", 1, "한국어 리소스는 ko.lproj에 있어야 합니다"))
+
+    codemagic_path = ROOT / "codemagic.yaml"
+    if codemagic_path.exists():
+        codemagic_text = codemagic_path.read_text(encoding="utf-8", errors="replace")
+        testflight_block = re.search(
+            r"(?ms)^  ios-testflight:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:|\Z)",
+            codemagic_text,
+        )
+        if testflight_block and "SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD" in testflight_block.group("body"):
+            findings.append(Finding("치명", "codemagic.yaml", 1, "ios-testflight 워크플로에 INTERNAL_BUILD가 설정되어 있습니다"))
+
+
+def audit_openclaw_cloud_inference(findings: list[Finding]) -> None:
+    openclaw_root = SOURCE_ROOT / "Services" / "OpenClaw"
+    forbidden_markers = ("dashscope", "fun-asr", "staticAlibabaEndpoint", "getAPIKey(for: .alibaba)")
+
+    for path in openclaw_root.rglob("*.swift"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        lower = text.lower()
+        for marker in forbidden_markers:
+            if marker.lower() in lower:
+                findings.append(
+                    Finding(
+                        "치명",
+                        relative(path),
+                        1,
+                        f"OpenClaw 활성 소스에 제거된 Alibaba ASR 참조가 남아 있습니다: {marker}",
+                    )
+                )
+
+    for path in (SOURCE_ROOT / "Views").glob("OpenClaw*.swift"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        lower = text.lower()
+        for marker in forbidden_markers:
+            if marker.lower() in lower:
+                findings.append(
+                    Finding(
+                        "치명",
+                        relative(path),
+                        1,
+                        f"OpenClaw 화면에 제거된 Alibaba ASR 참조가 남아 있습니다: {marker}",
+                    )
+                )
+
+
+def audit_diagnostic_exports(findings: list[Finding]) -> None:
+    path_text = "CameraAccess/Views/DebugMenuView.swift"
+    path = ROOT / path_text
+    if not path.exists():
+        findings.append(Finding("치명", path_text, 1, "진단 콘솔 소스가 없습니다"))
+        return
+
+    text = path.read_text(encoding="utf-8", errors="replace")
+    required_markers = (
+        "SensitiveDataRedactor.redact(sections.joined",
+        ".map(SensitiveDataRedactor.redact)",
+        "SensitiveDataRedactor.redact(text).data(using: .utf8)",
+    )
+    for marker in required_markers:
+        if marker not in text:
+            findings.append(Finding("치명", path_text, 1, f"진단 내보내기 마스킹 코드가 없습니다: {marker}"))
+
+    redactor_path = ROOT / "CameraAccess/Utils/SensitiveDataRedactor.swift"
+    if not redactor_path.exists():
+        findings.append(Finding("치명", relative(redactor_path), 1, "공유 민감정보 마스킹 유틸리티가 없습니다"))
+
+    knowledge_path = ROOT / "CameraAccess/Services/KnowledgeLogService.swift"
+    if knowledge_path.exists() and "SensitiveDataRedactor.redactKnowledgeLogText" not in knowledge_path.read_text(encoding="utf-8", errors="replace"):
+        findings.append(Finding("치명", relative(knowledge_path), 1, "지식 로그가 공유 민감정보 마스킹 유틸리티를 사용하지 않습니다"))
 
 
 def audit_secrets_and_transport(findings: list[Finding]) -> None:
@@ -195,9 +290,12 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
             "FileProtectionType.completeUntilFirstUserAuthentication",
         ],
         "CameraAccess/Views/DebugMenuView.swift": [
+            "SensitiveDataRedactor.redact",
+            "maximumEntryCount",
+        ],
+        "CameraAccess/Utils/SensitiveDataRedactor.swift": [
             "Bearer\\s+",
             "<보안상 숨김>",
-            "maximumEntryCount",
         ],
         "CameraAccess/TurboMetaApp.swift": [
             "TurboMetaShortcuts.updateAppShortcutParameters()",
@@ -405,6 +503,8 @@ def write_report(findings: list[Finding]) -> None:
 if __name__ == "__main__":
     findings: list[Finding] = []
     audit_package_resolution(findings)
+    audit_openclaw_cloud_inference(findings)
+    audit_diagnostic_exports(findings)
     audit_secrets_and_transport(findings)
     audit_localization_strings(findings)
     audit_swift_strings(findings)

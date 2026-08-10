@@ -23,7 +23,9 @@ struct TurboMetaApp: App {
   )
   #endif
 
+  #if DEBUG || INTERNAL_BUILD
   @StateObject private var developerConsole = DeveloperConsole.shared
+  #endif
 
   private let wearables: WearablesInterface
   @StateObject private var wearablesViewModel: WearablesViewModel
@@ -36,26 +38,32 @@ struct TurboMetaApp: App {
 
     if #available(iOS 16.0, *) {
       TurboMetaShortcuts.updateAppShortcutParameters()
+      #if DEBUG || INTERNAL_BUILD
       DeveloperConsole.shared.log(
         .info,
         category: "Siri",
         "한국어 App Shortcut 등록 정보 갱신 요청 완료"
       )
+      #endif
     }
 
     do {
       try Wearables.configure()
+      #if DEBUG || INTERNAL_BUILD
       DeveloperConsole.shared.log(
         .info,
         category: "TurboMeta",
         "Wearables SDK 설정 성공"
       )
+      #endif
     } catch {
+      #if DEBUG || INTERNAL_BUILD
       DeveloperConsole.shared.record(
         error: error,
         category: "TurboMeta",
         operation: "Wearables.configure"
       )
+      #endif
     }
 
     let wearables = Wearables.shared
@@ -96,6 +104,7 @@ struct TurboMetaApp: App {
         #endif
       }
       .environment(\.locale, Locale(identifier: "ko-KR"))
+      #if DEBUG || INTERNAL_BUILD
       .onChange(of: wearablesViewModel.showError) { isPresented in
         guard isPresented else { return }
         developerConsole.log(
@@ -107,6 +116,7 @@ struct TurboMetaApp: App {
       .fullScreenCover(isPresented: $developerConsole.isPresented) {
         DeveloperLogView(console: developerConsole)
       }
+      #endif
     }
   }
 }

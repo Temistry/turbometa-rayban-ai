@@ -83,6 +83,7 @@
 		8FD96B952E6F0F7D00F56AB3 /* MWDATMockDevice in Frameworks */ = {isa = PBXBuildFile; productRef = 8FD96B942E6F0F7D00F56AB3 /* MWDATMockDevice */; };
 		A5C50340AFD334B459151AF1 /* QuickVisionIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 568E19B82D2116C7FE3B1829 /* QuickVisionIntent.swift */; };
 		B3F7AF9C18583263BE4D96A1 /* LanguageManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0080AFEB87FC4CF85E53FE97 /* LanguageManager.swift */; };
+		D1A600000000000000000002 /* SensitiveDataRedactor.swift in Sources */ = {isa = PBXBuildFile; fileRef = D1A600000000000000000001 /* SensitiveDataRedactor.swift */; };
 		D83E4BD577765733E71A0068 /* QuickVisionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B037E0156E90DE2314A9F47 /* QuickVisionView.swift */; };
 		LT0001000100010001 /* LiveTranslateModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = LT1001000100010001 /* LiveTranslateModels.swift */; };
 		LT0002000200020002 /* LiveTranslateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = LT1002000200020002 /* LiveTranslateService.swift */; };
@@ -95,7 +96,6 @@
 		OC1004000400040004 /* OpenClawSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2004000400040004 /* OpenClawSettingsView.swift */; };
 		OC1005000500050005 /* OpenClawDeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2005000500050005 /* OpenClawDeviceIdentity.swift */; };
 		OC1006000600060006 /* OpenClawChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2006000600060006 /* OpenClawChatView.swift */; };
-		OC1007000700070007 /* OpenClawASRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2007000700070007 /* OpenClawASRService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -124,6 +124,7 @@
 /* Begin PBXFileReference section */
 		0080AFEB87FC4CF85E53FE97 /* LanguageManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LanguageManager.swift; path = Managers/LanguageManager.swift; sourceTree = "<group>"; };
 		069172850B30A2766C8BD4B5 /* TTSService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
+		D1A600000000000000000001 /* SensitiveDataRedactor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitiveDataRedactor.swift; sourceTree = "<group>"; };
 		1111827A1CF7A278A6DC6934 /* APIProviderManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = APIProviderManager.swift; path = Managers/APIProviderManager.swift; sourceTree = "<group>"; };
 		330AF93394A09D97C504F568 /* QuickVisionSettingsView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = QuickVisionSettingsView.swift; sourceTree = "<group>"; };
 		3A3A3A3A3A3A3A3A3A3A3A3A /* CameraAccess.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = CameraAccess.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -178,7 +179,7 @@
 		4BA57ABC2EF8227E002EC214 /* StreamView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamView.swift; sourceTree = "<group>"; };
 		4BA57ABD2EF8227E002EC214 /* TurboMetaHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurboMetaHomeView.swift; sourceTree = "<group>"; };
 		4BA57ABE2EF8227E002EC214 /* VisionRecognitionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisionRecognitionView.swift; sourceTree = "<group>"; };
-		4BA57AC02EF8227E002EC214 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = Localizable.strings; sourceTree = "<group>"; };
+		4BA57AC02EF8227E002EC214 /* ko */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = ko; path = Localizable.strings; sourceTree = "<group>"; };
 		4BA57AF22EF823ED002EC214 /* PermissionsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsManager.swift; sourceTree = "<group>"; };
 		4BA57AF52EF82400002EC214 /* PermissionsRequestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PermissionsRequestView.swift; sourceTree = "<group>"; };
 		4BB5DFEE2F06C05E00AF7BD0 /* LiveAIModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveAIModels.swift; sourceTree = "<group>"; };
@@ -209,7 +210,6 @@
 		OC2004000400040004 /* OpenClawSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawSettingsView.swift; sourceTree = "<group>"; };
 		OC2005000500050005 /* OpenClawDeviceIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawDeviceIdentity.swift; sourceTree = "<group>"; };
 		OC2006000600060006 /* OpenClawChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawChatView.swift; sourceTree = "<group>"; };
-		OC2007000700070007 /* OpenClawASRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawASRService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -307,6 +307,7 @@
 				4BA57AF22EF823ED002EC214 /* PermissionsManager.swift */,
 				4BA57A952EF8227E002EC214 /* APIKeyManager.swift */,
 				4BA57A962EF8227E002EC214 /* TimeUtils.swift */,
+				D1A600000000000000000001 /* SensitiveDataRedactor.swift */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -396,12 +397,12 @@
 			path = Views;
 			sourceTree = "<group>";
 		};
-		4BA57AC22EF8227E002EC214 /* zh-Hans.lproj */ = {
+		4BA57AC22EF8227E002EC214 /* ko.lproj */ = {
 			isa = PBXGroup;
 			children = (
 				4BA57AC12EF8227E002EC214 /* Localizable.strings */,
 			);
-			path = "zh-Hans.lproj";
+			path = ko.lproj;
 			sourceTree = "<group>";
 		};
 		5A5A5A5A5A5A5A5A5A5A5A5A = {
@@ -440,7 +441,7 @@
 				4BA57A972EF8227E002EC214 /* Utils */,
 				4BA57AA12EF8227E002EC214 /* ViewModels */,
 				4BA57ABF2EF8227E002EC214 /* Views */,
-				4BA57AC22EF8227E002EC214 /* zh-Hans.lproj */,
+				4BA57AC22EF8227E002EC214 /* ko.lproj */,
 				8FD96B772E6F0A9800F56AB1 /* Assets.xcassets */,
 				8FD96B782E6F0A9800F56AB1 /* TurboMeta.entitlements */,
 				8FD96B792E6F0A9800F56AB1 /* TurboMetaApp.swift */,
@@ -458,7 +459,6 @@
 				OC2002000200020002 /* OpenClawNodeService.swift */,
 				OC2003000300030003 /* OpenClawCommandRouter.swift */,
 				OC2005000500050005 /* OpenClawDeviceIdentity.swift */,
-				OC2007000700070007 /* OpenClawASRService.swift */,
 			);
 			path = OpenClaw;
 			sourceTree = "<group>";
@@ -524,12 +524,12 @@
 			};
 			buildConfigurationList = DDDDDDDDDDDDDDDDDDDDDD /* Build configuration list for PBXProject "CameraAccess" */;
 			compatibilityVersion = "Xcode 9.3";
-			developmentRegion = en;
+			developmentRegion = ko;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
 				Base,
-				"zh-Hans",
+				ko,
 			);
 			mainGroup = 5A5A5A5A5A5A5A5A5A5A5A5A;
 			packageReferences = (
@@ -612,6 +612,7 @@
 				4BA57AE42EF8227E002EC214 /* OmniRealtimeView.swift in Sources */,
 				4BA57AE52EF8227E002EC214 /* VisionAPIConfig.swift in Sources */,
 				4BA57AE62EF8227E002EC214 /* TimeUtils.swift in Sources */,
+				D1A600000000000000000002 /* SensitiveDataRedactor.swift in Sources */,
 				4BA57AE72EF8227E002EC214 /* SettingsView.swift in Sources */,
 				B27C3D4E5F60718293A4B5C6 /* UnifiedSettingsView.swift in Sources */,
 				4BA57AF62EF82400002EC214 /* PermissionsRequestView.swift in Sources */,
@@ -651,7 +652,6 @@
 				OC1004000400040004 /* OpenClawSettingsView.swift in Sources */,
 				OC1005000500050005 /* OpenClawDeviceIdentity.swift in Sources */,
 				OC1006000600060006 /* OpenClawChatView.swift in Sources */,
-				OC1007000700070007 /* OpenClawASRService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -684,7 +684,7 @@
 		4BA57AC12EF8227E002EC214 /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
-				4BA57AC02EF8227E002EC214 /* zh-Hans */,
+				4BA57AC02EF8227E002EC214 /* ko */,
 			);
 			name = Localizable.strings;
 			sourceTree = "<group>";

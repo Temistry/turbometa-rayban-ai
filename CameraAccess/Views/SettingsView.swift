@@ -13,7 +13,9 @@ struct SettingsView: View {
     @ObservedObject var quickVisionModeManager = QuickVisionModeManager.shared
     @ObservedObject var liveAIModeManager = LiveAIModeManager.shared
     @ObservedObject var openClawService = OpenClawNodeService.shared
+    #if DEBUG || INTERNAL_BUILD
     @ObservedObject var developerConsole = DeveloperConsole.shared
+    #endif
 
     let apiKey: String
 
@@ -50,7 +52,9 @@ struct SettingsView: View {
                 visionAISection
                 liveAISection
                 integrationSection
+                #if DEBUG || INTERNAL_BUILD
                 developerSection
+                #endif
                 aboutSection
             }
             .navigationTitle("settings.title".localized)
@@ -278,6 +282,7 @@ struct SettingsView: View {
         }
     }
 
+    #if DEBUG || INTERNAL_BUILD
     private var developerSection: some View {
         Section {
             Button {
@@ -310,6 +315,7 @@ struct SettingsView: View {
             Text("개발자 진단")
         }
     }
+    #endif
 
     private var aboutSection: some View {
         Section {
