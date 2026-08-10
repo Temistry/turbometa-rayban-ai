@@ -181,7 +181,7 @@ workflows:
       events:
         - push
       branch_patterns:
-        - pattern: "main"
+        - pattern: "feature/testflight-signing-config"
           include: true
           source: true
       cancel_previous_builds: true
@@ -247,5 +247,5 @@ workflows:
     publishing:
       app_store_connect:
         auth: integration
-        submit_to_testflight: false
+        submit_to_testflight: true
         submit_to_app_store: false

@@ -80,8 +80,9 @@ def audit_package_resolution(findings: list[Finding]) -> None:
         findings.append(Finding("치명", relative(resolved_path), 1, "Package.resolved가 없습니다"))
         return
 
-    expected_direct_packages = {
+    expected_remote_packages = {
         "haishinkit.swift": "https://github.com/Turbo1123/HaishinKit.swift",
+        "logboard": "https://github.com/shogo4405/Logboard.git",
         "meta-wearables-dat-ios": "https://github.com/facebook/meta-wearables-dat-ios",
     }
 
@@ -119,14 +120,23 @@ def audit_package_resolution(findings: list[Finding]) -> None:
                     ):
                         findings.append(Finding("치명", relative(resolved_path), 1, f"원격 패키지 revision이 올바르지 않습니다: {identity}"))
 
-            for identity, location in expected_direct_packages.items():
+            expected_identities = set(expected_remote_packages)
+            actual_identities = set(remote_packages)
+            missing_identities = expected_identities - actual_identities
+            unexpected_identities = actual_identities - expected_identities
+
+            for identity in sorted(missing_identities):
+                findings.append(Finding("치명", relative(resolved_path), 1, f"필수 원격 패키지가 없습니다: {identity}"))
+            for identity in sorted(unexpected_identities):
+                findings.append(Finding("치명", relative(resolved_path), 1, f"검토되지 않은 원격 패키지가 있습니다: {identity}"))
+            for identity, location in expected_remote_packages.items():
                 if remote_packages.get(identity) != location:
                     findings.append(
                         Finding(
                             "치명",
                             relative(resolved_path),
                             1,
-                            f"필수 직접 원격 패키지 또는 location이 올바르지 않습니다: {identity}",
+                            f"원격 패키지 location이 올바르지 않습니다: {identity}",
                         )
                     )
     except Exception as exc:  # noqa: BLE001

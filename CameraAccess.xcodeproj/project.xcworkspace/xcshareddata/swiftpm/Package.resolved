@@ -1,4 +1,5 @@
 {
+  "originHash" : "3f801ecfc13e97a7f05a26f680b7327ee3c466c7e98ffcd942fad86b9b889e0a",
   "pins" : [
     {
       "identity" : "haishinkit.swift",
@@ -7,6 +8,15 @@
       "state" : {
         "branch" : "fix-concurrency",
         "revision" : "8b18210cb2d1c939cd28fa4896217db54907c550"
+      }
+    },
+    {
+      "identity" : "logboard",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/shogo4405/Logboard.git",
+      "state" : {
+        "revision" : "8f41c63afb903040b77049ee2efa8c257b8c0d50",
+        "version" : "2.6.0"
       }
     },
     {
@@ -19,5 +29,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
