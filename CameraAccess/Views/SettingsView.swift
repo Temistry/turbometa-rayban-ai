@@ -11,7 +11,6 @@ struct SettingsView: View {
     @ObservedObject var languageManager = LanguageManager.shared
     @ObservedObject var providerManager = APIProviderManager.shared
     @ObservedObject var quickVisionModeManager = QuickVisionModeManager.shared
-    @ObservedObject var liveAIModeManager = LiveAIModeManager.shared
     @ObservedObject var openClawService = OpenClawNodeService.shared
     #if DEBUG || INTERNAL_BUILD
     @ObservedObject var developerConsole = DeveloperConsole.shared
@@ -23,11 +22,8 @@ struct SettingsView: View {
     @State private var showProviderSettings = false
     @State private var showModelSettings = false
     @State private var showQualitySettings = false
-    @State private var showLiveAIProviderSettings = false
     @State private var showGoogleAPIKeySettings = false
     @State private var showQuickVisionSettings = false
-    @State private var showLiveAISettings = false
-    @State private var showLiveTranslateSettings = false
     @State private var showOpenClawSettings = false
 
     @State private var selectedQuality = UserDefaults.standard.string(forKey: "video_quality") ?? "medium"
@@ -50,7 +46,6 @@ struct SettingsView: View {
                 deviceSection
                 koreanLanguageSection
                 visionAISection
-                liveAISection
                 integrationSection
                 #if DEBUG || INTERNAL_BUILD
                 developerSection
@@ -83,9 +78,6 @@ struct SettingsView: View {
             .sheet(isPresented: $showQualitySettings) {
                 VideoQualitySettingsView(selectedQuality: $selectedQuality)
             }
-            .sheet(isPresented: $showLiveAIProviderSettings) {
-                LiveAIProviderSettingsView()
-            }
             .sheet(isPresented: $showGoogleAPIKeySettings) {
                 GoogleAPIKeySettingsView()
             }
@@ -94,12 +86,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showQuickVisionSettings) {
                 QuickVisionSettingsView()
-            }
-            .sheet(isPresented: $showLiveAISettings) {
-                LiveAISettingsView()
-            }
-            .sheet(isPresented: $showLiveTranslateSettings) {
-                LiveTranslateSettingsView(viewModel: LiveTranslateViewModel())
             }
             .sheet(isPresented: $showOpenClawSettings) {
                 OpenClawSettingsView()
@@ -217,52 +203,6 @@ struct SettingsView: View {
             }
         } header: {
             Text("settings.ai".localized)
-        }
-    }
-
-    private var liveAISection: some View {
-        Section {
-            SettingsNavigationRow(
-                icon: "waveform.circle.fill",
-                iconColor: AppColors.primary,
-                title: "settings.liveai.provider".localized,
-                value: providerManager.liveAIProvider.displayName
-            ) {
-                showLiveAIProviderSettings = true
-            }
-
-            if providerManager.liveAIProvider == .google {
-                SettingsNavigationRow(
-                    icon: "key.fill",
-                    iconColor: .orange,
-                    title: "Google API Key",
-                    value: hasGoogleAPIKey
-                        ? "settings.apikey.configured".localized
-                        : "settings.apikey.notconfigured".localized,
-                    valueColor: hasGoogleAPIKey ? .green : .red
-                ) {
-                    showGoogleAPIKeySettings = true
-                }
-            }
-
-            SettingsNavigationRow(
-                icon: "brain.head.profile",
-                iconColor: AppColors.liveAI,
-                title: "liveai.settings".localized,
-                value: liveAIModeManager.currentMode.displayName
-            ) {
-                showLiveAISettings = true
-            }
-
-            SettingsNavigationRow(
-                icon: "globe",
-                iconColor: AppColors.translate,
-                title: "livetranslate.settings.title".localized
-            ) {
-                showLiveTranslateSettings = true
-            }
-        } header: {
-            Text("settings.liveai".localized)
         }
     }
 

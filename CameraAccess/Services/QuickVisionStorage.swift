@@ -43,17 +43,32 @@ final class QuickVisionStorage {
     // MARK: - Save Record
 
     func saveRecord(_ record: QuickVisionRecord) {
+        upsertRecord(record)
+    }
+
+    func upsertRecord(_ record: QuickVisionRecord) {
         var records = loadAllRecords()
-        records.insert(record, at: 0)
+        let previousRecord = records.first { $0.id == record.id }
+
+        if let index = records.firstIndex(where: { $0.id == record.id }) {
+            records[index] = record
+        } else {
+            records.insert(record, at: 0)
+        }
 
         if records.count > maxRecords {
             records = Array(records.prefix(maxRecords))
         }
 
-        save(records, reason: "퀵비전 기록 추가")
+        save(records, reason: "퀵비전 기록 갱신")
+
+        guard record.status.isTerminal,
+              previousRecord?.status.isTerminal != true else {
+            return
+        }
 
         // 사진 원본과 썸네일은 외부 지식 로그로 보내지 않는다.
-        // 질문과 한국어 답변 텍스트만 사전 마스킹 후 Markdown/JSONL에 기록한다.
+        // 종료된 질문과 한국어 답변 또는 안전한 오류 요약만 Markdown/JSONL에 기록한다.
         Task { @MainActor in
             KnowledgeLogService.shared.appendQuickVision(
                 record,

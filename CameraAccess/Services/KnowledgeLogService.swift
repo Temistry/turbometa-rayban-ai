@@ -323,15 +323,35 @@ final class KnowledgeLogService: ObservableObject {
     }
 
     func appendQuickVision(_ record: QuickVisionRecord, model: String) {
+        guard record.status.isTerminal else { return }
+
+        let answer: String
+        switch record.status {
+        case .succeeded:
+            answer = record.result
+        case .failed, .rejected:
+            answer = record.errorMessage ?? "퀵비전 인식에 실패했습니다"
+        case .pending:
+            return
+        }
+
+        var metadata = record.metadata
+        metadata["mode"] = record.mode.rawValue
+        metadata["status"] = record.status.rawValue
+        metadata["capture_source"] = record.captureSource
+        if let errorCode = record.errorCode {
+            metadata["error_code"] = errorCode
+        }
+
         let event = KnowledgeLogEvent(
             id: record.id,
             timestamp: record.timestamp,
             source: .quickVision,
             question: quickVisionQuestion(for: record),
-            answer: record.result,
+            answer: answer,
             model: model,
-            tags: ["퀵비전", record.mode.rawValue],
-            metadata: ["mode": record.mode.rawValue]
+            tags: ["퀵비전", record.mode.rawValue, record.status.rawValue],
+            metadata: metadata
         )
         append(event)
     }

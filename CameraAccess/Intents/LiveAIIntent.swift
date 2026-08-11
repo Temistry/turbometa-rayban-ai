@@ -14,8 +14,7 @@ struct LiveAIIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        NotificationCenter.default.post(name: .liveAITriggered, object: nil)
-        return .result(dialog: "실시간 대화를 시작합니다")
+        .result(dialog: "실시간 대화 기능은 현재 제공하지 않습니다")
     }
 }
 
@@ -27,17 +26,6 @@ struct StopLiveAIIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let manager = LiveAIManager.shared
-
-        if manager.isRunning {
-            await manager.stopSession()
-            return .result(dialog: "실시간 AI 대화를 중지했습니다")
-        } else {
-            return .result(dialog: "실시간 AI가 실행 중이 아닙니다")
-        }
+        .result(dialog: "실시간 대화 기능은 현재 제공하지 않습니다")
     }
-}
-
-extension Notification.Name {
-    static let liveAITriggered = Notification.Name("liveAITriggered")
 }

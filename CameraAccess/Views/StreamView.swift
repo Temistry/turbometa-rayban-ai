@@ -52,6 +52,24 @@ struct StreamView: View {
           }
         }
       }
+
+      VStack {
+        HStack {
+          Button { dismiss() } label: {
+            Label("닫기", systemImage: "xmark.circle.fill")
+              .font(AppTypography.headline)
+              .foregroundColor(.white)
+              .padding(.horizontal, AppSpacing.md)
+              .padding(.vertical, AppSpacing.sm)
+              .background(Color.black.opacity(0.55))
+              .clipShape(Capsule())
+          }
+          .accessibilityLabel("음식 분석 카메라 닫기")
+          Spacer()
+        }
+        .padding(AppSpacing.md)
+        Spacer()
+      }
     }
     .onAppear {
       guard viewModel.hasActiveDevice else {
@@ -101,9 +119,6 @@ struct StreamView: View {
       if let photo = viewModel.capturedPhoto {
         LeanEatView(photo: photo, apiKey: VisionAPIConfig.apiKey)
       }
-    }
-    .fullScreenCover(isPresented: $viewModel.showOmniRealtime) {
-      OmniRealtimeView(streamViewModel: viewModel, apiKey: VisionAPIConfig.apiKey)
     }
   }
 
@@ -174,11 +189,6 @@ struct ControlsView: View {
       CircleButton(icon: "camera.fill", text: nil) {
         print("[StreamView][INFO] 사진 촬영 요청")
         viewModel.capturePhoto()
-      }
-
-      CircleButton(icon: "brain.head.profile", text: nil) {
-        print("[StreamView][INFO] 실시간 AI 화면 열기")
-        viewModel.showOmniRealtime = true
       }
     }
   }

@@ -8,7 +8,6 @@ import SwiftUI
 struct UnifiedSettingsView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
     @ObservedObject private var quickVisionModeManager = QuickVisionModeManager.shared
-    @ObservedObject private var liveAIModeManager = LiveAIModeManager.shared
     @ObservedObject private var openClawService = OpenClawNodeService.shared
     #if DEBUG || INTERNAL_BUILD
     @ObservedObject private var developerConsole = DeveloperConsole.shared
@@ -18,8 +17,6 @@ struct UnifiedSettingsView: View {
     @State private var showGoogleAPIKeySettings = false
     @State private var showQualitySettings = false
     @State private var showQuickVisionSettings = false
-    @State private var showLiveAISettings = false
-    @State private var showLiveTranslateSettings = false
     @State private var showOpenClawSettings = false
     @State private var showKnowledgeFolderPicker = false
     @State private var showKnowledgeError = false
@@ -53,12 +50,6 @@ struct UnifiedSettingsView: View {
             }
             .sheet(isPresented: $showQuickVisionSettings) {
                 QuickVisionSettingsView()
-            }
-            .sheet(isPresented: $showLiveAISettings) {
-                LiveAISettingsView()
-            }
-            .sheet(isPresented: $showLiveTranslateSettings) {
-                LiveTranslateSettingsView(viewModel: LiveTranslateViewModel())
             }
             .sheet(isPresented: $showOpenClawSettings) {
                 OpenClawSettingsView()
@@ -154,7 +145,6 @@ struct UnifiedSettingsView: View {
             }
 
             UnifiedInfoRow(title: "퀵비전 모델", value: GeminiModelCatalog.quickVision)
-            UnifiedInfoRow(title: "Live AI 모델", value: GeminiModelCatalog.live)
 
             UnifiedSettingsRow(
                 icon: "video.fill",
@@ -173,28 +163,10 @@ struct UnifiedSettingsView: View {
             ) {
                 showQuickVisionSettings = true
             }
-
-            UnifiedSettingsRow(
-                icon: "brain.head.profile",
-                iconColor: AppColors.liveAI,
-                title: "liveai.settings".localized,
-                value: liveAIModeManager.currentMode.displayName
-            ) {
-                showLiveAISettings = true
-            }
-
-            UnifiedSettingsRow(
-                icon: "globe",
-                iconColor: AppColors.translate,
-                title: "livetranslate.settings.title".localized,
-                value: "Gemini Live"
-            ) {
-                showLiveTranslateSettings = true
-            }
         } header: {
             Text("Google Gemini")
         } footer: {
-            Text("퀵비전, Live AI, 실시간 번역과 음식 분석은 같은 Google Gemini 인증 설정을 사용합니다. 퀵비전 낭독은 iOS 한국어 시스템 음성을 사용합니다.")
+            Text("퀵비전과 음식 분석은 같은 Google Gemini 인증 설정을 사용합니다. 퀵비전 낭독은 iOS 한국어 시스템 음성을 사용합니다.")
         }
     }
 

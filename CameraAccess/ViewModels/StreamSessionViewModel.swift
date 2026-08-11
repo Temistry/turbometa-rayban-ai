@@ -48,7 +48,6 @@ class StreamSessionViewModel: ObservableObject {
   @Published var capturedPhoto: UIImage?
   @Published var showPhotoPreview: Bool = false
   @Published var showVisionRecognition: Bool = false
-  @Published var showOmniRealtime: Bool = false
   @Published var showLeanEat: Bool = false
 
   private var timerTask: Task<Void, Never>?

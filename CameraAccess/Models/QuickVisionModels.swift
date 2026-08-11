@@ -101,54 +101,126 @@ enum QuickVisionMode: String, CaseIterable, Codable, Identifiable {
 
 // MARK: - Quick Vision Record
 
+enum QuickVisionRecordStatus: String, Codable {
+    case pending
+    case succeeded
+    case failed
+    case rejected
+
+    var isTerminal: Bool {
+        self != .pending
+    }
+
+    var displayName: String {
+        switch self {
+        case .pending: return "진행 중"
+        case .succeeded: return "완료"
+        case .failed: return "실패"
+        case .rejected: return "요청 거절"
+        }
+    }
+
+    var systemImageName: String {
+        switch self {
+        case .pending: return "clock"
+        case .succeeded: return "checkmark.circle.fill"
+        case .failed, .rejected: return "exclamationmark.triangle.fill"
+        }
+    }
+}
+
 struct QuickVisionRecord: Identifiable, Codable {
-    let id: UUID
-    let timestamp: Date
-    let mode: QuickVisionMode
-    let prompt: String
-    let result: String
-    let thumbnailData: Data?
+    var id: UUID
+    var timestamp: Date
+    var mode: QuickVisionMode
+    var prompt: String
+    var result: String
+    var thumbnailData: Data?
+    var status: QuickVisionRecordStatus
+    var errorCode: String?
+    var errorMessage: String?
+    var captureSource: String
+    var metadata: [String: String]
 
     init(
         id: UUID = UUID(),
         timestamp: Date = Date(),
         mode: QuickVisionMode,
         prompt: String,
-        result: String,
-        thumbnail: UIImage? = nil
+        result: String = "",
+        thumbnail: UIImage? = nil,
+        status: QuickVisionRecordStatus = .pending,
+        errorCode: String? = nil,
+        errorMessage: String? = nil,
+        captureSource: String = "none",
+        metadata: [String: String] = [:]
     ) {
         self.id = id
         self.timestamp = timestamp
         self.mode = mode
         self.prompt = prompt
         self.result = result
-        // 压缩缩略图到 100x100，质量 0.5
-        if let image = thumbnail {
-            let size = CGSize(width: 100, height: 100)
-            let renderer = UIGraphicsImageRenderer(size: size)
-            let resized = renderer.image { _ in
-                image.draw(in: CGRect(origin: .zero, size: size))
-            }
-            self.thumbnailData = resized.jpegData(compressionQuality: 0.5)
-        } else {
-            self.thumbnailData = nil
-        }
+        self.status = status
+        self.errorCode = errorCode
+        self.errorMessage = errorMessage
+        self.captureSource = captureSource
+        self.metadata = metadata
+        self.thumbnailData = Self.makeThumbnailData(from: thumbnail)
     }
 
-    // Computed properties
+    private enum CodingKeys: String, CodingKey {
+        case id, timestamp, mode, prompt, result, thumbnailData
+        case status, errorCode, errorMessage, captureSource, metadata
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        timestamp = try container.decode(Date.self, forKey: .timestamp)
+        mode = try container.decode(QuickVisionMode.self, forKey: .mode)
+        prompt = try container.decode(String.self, forKey: .prompt)
+        result = try container.decode(String.self, forKey: .result)
+        thumbnailData = try container.decodeIfPresent(Data.self, forKey: .thumbnailData)
+        status = try container.decodeIfPresent(QuickVisionRecordStatus.self, forKey: .status) ?? .succeeded
+        errorCode = try container.decodeIfPresent(String.self, forKey: .errorCode)
+        errorMessage = try container.decodeIfPresent(String.self, forKey: .errorMessage)
+        captureSource = try container.decodeIfPresent(String.self, forKey: .captureSource) ?? "none"
+        metadata = try container.decodeIfPresent([String: String].self, forKey: .metadata) ?? [:]
+    }
+
+    mutating func setThumbnail(_ image: UIImage?) {
+        thumbnailData = Self.makeThumbnailData(from: image)
+    }
+
+    private static func makeThumbnailData(from image: UIImage?) -> Data? {
+        guard let image else { return nil }
+        let size = CGSize(width: 100, height: 100)
+        let renderer = UIGraphicsImageRenderer(size: size)
+        let resized = renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: size))
+        }
+        return resized.jpegData(compressionQuality: 0.5)
+    }
+
     var thumbnail: UIImage? {
         guard let data = thumbnailData else { return nil }
         return UIImage(data: data)
     }
 
     var title: String {
-        let content = result
+        let content = displayContent
         return content.count > 30 ? String(content.prefix(30)) + "..." : content
     }
 
     var summary: String {
-        let content = result
+        let content = displayContent
         return content.count > 80 ? String(content.prefix(80)) + "..." : content
+    }
+
+    var displayContent: String {
+        if !result.isEmpty { return result }
+        if let errorMessage, !errorMessage.isEmpty { return errorMessage }
+        return status == .pending ? "인식 준비 중입니다" : "인식 결과가 없습니다"
     }
 
     var formattedDate: String {

@@ -20,21 +20,32 @@ struct LeanEatView: View {
             ZStack {
                 AppColors.secondaryBackground.ignoresSafeArea()
 
-                ScrollView {
-                    VStack(spacing: AppSpacing.lg) {
-                        photoSection
+                VStack(spacing: AppSpacing.md) {
+                    ScrollView {
+                        VStack(spacing: AppSpacing.lg) {
+                            photoSection
 
-                        if viewModel.isAnalyzing {
-                            analyzingView
-                        } else if let error = viewModel.errorMessage {
-                            errorView(error)
-                        } else if let nutrition = viewModel.nutritionData {
-                            nutritionResultView(nutrition)
-                        } else {
-                            analyzePromptView
+                            if viewModel.isAnalyzing {
+                                analyzingView
+                            } else if let error = viewModel.errorMessage {
+                                errorView(error)
+                            } else if let nutrition = viewModel.nutritionData {
+                                nutritionResultView(nutrition)
+                            } else {
+                                analyzePromptView
+                            }
                         }
+                        .padding()
                     }
-                    .padding()
+
+                    Button("분석 닫기") {
+                        dismiss()
+                    }
+                    .font(AppTypography.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, AppSpacing.md)
+                    .background(AppColors.secondaryBackground)
+                    .foregroundColor(AppColors.textPrimary)
                 }
             }
             .navigationTitle("leaneat.title".localized)

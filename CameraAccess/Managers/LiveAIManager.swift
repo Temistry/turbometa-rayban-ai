@@ -34,24 +34,11 @@ class LiveAIManager: ObservableObject {
     // 음성 출력
     private let tts = TTSService.shared
 
-    private init() {
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(handleLiveAITrigger(_:)),
-            name: .liveAITriggered,
-            object: nil
-        )
-    }
+    private init() {}
 
     func setStreamViewModel(_ viewModel: StreamSessionViewModel) {
         streamViewModel = viewModel
         print("[LiveAIManager][INFO] StreamViewModel 연결 완료 hasActiveDevice=\(viewModel.hasActiveDevice) streamStatus=\(viewModel.streamingStatus)")
-    }
-
-    @objc private func handleLiveAITrigger(_ notification: Notification) {
-        Task { @MainActor in
-            await startLiveAISession()
-        }
     }
 
     // MARK: - Start Session

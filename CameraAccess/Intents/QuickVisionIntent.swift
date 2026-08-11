@@ -177,28 +177,6 @@ struct TurboMetaShortcuts: AppShortcutsProvider {
             shortTitle: "사물 알아보기",
             systemImageName: "books.vertical.circle.fill"
         )
-
-        AppShortcut(
-            intent: LiveAIIntent(),
-            phrases: [
-                "\(.applicationName) 실시간 대화",
-                "\(.applicationName) 대화 시작",
-                "\(.applicationName) 실시간 대화 시작"
-            ],
-            shortTitle: "실시간 대화",
-            systemImageName: "brain.head.profile"
-        )
-
-        AppShortcut(
-            intent: StopLiveAIIntent(),
-            phrases: [
-                "\(.applicationName) 실시간 대화 중지",
-                "\(.applicationName) 대화 그만",
-                "\(.applicationName) 대화 종료"
-            ],
-            shortTitle: "실시간 대화 중지",
-            systemImageName: "stop.circle.fill"
-        )
     }
 }
 
@@ -248,26 +226,53 @@ final class QuickVisionManager: ObservableObject {
     }
 
     func performQuickVisionWithMode(_ mode: QuickVisionMode, customPrompt: String? = nil) async {
+        let prompt = customPrompt ?? QuickVisionModeManager.shared.getPrompt(for: mode)
+        let model = GeminiModelCatalog.quickVision
+
         guard !isProcessing else {
-            print("[QuickVision][WARN] 이미 처리 중이므로 중복 요청 무시 mode=\(mode.rawValue)")
+            let rejectedRecord = QuickVisionRecord(
+                mode: mode,
+                prompt: prompt,
+                status: .rejected,
+                errorCode: "already_processing",
+                errorMessage: "이전 퀵비전 인식이 아직 진행 중입니다",
+                metadata: ["source": "app", "model": model]
+            )
+            QuickVisionStorage.shared.upsertRecord(rejectedRecord)
+            print("[QuickVision][WARN] 이미 처리 중이므로 중복 요청 기록 mode=\(mode.rawValue)")
             return
         }
+
+        var record = QuickVisionRecord(
+            mode: mode,
+            prompt: prompt,
+            metadata: ["source": "app", "model": model]
+        )
+        QuickVisionStorage.shared.upsertRecord(record)
 
         guard let streamViewModel else {
             let message = "이미지 인식 기능이 아직 준비되지 않았습니다. 앱을 연 뒤 다시 시도하세요"
             errorMessage = message
+            record.status = .failed
+            record.errorCode = "stream_unavailable"
+            record.errorMessage = message
+            QuickVisionStorage.shared.upsertRecord(record)
             print("[QuickVision][ERROR] StreamViewModel 없음")
             tts.speak(message)
             return
         }
 
         isProcessing = true
+        defer {
+            isProcessing = false
+            print("[QuickVision][INFO] 종료 mode=\(mode.rawValue) success=\(lastResult != nil)")
+        }
+
         errorMessage = nil
         lastResult = nil
         lastImage = nil
         lastMode = mode
 
-        let model = GeminiModelCatalog.quickVision
         print(
             "[QuickVision][INFO] 시작 mode=\(mode.rawValue) provider=Google Gemini "
             + "model=\(model) hasDevice=\(streamViewModel.hasActiveDevice) "
@@ -277,14 +282,16 @@ final class QuickVisionManager: ObservableObject {
         guard let apiKey = APIKeyManager.shared.getGoogleAPIKey(), !apiKey.isEmpty else {
             let message = "설정에서 Google Gemini API Key를 먼저 등록하세요"
             errorMessage = message
+            record.status = .failed
+            record.errorCode = "api_key_missing"
+            record.errorMessage = message
+            QuickVisionStorage.shared.upsertRecord(record)
             print("[QuickVision][ERROR] Google Gemini 인증 설정 없음")
             tts.speak(message)
-            isProcessing = false
             return
         }
 
         tts.speak("인식 중입니다")
-        let prompt = customPrompt ?? QuickVisionModeManager.shared.getPrompt(for: mode)
 
         do {
             guard streamViewModel.hasActiveDevice else {
@@ -324,12 +331,14 @@ final class QuickVisionManager: ObservableObject {
             let photo: UIImage
             if let capturedPhoto = streamViewModel.capturedPhoto {
                 photo = capturedPhoto
+                record.captureSource = "photo"
                 print(
                     "[QuickVision][INFO] 촬영 사진 사용 size=\(capturedPhoto.size.width)x\(capturedPhoto.size.height) "
                     + "elapsedMs=\(photoWaitCount * 100)"
                 )
             } else if let videoFrame = streamViewModel.currentVideoFrame {
                 photo = videoFrame
+                record.captureSource = "videoFrame"
                 print(
                     "[QuickVision][WARN] 촬영 사진이 없어 최신 영상 프레임 사용 "
                     + "size=\(videoFrame.size.width)x\(videoFrame.size.height)"
@@ -338,6 +347,8 @@ final class QuickVisionManager: ObservableObject {
                 throw QuickVisionError.frameTimeout
             }
 
+            record.setThumbnail(photo)
+            QuickVisionStorage.shared.upsertRecord(record)
             lastImage = photo
 
             tts.prepareAudioSession()
@@ -347,23 +358,34 @@ final class QuickVisionManager: ObservableObject {
             let service = QuickVisionService(apiKey: apiKey, model: model)
             let result = try await service.analyzeImage(photo, customPrompt: prompt)
             lastResult = result
-            saveToHistory(mode: mode, prompt: prompt, result: result, image: photo)
+            record.status = .succeeded
+            record.result = result
+            QuickVisionStorage.shared.upsertRecord(record)
             print("[QuickVision][INFO] 인식 성공 resultLength=\(result.count)")
             tts.speak(result)
         } catch let error as QuickVisionError {
-            errorMessage = error.localizedDescription
+            let message = "인식에 실패했습니다. 다시 시도하세요"
+            errorMessage = message
+            record.status = .failed
+            record.errorCode = failureCode(for: error)
+            record.errorMessage = message
+            QuickVisionStorage.shared.upsertRecord(record)
             let nsError = error as NSError
             print(
                 "[QuickVision][ERROR] 단계 실패 type=QuickVisionError domain=\(nsError.domain) "
                 + "code=\(nsError.code) description=\(nsError.localizedDescription) "
                 + "mode=\(mode.rawValue) model=\(model)"
             )
-            tts.speak(error.localizedDescription)
+            tts.speak(message)
             await streamViewModel.stopSession()
         } catch {
             let nsError = error as NSError
-            let message = "인식에 실패했습니다. \(error.localizedDescription)"
+            let message = "인식에 실패했습니다. 다시 시도하세요"
             errorMessage = message
+            record.status = .failed
+            record.errorCode = "unexpected_error"
+            record.errorMessage = message
+            QuickVisionStorage.shared.upsertRecord(record)
             print(
                 "[QuickVision][ERROR] 예상하지 못한 실패 domain=\(nsError.domain) "
                 + "code=\(nsError.code) description=\(nsError.localizedDescription) "
@@ -372,9 +394,21 @@ final class QuickVisionManager: ObservableObject {
             tts.speak(message)
             await streamViewModel.stopSession()
         }
+    }
 
-        isProcessing = false
-        print("[QuickVision][INFO] 종료 mode=\(mode.rawValue) success=\(lastResult != nil)")
+    private func failureCode(for error: QuickVisionError) -> String {
+        switch error {
+        case .noDevice: return "no_device"
+        case .streamNotReady: return "stream_not_ready"
+        case .frameTimeout: return "frame_timeout"
+        case .apiKeyMissing: return "api_key_missing"
+        case .invalidImage: return "invalid_image"
+        case .emptyResponse: return "empty_response"
+        case .invalidResponse: return "invalid_response"
+        case .apiError: return "api_error"
+        case .network: return "network_error"
+        case .blocked: return "blocked"
+        }
     }
 
     func performQuickVision(customPrompt: String? = nil) async {
@@ -386,21 +420,6 @@ final class QuickVisionManager: ObservableObject {
 
     func performQuickVisionFromIntent(customPrompt: String? = nil) async {
         await performQuickVision(customPrompt: customPrompt)
-    }
-
-    private func saveToHistory(
-        mode: QuickVisionMode,
-        prompt: String,
-        result: String,
-        image: UIImage
-    ) {
-        let record = QuickVisionRecord(
-            mode: mode,
-            prompt: prompt,
-            result: result,
-            thumbnail: image
-        )
-        QuickVisionStorage.shared.saveRecord(record)
     }
 
     func stopStream() async {

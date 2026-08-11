@@ -12,11 +12,9 @@ struct RecordsView: View {
             VStack(spacing: 0) {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppSpacing.lg) {
-                        RecordTabButton(title: "Live AI", isSelected: selectedTab == 0) { selectedTab = 0 }
-                        RecordTabButton(title: "실시간 번역", isSelected: selectedTab == 1) { selectedTab = 1 }
-                        RecordTabButton(title: "영양 분석", isSelected: selectedTab == 2) { selectedTab = 2 }
-                        RecordTabButton(title: "단어 학습", isSelected: selectedTab == 3) { selectedTab = 3 }
-                        RecordTabButton(title: "quickvision.tab".localized, isSelected: selectedTab == 4) { selectedTab = 4 }
+                        RecordTabButton(title: "영양 분석", isSelected: selectedTab == 0) { selectedTab = 0 }
+                        RecordTabButton(title: "단어 학습", isSelected: selectedTab == 1) { selectedTab = 1 }
+                        RecordTabButton(title: "quickvision.tab".localized, isSelected: selectedTab == 2) { selectedTab = 2 }
                     }
                     .padding(.horizontal, AppSpacing.lg)
                     .padding(.vertical, AppSpacing.md)
@@ -24,11 +22,9 @@ struct RecordsView: View {
                 .background(AppColors.tertiaryBackground)
 
                 TabView(selection: $selectedTab) {
-                    LiveAIRecordsView().tag(0)
-                    TranslationRecordsView().tag(1)
-                    LeanEatRecordsView().tag(2)
-                    WordLearnRecordsView().tag(3)
-                    QuickVisionRecordsView().tag(4)
+                    LeanEatRecordsView().tag(0)
+                    WordLearnRecordsView().tag(1)
+                    QuickVisionRecordsView().tag(2)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
             }
@@ -65,128 +61,7 @@ struct RecordTabButton: View {
     }
 }
 
-// MARK: - Live AI
-
-struct LiveAIRecordsView: View {
-    @StateObject private var viewModel = ConversationListViewModel()
-    @State private var selectedConversation: ConversationRecord?
-    @State private var showDetail = false
-
-    var body: some View {
-        ZStack {
-            AppColors.secondaryBackground.ignoresSafeArea()
-
-            if viewModel.conversations.isEmpty {
-                EmptyRecordView(
-                    icon: "brain.head.profile",
-                    color: AppColors.liveAI,
-                    title: "Live AI 대화 기록이 없습니다",
-                    description: "Live AI를 사용하면 대화 기록이 여기에 표시됩니다"
-                )
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: AppSpacing.md) {
-                        ForEach(viewModel.conversations) { conversation in
-                            ConversationCell(conversation: conversation)
-                                .onTapGesture {
-                                    selectedConversation = conversation
-                                    showDetail = true
-                                }
-                                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                    Button(role: .destructive) {
-                                        viewModel.deleteConversation(conversation.id)
-                                    } label: {
-                                        Label("삭제", systemImage: "trash")
-                                    }
-                                }
-                        }
-                    }
-                    .padding(AppSpacing.md)
-                }
-                .refreshable { viewModel.loadConversations() }
-            }
-        }
-        .onAppear { viewModel.loadConversations() }
-        .sheet(isPresented: $showDetail) {
-            if let selectedConversation {
-                ConversationDetailView(conversation: selectedConversation)
-            }
-        }
-    }
-}
-
-@MainActor
-final class ConversationListViewModel: ObservableObject {
-    @Published var conversations: [ConversationRecord] = []
-
-    func loadConversations() {
-        conversations = ConversationStorage.shared.loadAllConversations()
-        print("[Records][INFO] Live AI 대화 \(conversations.count)개 로드")
-    }
-
-    func deleteConversation(_ id: UUID) {
-        ConversationStorage.shared.deleteConversation(id)
-        print("[Records][INFO] Live AI 대화 삭제 id=\(id)")
-        loadConversations()
-    }
-}
-
-struct ConversationCell: View {
-    let conversation: ConversationRecord
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: AppSpacing.sm) {
-            HStack {
-                Image(systemName: "brain.head.profile")
-                    .foregroundColor(AppColors.liveAI)
-                    .font(AppTypography.headline)
-
-                Text(conversation.title)
-                    .font(AppTypography.headline)
-                    .foregroundColor(AppColors.textPrimary)
-                    .lineLimit(1)
-
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(AppTypography.caption)
-                    .foregroundColor(AppColors.textTertiary)
-            }
-
-            if !conversation.summary.isEmpty {
-                Text(conversation.summary)
-                    .font(AppTypography.subheadline)
-                    .foregroundColor(AppColors.textSecondary)
-                    .lineLimit(2)
-            }
-
-            HStack(spacing: AppSpacing.md) {
-                Label(conversation.formattedDate, systemImage: "clock")
-                Label("메시지 \(conversation.messageCount)개", systemImage: "bubble.left.and.bubble.right")
-                Spacer()
-            }
-            .font(AppTypography.caption)
-            .foregroundColor(AppColors.textSecondary)
-        }
-        .padding(AppSpacing.md)
-        .background(AppColors.tertiaryBackground)
-        .cornerRadius(AppCornerRadius.lg)
-        .shadow(color: AppShadow.small(), radius: 4, x: 0, y: 2)
-    }
-}
-
-// MARK: - Placeholder record tabs
-
-struct TranslationRecordsView: View {
-    var body: some View {
-        EmptyRecordView(
-            icon: "text.bubble",
-            color: AppColors.translate,
-            title: "번역 기록이 없습니다",
-            description: "번역 기록 저장 기능은 준비 중입니다"
-        )
-        .background(AppColors.secondaryBackground)
-    }
-}
+// MARK: - Available record tabs
 
 struct LeanEatRecordsView: View {
     var body: some View {
@@ -311,6 +186,7 @@ struct QuickVisionRecordCell: View {
                         .foregroundColor(AppColors.textPrimary)
                         .lineLimit(1)
                     Spacer()
+                    QuickVisionRecordStatusLabel(status: record.status)
                     Image(systemName: "chevron.right")
                         .font(AppTypography.caption)
                         .foregroundColor(AppColors.textTertiary)
