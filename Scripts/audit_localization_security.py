@@ -285,6 +285,10 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
         ],
         "CameraAccess/Services/OpenClaw/OpenClawNodeService.swift": [
             "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
+            "OpenClawTransportMode",
+            "openclaw_transport_mode",
+            "transportMode == .meshnet && isMeshnetPeer",
+            "octets[0] == 100 && (64...127).contains(octets[1])",
             "insecurePublicWebSocket",
             "credentialsOrQueryNotAllowed",
         ],
@@ -328,6 +332,41 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
         for marker in markers:
             if marker not in text:
                 findings.append(Finding("치명", path_text, 1, f"필수 보호 코드가 없습니다: {marker}"))
+
+    openclaw_service_path = SOURCE_ROOT / "Services" / "OpenClaw" / "OpenClawNodeService.swift"
+    if openclaw_service_path.exists():
+        openclaw_text = openclaw_service_path.read_text(encoding="utf-8", errors="replace")
+        forbidden_meshnet_markers = (
+            'isMeshnetHost(host) ? "ws" : "wss"',
+            "hasPrefix(\"100.\")",
+            "NSAllowsArbitraryLoads",
+        )
+        for marker in forbidden_meshnet_markers:
+            if marker in openclaw_text:
+                findings.append(
+                    Finding(
+                        "치명",
+                        relative(openclaw_service_path),
+                        1,
+                        f"Meshnet transport 정책을 약화하는 코드가 있습니다: {marker}",
+                    )
+                )
+
+    meshnet_settings_path = SOURCE_ROOT / "Views" / "OpenClawSettingsView.swift"
+    if not meshnet_settings_path.exists():
+        findings.append(Finding("치명", relative(meshnet_settings_path), 1, "Meshnet opt-in 설정 화면이 없습니다"))
+    else:
+        meshnet_settings_text = meshnet_settings_path.read_text(encoding="utf-8", errors="replace")
+        for marker in ("Nord Meshnet", "OpenClawTransportMode.meshnet", "Gateway 토큰과 기기 페어링"):
+            if marker not in meshnet_settings_text:
+                findings.append(
+                    Finding(
+                        "치명",
+                        relative(meshnet_settings_path),
+                        1,
+                        f"Meshnet opt-in 보안 안내가 없습니다: {marker}",
+                    )
+                )
 
 
 def audit_localization_strings(findings: list[Finding]) -> None:
@@ -404,6 +443,8 @@ def audit_swift_strings(findings: list[Finding]) -> None:
         "TurboMeta",
         "Ray-Ban Meta",
         "OpenClaw",
+        "Nord Meshnet",
+        "Nord traffic routing",
         "Live AI",
         "API Key",
         "Google Gemini",

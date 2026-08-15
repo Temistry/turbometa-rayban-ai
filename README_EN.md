@@ -79,6 +79,18 @@ Instead, the user selects a folder in the iOS Files document picker. That can be
 
 Folder access and sync must be selected and authorized by the user. Re-select the folder if a bookmark becomes stale or the provider revokes access.
 
+## OpenClaw Nord Meshnet remote connection
+
+To use OpenClaw away from the office without router port forwarding or public Internet exposure, link the Windows PC and iPhone as **personally approved Nord Meshnet peers**, then explicitly select **Nord Meshnet** mode in TurboMeta's OpenClaw settings.
+
+- Meshnet mode permits `ws://` only for an **exact IPv4 peer address** in `100.64.0.0/10`. The address range is not trusted automatically: in standard mode, the same address still requires `wss://`.
+- Do not use Meshnet mode for ordinary office-LAN addresses, hostnames, or public hosts. External or unverified hosts must continue to use `wss://`.
+- Keep the Gateway loopback-only when a Meshnet-only proxy/listener can provide access. If a direct listener is necessary, constrain the Windows Firewall inbound rule to the Meshnet interface and one approved iPhone peer.
+- Meshnet does not replace Gateway authentication, signed device connection, or OpenClaw pairing. Do not put a token in a URL, bind the Gateway to public WAN, enable Nord traffic routing for this purpose, or broaden local-network permissions.
+- After configuring the peer link, Gateway, and firewall, verify the physical iPhone path on the same Meshnet and then on cellular. Never share endpoint addresses, peer names, tokens, raw handshakes, or raw logs in work records or support requests.
+
+If the direct Meshnet `ws://` path fails on a physical device because of iOS App Transport Security, do not add a broad ATS exception. Use a Meshnet-only `wss://` proxy on the PC instead.
+
 ## Build and validation
 
 ### Static audit

@@ -33,6 +33,11 @@ enum OpenClawConnectionState: Equatable {
     }
 }
 
+enum OpenClawTransportMode: String, CaseIterable {
+    case standard
+    case meshnet
+}
+
 // MARK: - Service
 
 final class OpenClawNodeService: NSObject, ObservableObject {
@@ -42,6 +47,9 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     @Published var isEnabled = UserDefaults.standard.bool(forKey: "openclaw_enabled")
     @Published var gatewayHost = UserDefaults.standard.string(forKey: "openclaw_host") ?? "127.0.0.1"
     @Published var gatewayPort = UserDefaults.standard.integer(forKey: "openclaw_port").nonZeroOrDefault(18789)
+    @Published var transportMode = OpenClawTransportMode(
+        rawValue: UserDefaults.standard.string(forKey: "openclaw_transport_mode") ?? ""
+    ) ?? .standard
 
     private var webSocket: URLSessionWebSocketTask?
     private var urlSession: URLSession?
@@ -83,6 +91,11 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     func setCommandRouter(_ router: OpenClawCommandRouter) {
         commandRouter = router
+    }
+
+    func updateTransportMode(_ mode: OpenClawTransportMode) {
+        transportMode = mode
+        saveSettings()
     }
 
     func connect() {
@@ -247,7 +260,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
                 self.connectionState = .error(message)
             }
             shouldReconnect = false
-            print("[OpenClaw][ERROR] Gateway URL 검증 실패 description=\(message) host=\(gatewayHost) port=\(gatewayPort)")
+            print("[OpenClaw][ERROR] Gateway URL 검증 실패 description=\(message) port=\(gatewayPort) mode=\(transportMode.rawValue)")
             return
         }
 
@@ -256,7 +269,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
 
         // 토큰은 URL 쿼리에 넣지 않는다. URL은 각종 프록시와 진단 로그에 남기 쉽기 때문이다.
-        print("[OpenClaw][INFO] Gateway 연결 시작 scheme=\(url.scheme ?? "-") host=\(url.host ?? "-") port=\(url.port ?? gatewayPort) tokenConfigured=\(loadGatewayToken() != nil)")
+        print("[OpenClaw][INFO] Gateway 연결 시작 scheme=\(url.scheme ?? "-") port=\(url.port ?? gatewayPort) mode=\(transportMode.rawValue) tokenConfigured=\(loadGatewayToken() != nil)")
 
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 10
@@ -277,125 +290,26 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     private func makeGatewayURL() throws -> URL {
-        let rawHost = gatewayHost.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !rawHost.isEmpty else {
-            throw OpenClawTransportError.invalidHost
-        }
-        guard (1...65_535).contains(gatewayPort) else {
-            throw OpenClawTransportError.invalidPort(gatewayPort)
-        }
-
-        let hasExplicitScheme = rawHost.contains("://")
-        let suppliedComponents = hasExplicitScheme ? URLComponents(string: rawHost) : nil
-        let host = suppliedComponents?.host ?? rawHost
-        guard !host.isEmpty else {
-            throw OpenClawTransportError.invalidHost
-        }
-
-        // 주소 입력란에 자격 증명을 넣으면 URL/프록시 로그에 새어 나가기 쉽다.
-        guard suppliedComponents?.user == nil,
-              suppliedComponents?.password == nil,
-              suppliedComponents?.query == nil,
-              suppliedComponents?.fragment == nil else {
-            throw OpenClawTransportError.credentialsOrQueryNotAllowed
-        }
-
-        let requestedScheme = suppliedComponents?.scheme?.lowercased()
-        let scheme = requestedScheme ?? (Self.isLocalOrPrivateHost(host) ? "ws" : "wss")
-        guard scheme == "ws" || scheme == "wss" else {
-            throw OpenClawTransportError.unsupportedScheme(scheme)
-        }
-
-        // 평문 WebSocket은 엄격히 검증된 루프백/사설 IP 또는 .local 호스트에서만 허용한다.
-        if scheme == "ws" && !Self.isLocalOrPrivateHost(host) {
-            throw OpenClawTransportError.insecurePublicWebSocket(host)
-        }
-
-        var components = URLComponents()
-        components.scheme = scheme
-        components.host = host
-        components.port = suppliedComponents?.port ?? gatewayPort
-        components.path = suppliedComponents?.path ?? ""
-
-        guard let url = components.url else {
-            throw OpenClawTransportError.invalidHost
-        }
-        return url
+        try OpenClawGatewayEndpoint.makeURL(
+            rawHost: gatewayHost,
+            defaultPort: gatewayPort,
+            transportMode: transportMode
+        )
     }
 
     static func isLocalOrPrivateHost(_ host: String) -> Bool {
-        var normalized = host
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .lowercased()
-            .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
-
-        // Fully-qualified hostnames may legally end in a dot.
-        if normalized.hasSuffix(".") {
-            normalized.removeLast()
-        }
-
-        if normalized == "localhost" || normalized == "::1" || normalized.hasSuffix(".local") {
-            return true
-        }
-
-        if let octets = strictIPv4Octets(normalized) {
-            switch octets[0] {
-            case 10, 127:
-                return true
-            case 169:
-                return octets[1] == 254
-            case 172:
-                return (16...31).contains(octets[1])
-            case 192:
-                return octets[1] == 168
-            default:
-                return false
-            }
-        }
-
-        // Hostname prefixes such as "10.attacker.example" must never be treated as an IP.
-        // IPv6 private/link-local checks only run for actual colon-containing literals.
-        guard normalized.contains(":") else {
-            return false
-        }
-
-        if normalized.hasPrefix("fc") || normalized.hasPrefix("fd") {
-            return true // IPv6 unique-local fc00::/7
-        }
-
-        let firstHextet = normalized.split(separator: ":", omittingEmptySubsequences: true).first
-            .flatMap { UInt16($0, radix: 16) }
-        if let firstHextet,
-           (firstHextet & 0xffc0) == 0xfe80 {
-            return true // IPv6 link-local fe80::/10
-        }
-
-        return false
+        OpenClawGatewayEndpoint.isLocalOrPrivateHost(host)
     }
 
-    private static func strictIPv4Octets(_ value: String) -> [Int]? {
-        let components = value.split(separator: ".", omittingEmptySubsequences: false)
-        guard components.count == 4 else { return nil }
-
-        var octets: [Int] = []
-        octets.reserveCapacity(4)
-
-        for component in components {
-            guard !component.isEmpty,
-                  component.allSatisfy({ $0.isNumber }),
-                  let octet = Int(component),
-                  (0...255).contains(octet) else {
-                return nil
-            }
-            octets.append(octet)
-        }
-        return octets
+    static func isMeshnetHost(_ host: String) -> Bool {
+        OpenClawGatewayEndpoint.isMeshnetHost(host)
     }
 
     private func saveSettings() {
         UserDefaults.standard.set(isEnabled, forKey: "openclaw_enabled")
         UserDefaults.standard.set(gatewayHost, forKey: "openclaw_host")
         UserDefaults.standard.set(gatewayPort, forKey: "openclaw_port")
+        UserDefaults.standard.set(transportMode.rawValue, forKey: "openclaw_transport_mode")
     }
 
     // MARK: - WebSocket messaging
@@ -840,25 +754,204 @@ extension OpenClawNodeService: URLSessionWebSocketDelegate {
     }
 }
 
-// MARK: - Errors and helpers
+// MARK: - Endpoint validation
+
+enum OpenClawGatewayEndpoint {
+    static func makeURL(
+        rawHost: String,
+        defaultPort: Int,
+        transportMode: OpenClawTransportMode
+    ) throws -> URL {
+        let trimmedHost = rawHost.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedHost.isEmpty else {
+            throw OpenClawTransportError.invalidHost
+        }
+        guard (1...65_535).contains(defaultPort) else {
+            throw OpenClawTransportError.invalidPort(defaultPort)
+        }
+
+        let hasExplicitScheme = trimmedHost.contains("://")
+        let suppliedComponents: URLComponents?
+        if hasExplicitScheme {
+            guard let components = URLComponents(string: trimmedHost),
+                  let parsedHost = components.host,
+                  !parsedHost.isEmpty else {
+                throw OpenClawTransportError.invalidHost
+            }
+            suppliedComponents = components
+        } else {
+            guard !containsUnsafeBareHostSyntax(trimmedHost) else {
+                throw OpenClawTransportError.invalidHost
+            }
+            suppliedComponents = nil
+        }
+
+        guard suppliedComponents?.user == nil,
+              suppliedComponents?.password == nil,
+              suppliedComponents?.query == nil,
+              suppliedComponents?.fragment == nil else {
+            throw OpenClawTransportError.credentialsOrQueryNotAllowed
+        }
+        let host = suppliedComponents?.host ?? trimmedHost
+        guard !host.isEmpty else {
+            throw OpenClawTransportError.invalidHost
+        }
+
+        let port = suppliedComponents?.port ?? defaultPort
+        guard (1...65_535).contains(port) else {
+            throw OpenClawTransportError.invalidPort(port)
+        }
+
+        let requestedScheme = suppliedComponents?.scheme?.lowercased()
+        let isMeshnetPeer = isMeshnetHost(host)
+        let isLocalOrPrivate = isLocalOrPrivateHost(host)
+        let canUsePlainWebSocket = isLocalOrPrivate
+            || (transportMode == .meshnet && isMeshnetPeer)
+        let defaultsToPlainWebSocket = isLocalOrPrivate
+            || (transportMode == .meshnet && isMeshnetPeer)
+        let scheme = requestedScheme ?? (defaultsToPlainWebSocket ? "ws" : "wss")
+        guard scheme == "ws" || scheme == "wss" else {
+            throw OpenClawTransportError.unsupportedScheme(scheme)
+        }
+
+        if scheme == "ws" && !canUsePlainWebSocket {
+            if isMeshnetPeer {
+                throw OpenClawTransportError.meshnetModeRequired
+            }
+            throw OpenClawTransportError.insecurePublicWebSocket
+        }
+
+        var components = URLComponents()
+        components.scheme = scheme
+        components.host = host
+        components.port = port
+        components.path = suppliedComponents?.path ?? ""
+
+        guard let url = components.url else {
+            throw OpenClawTransportError.invalidHost
+        }
+        return url
+    }
+
+    static func isLocalOrPrivateHost(_ host: String) -> Bool {
+        let normalized = normalizeHost(host)
+
+        if normalized == "localhost" || normalized == "::1" || normalized.hasSuffix(".local") {
+            return true
+        }
+
+        if let octets = strictIPv4Octets(normalized) {
+            switch octets[0] {
+            case 10, 127:
+                return true
+            case 169:
+                return octets[1] == 254
+            case 172:
+                return (16...31).contains(octets[1])
+            case 192:
+                return octets[1] == 168
+            default:
+                return false
+            }
+        }
+
+        // Hostname prefixes such as "10.attacker.example" must never be treated as an IP.
+        // IPv6 private/link-local checks only run for actual colon-containing literals.
+        guard normalized.contains(":") else {
+            return false
+        }
+
+        if normalized.hasPrefix("fc") || normalized.hasPrefix("fd") {
+            return true // IPv6 unique-local fc00::/7
+        }
+
+        let firstHextet = normalized.split(separator: ":", omittingEmptySubsequences: true).first
+            .flatMap { UInt16($0, radix: 16) }
+        if let firstHextet,
+           (firstHextet & 0xffc0) == 0xfe80 {
+            return true // IPv6 link-local fe80::/10
+        }
+
+        return false
+    }
+
+    static func isMeshnetHost(_ host: String) -> Bool {
+        guard let octets = strictIPv4Octets(normalizeHost(host)) else {
+            return false
+        }
+
+        // Nord Meshnet addresses use the CGNAT range 100.64.0.0/10.
+        return octets[0] == 100 && (64...127).contains(octets[1])
+    }
+
+    private static func containsUnsafeBareHostSyntax(_ value: String) -> Bool {
+        value.contains("/")
+            || value.contains("?")
+            || value.contains("#")
+            || value.contains("@")
+            || (value.contains(":") && !isBracketedIPv6Literal(value))
+    }
+
+    private static func isBracketedIPv6Literal(_ value: String) -> Bool {
+        guard value.hasPrefix("["), value.hasSuffix("]") else {
+            return false
+        }
+        return value.dropFirst().dropLast().contains(":")
+    }
+
+    private static func normalizeHost(_ host: String) -> String {
+        var normalized = host
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+
+        // Fully-qualified hostnames may legally end in a dot.
+        if normalized.hasSuffix(".") {
+            normalized.removeLast()
+        }
+        return normalized
+    }
+
+    private static func strictIPv4Octets(_ value: String) -> [Int]? {
+        let components = value.split(separator: ".", omittingEmptySubsequences: false)
+        guard components.count == 4 else { return nil }
+
+        var octets: [Int] = []
+        octets.reserveCapacity(4)
+
+        for component in components {
+            guard !component.isEmpty,
+                  component.allSatisfy({ $0.isNumber }),
+                  let octet = Int(component),
+                  (0...255).contains(octet) else {
+                return nil
+            }
+            octets.append(octet)
+        }
+        return octets
+    }
+}
 
 private enum OpenClawTransportError: LocalizedError {
     case invalidHost
     case invalidPort(Int)
     case unsupportedScheme(String)
-    case insecurePublicWebSocket(String)
+    case insecurePublicWebSocket
+    case meshnetModeRequired
     case credentialsOrQueryNotAllowed
 
     var errorDescription: String? {
         switch self {
         case .invalidHost:
             return "Gateway 호스트가 올바르지 않습니다"
-        case .invalidPort(let port):
-            return "Gateway 포트가 올바르지 않습니다: \(port)"
-        case .unsupportedScheme(let scheme):
-            return "지원하지 않는 연결 방식입니다: \(scheme)"
-        case .insecurePublicWebSocket(let host):
-            return "공인망 호스트 \(host)에는 암호화된 wss:// 연결만 사용할 수 있습니다"
+        case .invalidPort:
+            return "Gateway 포트가 올바르지 않습니다"
+        case .unsupportedScheme:
+            return "지원하지 않는 연결 방식입니다"
+        case .insecurePublicWebSocket:
+            return "공인망 호스트에는 암호화된 wss:// 연결만 사용할 수 있습니다"
+        case .meshnetModeRequired:
+            return "Meshnet 주소의 ws:// 연결은 설정에서 Meshnet 모드를 켠 경우에만 사용할 수 있습니다"
         case .credentialsOrQueryNotAllowed:
             return "Gateway 주소에는 사용자 정보, 토큰, 쿼리 문자열 또는 프래그먼트를 넣을 수 없습니다"
         }

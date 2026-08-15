@@ -45,6 +45,17 @@ struct OpenClawSettingsView: View {
                 }
 
                 Section {
+                    Picker(
+                        "연결 모드",
+                        selection: Binding(
+                            get: { nodeService.transportMode },
+                            set: { nodeService.updateTransportMode($0) }
+                        )
+                    ) {
+                        Text("기본 보안 연결").tag(OpenClawTransportMode.standard)
+                        Text("Nord Meshnet").tag(OpenClawTransportMode.meshnet)
+                    }
+
                     HStack {
                         Text("호스트")
                             .frame(width: 58, alignment: .leading)
@@ -71,6 +82,11 @@ struct OpenClawSettingsView: View {
                         Text("openclaw.gateway.help".localized)
                         Label(transportDescription, systemImage: transportSystemImage)
                             .foregroundColor(transportColor)
+
+                        if nodeService.transportMode == .meshnet {
+                            Text("Meshnet 모드는 사용자가 승인한 개인 Nord Meshnet 피어의 100.64.0.0/10 IPv4 주소에만 ws://를 허용합니다. 일반 사무실 LAN·공인 호스트에는 사용하지 말고, Gateway 토큰과 기기 페어링을 계속 유지하세요.")
+                                .foregroundColor(.orange)
+                        }
                     }
                 }
 
@@ -128,6 +144,16 @@ struct OpenClawSettingsView: View {
                             .foregroundColor(.orange)
                     }
                     .padding(.vertical, 4)
+                }
+
+                if nodeService.transportMode == .meshnet {
+                    Section("Meshnet 사용 전 확인") {
+                        Label("Windows Gateway와 방화벽을 승인한 Meshnet iPhone 피어 하나로 제한하세요.", systemImage: "checkmark.shield")
+                        Label("공유기 포트포워딩, 공인 WAN 바인딩, Nord traffic routing은 사용하지 마세요.", systemImage: "xmark.shield")
+                        Label("Meshnet은 Gateway 토큰과 기기 페어링을 대체하지 않습니다.", systemImage: "key.shield")
+                    }
+                    .font(AppTypography.caption)
+                    .foregroundColor(.secondary)
                 }
             }
             .navigationTitle("OpenClaw 설정")
@@ -189,24 +215,35 @@ struct OpenClawSettingsView: View {
         OpenClawNodeService.isLocalOrPrivateHost(normalizedHost)
     }
 
+    private var isMeshnetHost: Bool {
+        OpenClawNodeService.isMeshnetHost(normalizedHost)
+    }
+
+    private var canUsePlainWebSocket: Bool {
+        isLocalOrPrivate || (nodeService.transportMode == .meshnet && isMeshnetHost)
+    }
+
     private var transportDescription: String {
         if explicitScheme == "wss" {
             return "암호화된 wss:// 연결을 사용합니다"
         }
-        if explicitScheme == "ws" || (explicitScheme == nil && isLocalOrPrivate) {
+        if nodeService.transportMode == .meshnet && isMeshnetHost {
+            return "승인된 Meshnet 피어용 ws:// 연결입니다. Meshnet 오버레이 외에서는 사용하지 마세요"
+        }
+        if explicitScheme == "ws" || (explicitScheme == nil && canUsePlainWebSocket) {
             return "사설망용 ws:// 연결입니다. 전송 내용은 암호화되지 않습니다"
         }
         return "공인망 호스트는 자동으로 wss:// 연결을 사용합니다"
     }
 
     private var transportSystemImage: String {
-        explicitScheme == "wss" || (explicitScheme == nil && !isLocalOrPrivate)
+        explicitScheme == "wss" || (explicitScheme == nil && !canUsePlainWebSocket)
             ? "lock.fill"
             : "exclamationmark.triangle.fill"
     }
 
     private var transportColor: Color {
-        explicitScheme == "wss" || (explicitScheme == nil && !isLocalOrPrivate)
+        explicitScheme == "wss" || (explicitScheme == nil && !canUsePlainWebSocket)
             ? .green
             : .orange
     }
@@ -225,8 +262,10 @@ struct OpenClawSettingsView: View {
             return
         }
 
-        if explicitScheme == "ws" && !isLocalOrPrivate {
-            validationMessage = "공인망 호스트에는 ws://를 사용할 수 없습니다. wss:// 주소를 입력하세요"
+        if explicitScheme == "ws" && !canUsePlainWebSocket {
+            validationMessage = isMeshnetHost
+                ? "Meshnet 주소의 ws:// 연결은 Nord Meshnet 모드를 켠 경우에만 사용할 수 있습니다"
+                : "공인망 호스트에는 ws://를 사용할 수 없습니다. wss:// 주소를 입력하세요"
             showValidationError = true
             return
         }

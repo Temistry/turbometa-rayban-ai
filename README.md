@@ -302,6 +302,18 @@ wss://gateway.example.com
 
 사설망 `ws://`도 암호화되지 않습니다. 신뢰할 수 없는 Wi-Fi에서는 사용하지 마세요.
 
+### Nord Meshnet 원격 연결
+
+공유기 포트포워딩이나 공인 인터넷 노출 없이 외부에서 OpenClaw를 사용하려면, Windows PC와 iPhone을 **사용자가 승인한 Nord Meshnet 피어**로 연결한 뒤 앱 설정에서 **Nord Meshnet** 연결 모드를 직접 선택합니다.
+
+- Meshnet 모드는 `100.64.0.0/10` 범위의 **정확한 IPv4 피어 주소**에만 `ws://`를 허용합니다. 주소 범위만으로 자동 신뢰하지 않으며, 기본 보안 연결 모드에서는 같은 주소도 `wss://`가 필요합니다.
+- 일반 사무실 LAN 주소, 호스트명, 공인 주소에는 Meshnet 모드를 사용하지 마세요. 외부·미확인 주소에는 계속 `wss://`를 사용해야 합니다.
+- Windows PC의 Gateway는 루프백 기본 구성을 유지할 수 있으면 Meshnet 전용 프록시/리스너로만 노출합니다. 직접 바인딩이 필요하면 Windows Firewall 인바운드 규칙을 Meshnet 인터페이스와 승인한 iPhone 피어 하나로 제한합니다.
+- Gateway 토큰, 서명된 기기 연결, OpenClaw 페어링 승인은 Meshnet을 사용해도 필수입니다. 토큰을 URL에 넣거나, 공인 WAN에 바인딩하거나, Nord traffic routing·광범위한 로컬 네트워크 권한을 이 용도로 활성화하지 마세요.
+- 두 기기의 Meshnet 연결과 Gateway/방화벽 구성을 마친 뒤에는 같은 Meshnet 경로와 iPhone 셀룰러 경로를 각각 실기기에서 확인합니다. 주소·피어 이름·토큰·원시 handshake·원시 로그는 작업 기록이나 지원 요청에 공유하지 마세요.
+
+Meshnet `ws://` 경로가 iOS App Transport Security 정책에서 실기기에 실패하면 전체 ATS 예외를 추가하지 않습니다. 대신 PC의 Meshnet 전용 `wss://` 프록시를 사용하세요.
+
 ## 정적 점검
 
 한국어와 기본 보안 설정을 검사하려면 다음 명령을 실행합니다.
