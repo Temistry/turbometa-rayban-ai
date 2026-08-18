@@ -92,7 +92,8 @@ struct GalvisOpenClawSessionView: View {
         case .connecting: return "OpenClaw 연결 중"
         case .listening: return "듣는 중"
         case .waitingForResponse: return "OpenClaw 답변 대기 중"
-        case .speaking: return "답변 중"
+        case .generatingSpeech: return "Gateway 음성 생성 중"
+        case .speaking: return "Gateway 음성 재생 중"
         case .followUp: return "15초 동안 다음 질문을 기다립니다"
         case .waitingForWakeWord: return "‘갈비스’ 호출 대기 중"
         case .error: return "음성 대화 오류"
@@ -104,7 +105,7 @@ struct GalvisOpenClawSessionView: View {
         switch sessionManager.state {
         case .listening, .followUp, .waitingForWakeWord: return "mic.circle.fill"
         case .speaking: return "speaker.wave.3.fill"
-        case .waitingForResponse, .connecting: return "arrow.triangle.2.circlepath.circle.fill"
+        case .generatingSpeech, .waitingForResponse, .connecting: return "arrow.triangle.2.circlepath.circle.fill"
         case .error: return "exclamationmark.triangle.fill"
         case .stopped: return "stop.circle.fill"
         case .idle, .requestingPermission: return "waveform.circle.fill"
@@ -115,7 +116,7 @@ struct GalvisOpenClawSessionView: View {
         switch sessionManager.state {
         case .error: return .red
         case .stopped: return .secondary
-        case .speaking: return .indigo
+        case .generatingSpeech, .speaking: return .indigo
         case .listening, .followUp, .waitingForWakeWord: return .green
         default: return .purple
         }
@@ -123,7 +124,7 @@ struct GalvisOpenClawSessionView: View {
 
     private var isActiveState: Bool {
         switch sessionManager.state {
-        case .listening, .speaking, .connecting, .waitingForResponse, .followUp:
+        case .listening, .generatingSpeech, .speaking, .connecting, .waitingForResponse, .followUp:
             return true
         default:
             return false

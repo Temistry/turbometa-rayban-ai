@@ -9,6 +9,7 @@ final class GalvisOpenClawSessionManager: ObservableObject {
         case connecting
         case listening
         case waitingForResponse
+        case generatingSpeech
         case speaking
         case followUp
         case waitingForWakeWord
@@ -23,7 +24,6 @@ final class GalvisOpenClawSessionManager: ObservableObject {
     private let openClaw = OpenClawNodeService.shared
     private let recognizer = GalvisSpeechRecognizer()
     private let audioSession = GalvisAudioSessionController()
-    private let tts = TTSService.shared
     private var sessionTask: Task<Void, Never>?
     private var followUpTimeoutTask: Task<Void, Never>?
     private var backgroundObserver: NSObjectProtocol?
@@ -65,7 +65,7 @@ final class GalvisOpenClawSessionManager: ObservableObject {
         sessionTask = nil
         recognizer.cancel()
         openClaw.cancelPendingConversation()
-        tts.stop()
+        openClaw.stopSpeechResponse()
         audioSession.deactivate()
         state = .stopped
         print("[Galvis][INFO] 음성 대화 종료")
@@ -104,7 +104,7 @@ final class GalvisOpenClawSessionManager: ObservableObject {
             state = .error(error.localizedDescription)
             isActive = false
             recognizer.cancel()
-            tts.stop()
+            openClaw.stopSpeechResponse()
             audioSession.deactivate()
         }
     }
@@ -195,8 +195,11 @@ final class GalvisOpenClawSessionManager: ObservableObject {
 
     private func speak(_ text: String) async throws {
         recognizer.cancel()
+        state = .generatingSpeech
+        let audio = try await openClaw.requestSpeechAudio(for: text)
+        guard isActive && !Task.isCancelled else { throw CancellationError() }
         state = .speaking
-        try await tts.speakAndWait(text, preservesAudioSession: true)
+        try await openClaw.playSpeechAudio(audio)
     }
 
     private func waitForConnection() async throws {

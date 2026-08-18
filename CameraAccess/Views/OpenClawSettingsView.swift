@@ -6,7 +6,6 @@ import SwiftUI
 
 struct OpenClawSettingsView: View {
     @ObservedObject var nodeService = OpenClawNodeService.shared
-    @ObservedObject private var ttsService = TTSService.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var host = ""
@@ -100,14 +99,26 @@ struct OpenClawSettingsView: View {
                         )
                     )
 
-                    Picker("발화 속도", selection: $ttsService.speechRate) {
-                        Text("느리게").tag(TTSSpeechRate.slow)
-                        Text("보통").tag(TTSSpeechRate.normal)
-                        Text("빠르게").tag(TTSSpeechRate.fast)
+                    Picker(
+                        "발화 속도",
+                        selection: Binding(
+                            get: { nodeService.speechRate },
+                            set: { nodeService.updateSpeechRate($0) }
+                        )
+                    ) {
+                        Text("느리게").tag(OpenClawSpeechRate.slow)
+                        Text("보통").tag(OpenClawSpeechRate.normal)
+                        Text("빠르게").tag(OpenClawSpeechRate.fast)
                     }
                     .accessibilityLabel("OpenClaw 발화 속도")
 
-                    if ttsService.isSpeaking {
+                    if let speechStatus = nodeService.speechStatusMessage {
+                        Text(speechStatus)
+                            .font(AppTypography.caption)
+                            .foregroundColor(AppColors.textSecondary)
+                    }
+
+                    if nodeService.isSpeechPlaying {
                         Button(role: .destructive) {
                             nodeService.stopSpeechResponse()
                         } label: {
