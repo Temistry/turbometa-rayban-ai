@@ -66,7 +66,8 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private let keychainService = "com.smartview.glassai.openclaw"
     private let keychainAccount = "gateway_token"
 
-    private static let protocolVersion = 3
+    static let minimumProtocolVersion = 3
+    static let maximumProtocolVersion = 4
     private static let tickInterval: TimeInterval = 15
     private static let maxReconnectAttempts = 5
     private static let maximumWebSocketMessageSize = 8 * 1024 * 1024
@@ -479,8 +480,8 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
 
         let connectParams: [String: Any] = [
-            "minProtocol": Self.protocolVersion,
-            "maxProtocol": Self.protocolVersion,
+            "minProtocol": Self.minimumProtocolVersion,
+            "maxProtocol": Self.maximumProtocolVersion,
             "client": [
                 "id": clientID,
                 "displayName": "Ray-Ban Meta Glasses",

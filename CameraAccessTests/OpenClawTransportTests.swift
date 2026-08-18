@@ -3,6 +3,11 @@ import XCTest
 @testable import CameraAccess
 
 final class OpenClawTransportTests: XCTestCase {
+    func testGatewayProtocolNegotiationSupportsVersionFour() {
+        XCTAssertEqual(OpenClawNodeService.minimumProtocolVersion, 3)
+        XCTAssertEqual(OpenClawNodeService.maximumProtocolVersion, 4)
+    }
+
     func testMeshnetCIDRBoundariesAreExact() {
         XCTAssertTrue(OpenClawGatewayEndpoint.isMeshnetHost("100.64.0.0"))
         XCTAssertTrue(OpenClawGatewayEndpoint.isMeshnetHost("100.127.255.255"))
