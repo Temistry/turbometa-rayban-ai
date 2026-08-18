@@ -51,8 +51,9 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         rawValue: UserDefaults.standard.string(forKey: "openclaw_transport_mode") ?? ""
     ) ?? .standard
 
-    private var webSocket: URLSessionWebSocketTask?
-    private var urlSession: URLSession?
+    private var webSocketTransport: OpenClawWebSocketTransport?
+    private var connectionGeneration = 0
+    private var handledDisconnectGeneration: Int?
     private var commandRouter: OpenClawCommandRouter?
     private var reconnectTask: Task<Void, Never>?
     private var tickTask: Task<Void, Never>?
@@ -121,10 +122,10 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         tickTask?.cancel()
         tickTask = nil
 
-        webSocket?.cancel(with: .goingAway, reason: nil)
-        webSocket = nil
-        urlSession?.invalidateAndCancel()
-        urlSession = nil
+        webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
+        webSocketTransport = nil
+        connectionGeneration += 1
+        handledDisconnectGeneration = connectionGeneration
 
         DispatchQueue.main.async {
             self.connectionState = .disconnected
@@ -268,25 +269,52 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             self.connectionState = .connecting
         }
 
+        let transportKind = OpenClawWebSocketTransportSelector.kind(
+            for: url,
+            transportMode: transportMode
+        )
+        connectionGeneration += 1
+        let generation = connectionGeneration
+        handledDisconnectGeneration = nil
+
         // 토큰은 URL 쿼리에 넣지 않는다. URL은 각종 프록시와 진단 로그에 남기 쉽기 때문이다.
-        print("[OpenClaw][INFO] Gateway 연결 시작 scheme=\(url.scheme ?? "-") port=\(url.port ?? gatewayPort) mode=\(transportMode.rawValue) tokenConfigured=\(loadGatewayToken() != nil)")
+        print("[OpenClaw][INFO] Gateway 연결 시작 scheme=\(url.scheme ?? "-") port=\(url.port ?? gatewayPort) mode=\(transportMode.rawValue) transport=\(transportKind.rawValue) tokenConfigured=\(loadGatewayToken() != nil)")
 
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 10
-        configuration.timeoutIntervalForResource = 30
-        configuration.waitsForConnectivity = false
-        configuration.urlCache = nil
-        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+        let transport: OpenClawWebSocketTransport
+        do {
+            switch transportKind {
+            case .urlSession:
+                transport = OpenClawURLSessionWebSocketTransport(
+                    url: url,
+                    maximumMessageSize: Self.maximumWebSocketMessageSize
+                )
+            case .meshnetNetwork:
+                transport = try OpenClawMeshnetWebSocketTransport(
+                    url: url,
+                    maximumMessageSize: Self.maximumWebSocketMessageSize
+                )
+            }
+        } catch {
+            handleTransportFailure(error, generation: generation)
+            return
+        }
 
-        let delegateQueue = OperationQueue()
-        delegateQueue.name = "openclaw-ws"
-        delegateQueue.maxConcurrentOperationCount = 1
-        urlSession = URLSession(configuration: configuration, delegate: self, delegateQueue: delegateQueue)
+        transport.onOpen = { [weak self] in
+            guard let self, self.connectionGeneration == generation else { return }
+            print("[OpenClaw][INFO] WebSocket 열림 transport=\(transportKind.rawValue)")
+            self.receiveMessage(generation: generation)
+        }
+        transport.onClose = { [weak self] code, reason in
+            guard let self, self.connectionGeneration == generation else { return }
+            print("[OpenClaw][WARN] WebSocket 닫힘 code=\(code) reason=\(reason ?? "-") transport=\(transportKind.rawValue)")
+            self.scheduleDisconnectHandling(generation: generation)
+        }
+        transport.onFailure = { [weak self] error in
+            self?.handleTransportFailure(error, generation: generation)
+        }
 
-        let task = urlSession?.webSocketTask(with: url)
-        task?.maximumMessageSize = Self.maximumWebSocketMessageSize
-        webSocket = task
-        task?.resume()
+        webSocketTransport = transport
+        transport.start()
     }
 
     private func makeGatewayURL() throws -> URL {
@@ -314,24 +342,26 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     // MARK: - WebSocket messaging
 
-    private func receiveMessage() {
-        guard let webSocket else { return }
-        webSocket.receive { [weak self] result in
+    private func receiveMessage(generation: Int) {
+        guard let transport = webSocketTransport else { return }
+        transport.receive { [weak self] result in
+            guard let self, self.connectionGeneration == generation else { return }
             switch result {
             case .success(let message):
-                self?.handleMessage(message)
-                self?.receiveMessage()
+                self.handleMessage(message)
+                DispatchQueue.global(qos: .utility).async { [weak self] in
+                    self?.receiveMessage(generation: generation)
+                }
 
             case .failure(let error):
-                guard let self else { return }
                 let nsError = error as NSError
-                let state = self.webSocket?.state
+                let state = self.webSocketTransport?.state
                 print("[OpenClaw][ERROR] 수신 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) socketState=\(String(describing: state)) reconnect=\(self.shouldReconnect)")
 
                 if state == .canceling || state == .completed || !self.shouldReconnect {
                     return
                 }
-                self.scheduleDisconnectHandling()
+                self.scheduleDisconnectHandling(generation: generation)
             }
         }
     }
@@ -343,24 +373,25 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             return
         }
 
-        guard let webSocket, webSocket.state == .running else {
-            print("[OpenClaw][ERROR] WebSocket이 실행 중이 아니어서 전송 실패 state=\(String(describing: self.webSocket?.state))")
+        guard let transport = webSocketTransport, transport.state == .running else {
+            print("[OpenClaw][ERROR] WebSocket이 실행 중이 아니어서 전송 실패 state=\(String(describing: self.webSocketTransport?.state))")
             return
         }
 
-        webSocket.send(.string(text)) { [weak self] error in
+        let generation = connectionGeneration
+        transport.send(.string(text)) { [weak self] error in
             guard let error else { return }
             let nsError = error as NSError
             print("[OpenClaw][ERROR] 전송 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
             if self?.shouldReconnect == true {
-                self?.scheduleDisconnectHandling()
+                self?.scheduleDisconnectHandling(generation: generation)
             }
         }
     }
 
     // MARK: - Message handling
 
-    private func handleMessage(_ message: URLSessionWebSocketTask.Message) {
+    private func handleMessage(_ message: OpenClawWebSocketMessage) {
         let text: String
         let byteCount: Int
 
@@ -371,9 +402,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         case .data(let data):
             text = String(data: data, encoding: .utf8) ?? ""
             byteCount = data.count
-        @unknown default:
-            print("[OpenClaw][WARN] 알 수 없는 WebSocket 메시지 유형")
-            return
         }
 
         guard let data = text.data(using: .utf8),
@@ -655,20 +683,38 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
     }
 
-    private func scheduleDisconnectHandling() {
+    private func handleTransportFailure(_ error: Error, generation: Int) {
+        guard connectionGeneration == generation else { return }
+        let nsError = error as NSError
+        print("[OpenClaw][ERROR] 연결 작업 종료 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+
+        if shouldReconnect {
+            DispatchQueue.main.async {
+                self.connectionState = .error("Gateway 네트워크 연결 오류: \(nsError.localizedDescription)")
+            }
+            scheduleDisconnectHandling(generation: generation)
+        }
+    }
+
+    private func scheduleDisconnectHandling(generation: Int) {
         Task { @MainActor [weak self] in
-            self?.handleDisconnectOnMain()
+            self?.handleDisconnectOnMain(generation: generation)
         }
     }
 
     @MainActor
-    private func handleDisconnectOnMain() {
-        guard connectionState != .disconnected else { return }
+    private func handleDisconnectOnMain(generation: Int) {
+        guard connectionGeneration == generation,
+              handledDisconnectGeneration != generation,
+              connectionState != .disconnected else { return }
+        handledDisconnectGeneration = generation
 
-        webSocket = nil
-        urlSession?.invalidateAndCancel()
-        urlSession = nil
+        webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
+        webSocketTransport = nil
         tickTask?.cancel()
+        tickTask = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
 
         guard shouldReconnect else {
             connectionState = .disconnected
@@ -714,43 +760,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             }
         }
         return nil
-    }
-}
-
-// MARK: - URLSessionWebSocketDelegate
-
-extension OpenClawNodeService: URLSessionWebSocketDelegate {
-    func urlSession(
-        _ session: URLSession,
-        webSocketTask: URLSessionWebSocketTask,
-        didOpenWithProtocol protocol: String?
-    ) {
-        print("[OpenClaw][INFO] WebSocket 열림 protocol=\(`protocol` ?? "-")")
-        receiveMessage()
-    }
-
-    func urlSession(
-        _ session: URLSession,
-        webSocketTask: URLSessionWebSocketTask,
-        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
-        reason: Data?
-    ) {
-        let reasonText = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "-"
-        print("[OpenClaw][WARN] WebSocket 닫힘 code=\(closeCode.rawValue) reason=\(reasonText)")
-        scheduleDisconnectHandling()
-    }
-
-    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
-        guard let error else { return }
-        let nsError = error as NSError
-        print("[OpenClaw][ERROR] 연결 작업 종료 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
-
-        if shouldReconnect {
-            DispatchQueue.main.async {
-                self.connectionState = .error("Gateway 연결 오류: \(nsError.localizedDescription)")
-            }
-            scheduleDisconnectHandling()
-        }
     }
 }
 

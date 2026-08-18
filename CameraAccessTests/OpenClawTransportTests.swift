@@ -69,6 +69,52 @@ final class OpenClawTransportTests: XCTestCase {
         )
     }
 
+    func testMeshnetPlainWebSocketSelectsNetworkTransport() throws {
+        for host in ["100.64.0.0", "100.127.255.255"] {
+            let url = try OpenClawGatewayEndpoint.makeURL(
+                rawHost: host,
+                defaultPort: 18789,
+                transportMode: .meshnet
+            )
+
+            XCTAssertEqual(
+                OpenClawWebSocketTransportSelector.kind(for: url, transportMode: .meshnet),
+                .meshnetNetwork
+            )
+        }
+    }
+
+    func testOnlyValidatedMeshnetPlainWebSocketSelectsNetworkTransport() throws {
+        let secureMeshnetURL = try OpenClawGatewayEndpoint.makeURL(
+            rawHost: "wss://100.64.0.1",
+            defaultPort: 18789,
+            transportMode: .meshnet
+        )
+        let localURL = try OpenClawGatewayEndpoint.makeURL(
+            rawHost: "192.168.1.10",
+            defaultPort: 18789,
+            transportMode: .meshnet
+        )
+        let standardMeshnetURL = try OpenClawGatewayEndpoint.makeURL(
+            rawHost: "100.64.0.1",
+            defaultPort: 18789,
+            transportMode: .standard
+        )
+
+        XCTAssertEqual(
+            OpenClawWebSocketTransportSelector.kind(for: secureMeshnetURL, transportMode: .meshnet),
+            .urlSession
+        )
+        XCTAssertEqual(
+            OpenClawWebSocketTransportSelector.kind(for: localURL, transportMode: .meshnet),
+            .urlSession
+        )
+        XCTAssertEqual(
+            OpenClawWebSocketTransportSelector.kind(for: standardMeshnetURL, transportMode: .standard),
+            .urlSession
+        )
+    }
+
     func testGatewayPathIsPreservedWithoutUnsafeComponents() throws {
         let url = try OpenClawGatewayEndpoint.makeURL(
             rawHost: "wss://gateway.example.com/openclaw",

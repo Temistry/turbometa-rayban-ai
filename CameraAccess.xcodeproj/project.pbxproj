@@ -96,6 +96,7 @@
 		OC1004000400040004 /* OpenClawSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2004000400040004 /* OpenClawSettingsView.swift */; };
 		OC1005000500050005 /* OpenClawDeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2005000500050005 /* OpenClawDeviceIdentity.swift */; };
 		OC1006000600060006 /* OpenClawChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2006000600060006 /* OpenClawChatView.swift */; };
+		OC1007000700070007 /* OpenClawWebSocketTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2007000700070007 /* OpenClawWebSocketTransport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -210,6 +211,7 @@
 		OC2004000400040004 /* OpenClawSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawSettingsView.swift; sourceTree = "<group>"; };
 		OC2005000500050005 /* OpenClawDeviceIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawDeviceIdentity.swift; sourceTree = "<group>"; };
 		OC2006000600060006 /* OpenClawChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawChatView.swift; sourceTree = "<group>"; };
+		OC2007000700070007 /* OpenClawWebSocketTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawWebSocketTransport.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -459,6 +461,7 @@
 				OC2002000200020002 /* OpenClawNodeService.swift */,
 				OC2003000300030003 /* OpenClawCommandRouter.swift */,
 				OC2005000500050005 /* OpenClawDeviceIdentity.swift */,
+				OC2007000700070007 /* OpenClawWebSocketTransport.swift */,
 			);
 			path = OpenClaw;
 			sourceTree = "<group>";
@@ -652,6 +655,7 @@
 				OC1004000400040004 /* OpenClawSettingsView.swift in Sources */,
 				OC1005000500050005 /* OpenClawDeviceIdentity.swift in Sources */,
 				OC1006000600060006 /* OpenClawChatView.swift in Sources */,
+				OC1007000700070007 /* OpenClawWebSocketTransport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

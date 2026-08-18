@@ -84,7 +84,7 @@ struct OpenClawSettingsView: View {
                             .foregroundColor(transportColor)
 
                         if nodeService.transportMode == .meshnet {
-                            Text("Meshnet 모드는 사용자가 승인한 개인 Nord Meshnet 피어의 100.64.0.0/10 IPv4 주소에만 ws://를 허용합니다. 일반 사무실 LAN·공인 호스트에는 사용하지 말고, Gateway 토큰과 기기 페어링을 계속 유지하세요.")
+                            Text("호스트에는 Windows PC의 Meshnet IP만 입력하세요(예: 100.x.x.x). 앱은 승인된 100.64.0.0/10 IPv4에만 Meshnet 전용 ws:// 통로를 사용하며, Gateway 토큰과 기기 페어링은 계속 필요합니다.")
                                 .foregroundColor(.orange)
                         }
                     }
