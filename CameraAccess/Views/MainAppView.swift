@@ -22,6 +22,7 @@ struct MainAppView: View {
   @ObservedObject private var viewModel: WearablesViewModel
   @StateObject private var streamViewModel: StreamSessionViewModel
   @StateObject private var quickVisionManager = QuickVisionManager.shared
+  @StateObject private var galvisLaunchCoordinator = GalvisLaunchCoordinator.shared
   @State private var permissionsGranted = false
   @State private var hasCheckedPermissions = false
 
@@ -55,6 +56,8 @@ struct MainAppView: View {
             if OpenClawNodeService.shared.isEnabled {
               OpenClawNodeService.shared.connect()
             }
+
+            galvisLaunchCoordinator.markAppReady()
           }
       }
     } else {

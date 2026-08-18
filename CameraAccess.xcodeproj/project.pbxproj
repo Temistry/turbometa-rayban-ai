@@ -98,6 +98,9 @@
 		OC1006000600060006 /* OpenClawChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2006000600060006 /* OpenClawChatView.swift */; };
 		OC1007000700070007 /* OpenClawWebSocketTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2007000700070007 /* OpenClawWebSocketTransport.swift */; };
 		OC1008000800080008 /* OpenClawChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2008000800080008 /* OpenClawChatHistoryStore.swift */; };
+		GV1001000100010001 /* GalvisOpenClawIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2001000100010001 /* GalvisOpenClawIntent.swift */; };
+		GV1002000200020002 /* GalvisLaunchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2002000200020002 /* GalvisLaunchCoordinator.swift */; };
+		GV1003000300030003 /* GalvisOpenClawSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2003000300030003 /* GalvisOpenClawSessionView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -214,6 +217,9 @@
 		OC2006000600060006 /* OpenClawChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawChatView.swift; sourceTree = "<group>"; };
 		OC2007000700070007 /* OpenClawWebSocketTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawWebSocketTransport.swift; sourceTree = "<group>"; };
 		OC2008000800080008 /* OpenClawChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawChatHistoryStore.swift; sourceTree = "<group>"; };
+		GV2001000100010001 /* GalvisOpenClawIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisOpenClawIntent.swift; sourceTree = "<group>"; };
+		GV2002000200020002 /* GalvisLaunchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisLaunchCoordinator.swift; sourceTree = "<group>"; };
+		GV2003000300030003 /* GalvisOpenClawSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisOpenClawSessionView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -251,6 +257,7 @@
 		2BDC3665CD11E348EEEBA8F7 /* Intents */ = {
 			isa = PBXGroup;
 			children = (
+				GV2001000100010001 /* GalvisOpenClawIntent.swift */,
 				568E19B82D2116C7FE3B1829 /* QuickVisionIntent.swift */,
 				5C0ECA1D14EBBE33F66EEF18 /* LiveAIIntent.swift */,
 			);
@@ -281,6 +288,7 @@
 			isa = PBXGroup;
 			children = (
 				OC3000000000000000 /* OpenClaw */,
+				GV2002000200020002 /* GalvisLaunchCoordinator.swift */,
 				4B69CCC62F050D5D00D1D025 /* RTMPStreamingService.swift */,
 				4BA57A8D2EF8227E002EC214 /* ConversationStorage.swift */,
 				4BA57A8E2EF8227E002EC214 /* LeanEatService.swift */,
@@ -397,6 +405,7 @@
 				LT1005000500050005 /* LiveTranslateSettingsView.swift */,
 				OC2004000400040004 /* OpenClawSettingsView.swift */,
 				OC2006000600060006 /* OpenClawChatView.swift */,
+				GV2003000300030003 /* GalvisOpenClawSessionView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -660,6 +669,9 @@
 				OC1006000600060006 /* OpenClawChatView.swift in Sources */,
 				OC1007000700070007 /* OpenClawWebSocketTransport.swift in Sources */,
 				OC1008000800080008 /* OpenClawChatHistoryStore.swift in Sources */,
+				GV1001000100010001 /* GalvisOpenClawIntent.swift in Sources */,
+				GV1002000200020002 /* GalvisLaunchCoordinator.swift in Sources */,
+				GV1003000300030003 /* GalvisOpenClawSessionView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

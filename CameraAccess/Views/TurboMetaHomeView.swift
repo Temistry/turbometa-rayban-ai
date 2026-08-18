@@ -15,6 +15,7 @@ struct TurboMetaHomeView: View {
     @State private var showQuickVision = false
     @State private var showOpenClaw = false
     @ObservedObject private var openClawService = OpenClawNodeService.shared
+    @ObservedObject private var galvisLaunchCoordinator = GalvisLaunchCoordinator.shared
 
     var body: some View {
         NavigationView {
@@ -91,6 +92,12 @@ struct TurboMetaHomeView: View {
             }
             .fullScreenCover(isPresented: $showOpenClaw) {
                 OpenClawChatView(streamViewModel: streamViewModel)
+            }
+            .fullScreenCover(
+                isPresented: $galvisLaunchCoordinator.isOpenClawSessionPresented,
+                onDismiss: { galvisLaunchCoordinator.dismissOpenClawSession() }
+            ) {
+                GalvisOpenClawSessionView(streamViewModel: streamViewModel)
             }
         }
         .onAppear {

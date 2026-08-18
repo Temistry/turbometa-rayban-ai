@@ -111,6 +111,17 @@ private func formatResult(_ manager: QuickVisionManager) -> some IntentResult & 
 struct TurboMetaShortcuts: AppShortcutsProvider {
     static var appShortcuts: [AppShortcut] {
         AppShortcut(
+            intent: GalvisOpenClawIntent(),
+            phrases: [
+                "\(.applicationName) 오픈클로 호출해",
+                "\(.applicationName) 오픈클로 시작해",
+                "\(.applicationName)에게 물어보기"
+            ],
+            shortTitle: "OpenClaw 대화",
+            systemImageName: "waveform.circle.fill"
+        )
+
+        AppShortcut(
             intent: QuickVisionIntent(),
             phrases: [
                 "\(.applicationName) 이거 뭐야",
