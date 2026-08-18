@@ -15,7 +15,6 @@ final class TTSService: NSObject, ObservableObject {
     @Published private(set) var isSpeaking = false
 
     private var synthesizer: AVSpeechSynthesizer?
-    private var playbackTask: Task<Void, Never>?
 
     private override init() {
         super.init()
@@ -48,6 +47,7 @@ final class TTSService: NSObject, ObservableObject {
         }
 
         let engine = AVSpeechSynthesizer()
+        engine.delegate = self
         synthesizer = engine
 
         let utterance = AVSpeechUtterance(string: normalizedText)
@@ -58,35 +58,21 @@ final class TTSService: NSObject, ObservableObject {
 
         isSpeaking = true
         print(
-            "[TTS][INFO] iOS 시스템 음성 시작 language=\(koreanVoice.language) "
+            "[TTS][INFO] iOS 시스템 음성 요청 language=\(koreanVoice.language) "
             + "quality=\(koreanVoice.quality.rawValue) textLength=\(normalizedText.count)"
         )
         engine.speak(utterance)
-
-        playbackTask = Task { [weak self, weak engine] in
-            guard let self, let engine else { return }
-
-            while engine.isSpeaking {
-                if Task.isCancelled {
-                    engine.stopSpeaking(at: .immediate)
-                    return
-                }
-                try? await Task.sleep(nanoseconds: 100_000_000)
-            }
-
-            guard !Task.isCancelled else { return }
-            self.isSpeaking = false
-            self.synthesizer = nil
-            self.playbackTask = nil
-            print("[TTS][INFO] iOS 한국어 음성 재생 완료")
-        }
     }
 
     func stop() {
-        playbackTask?.cancel()
-        playbackTask = nil
-        synthesizer?.stopSpeaking(at: .immediate)
+        guard let engine = synthesizer else {
+            isSpeaking = false
+            return
+        }
+
         synthesizer = nil
+        engine.delegate = nil
+        engine.stopSpeaking(at: .immediate)
         isSpeaking = false
         print("[TTS][INFO] 음성 재생 중지")
     }
@@ -110,7 +96,7 @@ final class TTSService: NSObject, ObservableObject {
                 "[TTS][AUDIO] 세션 활성 category=\(session.category.rawValue) "
                 + "mode=\(session.mode.rawValue) outputs=[\(outputs)]"
             )
-            return !session.currentRoute.outputs.isEmpty
+            return true
         } catch {
             let nsError = error as NSError
             print(
@@ -118,6 +104,51 @@ final class TTSService: NSObject, ObservableObject {
                 + "code=\(nsError.code) description=\(nsError.localizedDescription)"
             )
             return false
+        }
+    }
+
+    private func finishSpeech(
+        from engine: AVSpeechSynthesizer,
+        outcome: String
+    ) {
+        guard synthesizer === engine else { return }
+        engine.delegate = nil
+        synthesizer = nil
+        isSpeaking = false
+        print("[TTS][INFO] iOS 한국어 음성 \(outcome)")
+    }
+}
+
+extension TTSService: AVSpeechSynthesizerDelegate {
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didStart utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor [weak self, weak synthesizer] in
+            guard let self, let synthesizer,
+                  self.synthesizer === synthesizer else { return }
+            self.isSpeaking = true
+            print("[TTS][INFO] iOS 한국어 음성 재생 시작")
+        }
+    }
+
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didFinish utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor [weak self, weak synthesizer] in
+            guard let self, let synthesizer else { return }
+            self.finishSpeech(from: synthesizer, outcome: "재생 완료")
+        }
+    }
+
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didCancel utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor [weak self, weak synthesizer] in
+            guard let self, let synthesizer else { return }
+            self.finishSpeech(from: synthesizer, outcome: "재생 취소")
         }
     }
 }

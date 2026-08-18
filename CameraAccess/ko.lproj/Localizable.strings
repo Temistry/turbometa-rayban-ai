@@ -436,6 +436,9 @@
 "openclaw.chat.sending" = "전송 중...";
 "openclaw.chat.noframe" = "안경 화면을 가져올 수 없습니다. 안경 연결 상태를 확인하세요";
 "openclaw.chat.text" = "키보드";
+"openclaw.chat.history.clear" = "채팅 기록 삭제";
+"openclaw.chat.history.clear.confirm" = "저장된 OpenClaw 채팅 기록을 모두 삭제할까요?";
+"openclaw.chat.image.attachment" = "사진 첨부";
 "openclaw.speech.section" = "음성 응답";
 "openclaw.speech.enabled" = "OpenClaw 응답 음성으로 읽기";
 "openclaw.speech.stop" = "음성 중지";

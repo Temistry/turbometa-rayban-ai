@@ -445,6 +445,9 @@
 "openclaw.chat.sending" = "Sending...";
 "openclaw.chat.noframe" = "Cannot get glasses frame, please check connection";
 "openclaw.chat.text" = "Text";
+"openclaw.chat.history.clear" = "Clear Chat History";
+"openclaw.chat.history.clear.confirm" = "Delete all saved OpenClaw chat history?";
+"openclaw.chat.image.attachment" = "Photo attached";
 "openclaw.speech.section" = "Voice Responses";
 "openclaw.speech.enabled" = "Read OpenClaw responses aloud";
 "openclaw.speech.stop" = "Stop Speaking";

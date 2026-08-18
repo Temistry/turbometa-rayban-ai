@@ -104,6 +104,8 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         guard defaults.object(forKey: "openclaw_speech_response_enabled") != nil else { return true }
         return defaults.bool(forKey: "openclaw_speech_response_enabled")
     }()
+    @Published private(set) var chatMessages: [OpenClawChatMessage] = []
+    @Published private(set) var pendingChatResponse = ""
 
     private var webSocketTransport: OpenClawWebSocketTransport?
     private var connectionGeneration = 0
@@ -115,7 +117,8 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private var pendingNonce: String?
     private var shouldReconnect = false
     private var reconnectAttempts = 0
-    private var lastSpokenFinalResponse: String?
+    private var handledFinalEventIdentities = Set<String>()
+    private let chatHistoryStore: OpenClawChatHistoryStore
     private lazy var deviceIdentity = OpenClawDeviceIdentityStore.loadOrCreate()
 
     private let keychainService = "com.smartview.glassai.openclaw"
@@ -139,7 +142,14 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     private override init() {
         let deviceID = UIDevice.current.identifierForVendor?.uuidString ?? UUID().uuidString
+        let historyStore = OpenClawChatHistoryStore.shared
+        let storedMessages = historyStore.load()
         self.nodeId = "rayban-\(deviceID.prefix(8))".lowercased()
+        self.chatHistoryStore = historyStore
+        self.chatMessages = storedMessages
+        self.handledFinalEventIdentities = Set(
+            storedMessages.compactMap(\.eventIdentity)
+        )
         super.init()
         hardenStoredToken()
     }
@@ -157,9 +167,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     func updateSpeechResponseEnabled(_ isEnabled: Bool) {
         isSpeechResponseEnabled = isEnabled
-        if !isEnabled {
-            lastSpokenFinalResponse = nil
-        }
         saveSettings()
         if !isEnabled {
             Task { @MainActor in
@@ -211,7 +218,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     func sendChatMessage(_ text: String, image: UIImage? = nil) {
         stopSpeechResponse()
-        lastSpokenFinalResponse = nil
         guard connectionState == .connected else {
             print("[OpenClaw][WARN] 연결되지 않아 채팅 전송 취소 textLength=\(text.count)")
             return
@@ -242,6 +248,15 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             params["attachments"] = attachments
         }
 
+        appendChatMessage(
+            OpenClawChatMessage(
+                role: "user",
+                text: text,
+                image: image
+            )
+        )
+        pendingChatResponse = ""
+
         sendJSON([
             "type": "req",
             "id": UUID().uuidString,
@@ -253,8 +268,27 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         print("[OpenClaw][INFO] 채팅 전송 textLength=\(text.count) imageBytes=\(imageBytes)")
     }
 
+    func addLocalChatNotice(_ text: String) {
+        guard !text.isEmpty else { return }
+        appendChatMessage(
+            OpenClawChatMessage(role: "assistant", text: text)
+        )
+    }
+
+    func clearChatHistory() {
+        stopSpeechResponse()
+        pendingChatResponse = ""
+        chatMessages = []
+        handledFinalEventIdentities = []
+        chatHistoryStore.deleteAll()
+    }
+
     private var chatSessionKey = "turbometa-chat"
-    var onChatEvent: ((String) -> Void)?
+
+    private func appendChatMessage(_ message: OpenClawChatMessage) {
+        chatMessages.append(message)
+        chatMessages = chatHistoryStore.save(chatMessages)
+    }
 
     // MARK: - Gateway token
 
@@ -616,15 +650,29 @@ final class OpenClawNodeService: NSObject, ObservableObject {
                let message = payload["message"] as? [String: Any],
                let content = message["content"] as? [[String: Any]] {
                 let text = content.compactMap { $0["text"] as? String }.joined()
-                if !text.isEmpty {
-                    DispatchQueue.main.async {
-                        if state == "final" {
-                            self.speakFinalChatResponse(text)
-                        }
-                        self.onChatEvent?(state == "final" ? "[[FINAL]]\(text)" : text)
+                guard !text.isEmpty else { return }
+
+                let runID = payload["runId"] as? String
+                let sequence = Self.integerValue(payload["seq"])
+                let eventIdentity = Self.finalEventIdentity(
+                    runID: runID,
+                    sequence: sequence
+                )
+
+                DispatchQueue.main.async {
+                    if state == "final" {
+                        self.handleFinalChatResponse(
+                            text,
+                            eventIdentity: eventIdentity
+                        )
+                    } else {
+                        self.pendingChatResponse = text
                     }
-                    print("[OpenClaw][INFO] 채팅 응답 전달 state=\(state) textLength=\(text.count)")
                 }
+                print(
+                    "[OpenClaw][INFO] 채팅 응답 전달 state=\(state) "
+                    + "textLength=\(text.count) eventIdentity=\(eventIdentity != nil)"
+                )
             }
 
         case "tick", "health":
@@ -635,21 +683,62 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
     }
 
+    private func handleFinalChatResponse(
+        _ text: String,
+        eventIdentity: String?
+    ) {
+        if let eventIdentity,
+           handledFinalEventIdentities.contains(eventIdentity) {
+            print("[OpenClaw][INFO] 중복 최종 채팅 이벤트 무시")
+            return
+        }
+
+        if let eventIdentity {
+            handledFinalEventIdentities.insert(eventIdentity)
+        }
+        pendingChatResponse = ""
+        appendChatMessage(
+            OpenClawChatMessage(
+                role: "assistant",
+                text: text,
+                eventIdentity: eventIdentity
+            )
+        )
+        speakFinalChatResponse(text)
+    }
+
     private func speakFinalChatResponse(_ text: String) {
         guard OpenClawSpeechResponseFormatter.shouldSpeak(
             state: "final",
             isEnabled: isSpeechResponseEnabled,
             text: text,
-            lastSpokenText: lastSpokenFinalResponse
+            lastSpokenText: nil
         ), let speechText = OpenClawSpeechResponseFormatter.textForSpeech(text) else {
+            print(
+                "[OpenClaw][INFO] 최종 채팅 음성 재생 생략 "
+                + "enabled=\(isSpeechResponseEnabled) textLength=\(text.count)"
+            )
             return
         }
-        lastSpokenFinalResponse = text
 
         Task { @MainActor in
             TTSService.shared.speak(speechText)
         }
         print("[OpenClaw][INFO] 최종 채팅 음성 재생 요청 textLength=\(speechText.count)")
+    }
+
+    private static func integerValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        return nil
+    }
+
+    static func finalEventIdentity(
+        runID: String?,
+        sequence: Int?
+    ) -> String? {
+        guard let runID, !runID.isEmpty, let sequence else { return nil }
+        return "\(runID):\(sequence)"
     }
 
     private func handleRequest(json: [String: Any]) {

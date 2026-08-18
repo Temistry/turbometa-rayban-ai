@@ -6,25 +6,15 @@
 
 import SwiftUI
 
-struct OpenClawChatMessage: Identifiable {
-    let id = UUID()
-    let role: String
-    let text: String
-    let image: UIImage?
-    let timestamp = Date()
-}
-
 struct OpenClawChatView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
     @ObservedObject var openClawService = OpenClawNodeService.shared
     @Environment(\.dismiss) private var dismiss
 
-    @State private var messages: [OpenClawChatMessage] = []
     @State private var inputText = ""
-    @State private var pendingResponse = ""
     @State private var isSending = false
-
     @State private var showTextInput = false
+    @State private var showClearHistoryConfirmation = false
 
     var body: some View {
         NavigationView {
@@ -45,19 +35,19 @@ struct OpenClawChatView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
-                            ForEach(messages) { msg in
+                            ForEach(openClawService.chatMessages) { msg in
                                 ChatBubble(message: msg).id(msg.id)
                             }
-                            if !pendingResponse.isEmpty {
+                            if !openClawService.pendingChatResponse.isEmpty {
                                 ChatBubble(message: OpenClawChatMessage(
-                                    role: "assistant", text: pendingResponse, image: nil
+                                    role: "assistant", text: openClawService.pendingChatResponse, image: nil
                                 ))
                             }
                         }
                         .padding()
                     }
-                    .onChange(of: messages.count) { _ in
-                        if let last = messages.last {
+                    .onChange(of: openClawService.chatMessages.count) { _ in
+                        if let last = openClawService.chatMessages.last {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
                     }
@@ -136,6 +126,14 @@ struct OpenClawChatView: View {
                         Circle()
                             .fill(openClawService.connectionState == .connected ? Color.green : Color.gray)
                             .frame(width: 8, height: 8)
+                        Button {
+                            showClearHistoryConfirmation = true
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 14))
+                        }
+                        .disabled(openClawService.chatMessages.isEmpty)
+
                         NavigationLink {
                             OpenClawSettingsView()
                         } label: {
@@ -147,34 +145,21 @@ struct OpenClawChatView: View {
             }
         }
         .onAppear {
-            setupChatEventHandler()
             if openClawService.connectionState != .connected,
                openClawService.loadGatewayToken() != nil {
                 openClawService.connect()
             }
         }
-        .onDisappear {
-            if !pendingResponse.isEmpty {
-                messages.append(OpenClawChatMessage(role: "assistant", text: pendingResponse, image: nil))
-                pendingResponse = ""
+        .alert(
+            "openclaw.chat.history.clear".localized,
+            isPresented: $showClearHistoryConfirmation
+        ) {
+            Button("cancel".localized, role: .cancel) {}
+            Button("delete".localized, role: .destructive) {
+                openClawService.clearChatHistory()
             }
-            openClawService.onChatEvent = nil
-        }
-    }
-
-    // MARK: - Chat Events
-
-    private func setupChatEventHandler() {
-        openClawService.onChatEvent = { (text: String) in
-            if text.hasPrefix("[[FINAL]]") {
-                let fullText = String(text.dropFirst(9))
-                pendingResponse = ""
-                if !fullText.isEmpty {
-                    messages.append(OpenClawChatMessage(role: "assistant", text: fullText, image: nil))
-                }
-            } else {
-                pendingResponse = text
-            }
+        } message: {
+            Text("openclaw.chat.history.clear.confirm".localized)
         }
     }
 
@@ -183,8 +168,6 @@ struct OpenClawChatView: View {
     private func sendText() {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        messages.append(OpenClawChatMessage(role: "user", text: text, image: nil))
-        flushPendingResponse()
         inputText = ""
         openClawService.sendChatMessage(text)
     }
@@ -205,25 +188,18 @@ struct OpenClawChatView: View {
         }
 
         guard let frame = streamViewModel.currentVideoFrame else {
-            messages.append(OpenClawChatMessage(role: "assistant", text: "openclaw.chat.noframe".localized, image: nil))
+            openClawService.addLocalChatNotice(
+                "openclaw.chat.noframe".localized
+            )
             if needsStreamStop { await streamViewModel.stopSession() }
             return
         }
 
         let text = inputText.isEmpty ? "openclaw.chat.photoprompt".localized : inputText
-        messages.append(OpenClawChatMessage(role: "user", text: text, image: frame))
-        flushPendingResponse()
         inputText = ""
         openClawService.sendChatMessage(text, image: frame)
 
         if needsStreamStop { await streamViewModel.stopSession() }
-    }
-
-    private func flushPendingResponse() {
-        if !pendingResponse.isEmpty {
-            messages.append(OpenClawChatMessage(role: "assistant", text: pendingResponse, image: nil))
-            pendingResponse = ""
-        }
     }
 }
 
@@ -244,6 +220,13 @@ private struct ChatBubble: View {
                         .frame(maxWidth: 200, maxHeight: 150)
                         .cornerRadius(12)
                         .clipped()
+                } else if message.hadImage {
+                    Label(
+                        "openclaw.chat.image.attachment".localized,
+                        systemImage: "photo"
+                    )
+                    .font(.caption)
+                    .foregroundColor(message.role == "user" ? .white : .secondary)
                 }
 
                 Text(message.text)
