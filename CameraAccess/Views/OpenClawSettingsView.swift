@@ -100,6 +100,13 @@ struct OpenClawSettingsView: View {
                         )
                     )
 
+                    Picker("발화 속도", selection: $ttsService.speechRate) {
+                        Text("느리게").tag(TTSSpeechRate.slow)
+                        Text("보통").tag(TTSSpeechRate.normal)
+                        Text("빠르게").tag(TTSSpeechRate.fast)
+                    }
+                    .accessibilityLabel("OpenClaw 발화 속도")
+
                     if ttsService.isSpeaking {
                         Button(role: .destructive) {
                             nodeService.stopSpeechResponse()

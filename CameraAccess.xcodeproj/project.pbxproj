@@ -101,6 +101,10 @@
 		GV1001000100010001 /* GalvisOpenClawIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2001000100010001 /* GalvisOpenClawIntent.swift */; };
 		GV1002000200020002 /* GalvisLaunchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2002000200020002 /* GalvisLaunchCoordinator.swift */; };
 		GV1003000300030003 /* GalvisOpenClawSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2003000300030003 /* GalvisOpenClawSessionView.swift */; };
+		GV1004000400040004 /* GalvisSpeechRecognizer.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2004000400040004 /* GalvisSpeechRecognizer.swift */; };
+		GV1005000500050005 /* GalvisAudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2005000500050005 /* GalvisAudioSessionController.swift */; };
+		GV1006000600060006 /* GalvisOpenClawSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2006000600060006 /* GalvisOpenClawSessionManager.swift */; };
+		GV1007000700070007 /* GalvisSpeechResponseFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2007000700070007 /* GalvisSpeechResponseFormatter.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -220,6 +224,10 @@
 		GV2001000100010001 /* GalvisOpenClawIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisOpenClawIntent.swift; sourceTree = "<group>"; };
 		GV2002000200020002 /* GalvisLaunchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisLaunchCoordinator.swift; sourceTree = "<group>"; };
 		GV2003000300030003 /* GalvisOpenClawSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisOpenClawSessionView.swift; sourceTree = "<group>"; };
+		GV2004000400040004 /* GalvisSpeechRecognizer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisSpeechRecognizer.swift; sourceTree = "<group>"; };
+		GV2005000500050005 /* GalvisAudioSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisAudioSessionController.swift; sourceTree = "<group>"; };
+		GV2006000600060006 /* GalvisOpenClawSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisOpenClawSessionManager.swift; sourceTree = "<group>"; };
+		GV2007000700070007 /* GalvisSpeechResponseFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisSpeechResponseFormatter.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -289,6 +297,10 @@
 			children = (
 				OC3000000000000000 /* OpenClaw */,
 				GV2002000200020002 /* GalvisLaunchCoordinator.swift */,
+				GV2004000400040004 /* GalvisSpeechRecognizer.swift */,
+				GV2005000500050005 /* GalvisAudioSessionController.swift */,
+				GV2006000600060006 /* GalvisOpenClawSessionManager.swift */,
+				GV2007000700070007 /* GalvisSpeechResponseFormatter.swift */,
 				4B69CCC62F050D5D00D1D025 /* RTMPStreamingService.swift */,
 				4BA57A8D2EF8227E002EC214 /* ConversationStorage.swift */,
 				4BA57A8E2EF8227E002EC214 /* LeanEatService.swift */,
@@ -672,6 +684,10 @@
 				GV1001000100010001 /* GalvisOpenClawIntent.swift in Sources */,
 				GV1002000200020002 /* GalvisLaunchCoordinator.swift in Sources */,
 				GV1003000300030003 /* GalvisOpenClawSessionView.swift in Sources */,
+				GV1004000400040004 /* GalvisSpeechRecognizer.swift in Sources */,
+				GV1005000500050005 /* GalvisAudioSessionController.swift in Sources */,
+				GV1006000600060006 /* GalvisOpenClawSessionManager.swift in Sources */,
+				GV1007000700070007 /* GalvisSpeechResponseFormatter.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -3,27 +3,46 @@ import SwiftUI
 struct GalvisOpenClawSessionView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
     @ObservedObject private var openClawService = OpenClawNodeService.shared
+    @StateObject private var sessionManager = GalvisOpenClawSessionManager()
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 24) {
+            VStack(spacing: 22) {
                 Spacer()
 
-                Image(systemName: "waveform.circle.fill")
+                Image(systemName: stateIcon)
                     .font(.system(size: 76))
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(stateColor)
+                    .symbolEffect(.pulse, isActive: isActiveState)
 
                 Text("갈비스 · OpenClaw")
                     .font(.title.bold())
 
-                statusView
+                Text(stateText)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(stateColor)
 
-                Text("음성 대화 준비 화면입니다. 다음 단계에서 마이크 인식, 짧은 답변 재생, 후속 질문 기능이 연결됩니다.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 28)
+                if !sessionManager.transcript.isEmpty {
+                    Text("“\(sessionManager.transcript)”")
+                        .font(.body)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 28)
+                }
+
+                if case .error(let message) = sessionManager.state {
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(.red)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 28)
+
+                    Button("다시 시작") {
+                        sessionManager.restartListening()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .tint(.purple)
+                }
 
                 if openClawService.loadGatewayToken() == nil {
                     Label("OpenClaw 설정에서 Gateway 정보를 먼저 저장하세요.", systemImage: "exclamationmark.triangle.fill")
@@ -33,15 +52,24 @@ struct GalvisOpenClawSessionView: View {
                         .padding(.horizontal, 28)
                 }
 
-                NavigationLink {
-                    OpenClawChatView(streamViewModel: streamViewModel)
-                } label: {
-                    Label("OpenClaw 채팅 열기", systemImage: "text.bubble.fill")
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 12) {
+                    NavigationLink {
+                        OpenClawChatView(streamViewModel: streamViewModel)
+                    } label: {
+                        Label("채팅", systemImage: "text.bubble.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button(role: .destructive) {
+                        stopAndDismiss()
+                    } label: {
+                        Label("대화 종료", systemImage: "stop.circle.fill")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(.purple)
-                .padding(.horizontal, 28)
+                .padding(.horizontal, 24)
 
                 Spacer()
             }
@@ -49,36 +77,61 @@ struct GalvisOpenClawSessionView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("종료") { dismiss() }
+                    Button("종료") { stopAndDismiss() }
                 }
             }
         }
-        .onAppear {
-            if openClawService.connectionState == .disconnected,
-               openClawService.loadGatewayToken() != nil {
-                openClawService.connect()
-            }
+        .onAppear { sessionManager.start() }
+        .onDisappear { sessionManager.stop() }
+    }
+
+    private var stateText: String {
+        switch sessionManager.state {
+        case .idle: return "준비 중"
+        case .requestingPermission: return "마이크 권한 확인 중"
+        case .connecting: return "OpenClaw 연결 중"
+        case .listening: return "듣는 중"
+        case .waitingForResponse: return "OpenClaw 답변 대기 중"
+        case .speaking: return "답변 중"
+        case .followUp: return "15초 동안 다음 질문을 기다립니다"
+        case .waitingForWakeWord: return "‘갈비스’ 호출 대기 중"
+        case .error: return "음성 대화 오류"
+        case .stopped: return "대화 종료됨"
         }
     }
 
-    @ViewBuilder
-    private var statusView: some View {
-        switch openClawService.connectionState {
-        case .connected:
-            Label("OpenClaw 연결됨", systemImage: "checkmark.circle.fill")
-                .foregroundStyle(.green)
-        case .connecting:
-            Label("OpenClaw 연결 중", systemImage: "arrow.triangle.2.circlepath")
-                .foregroundStyle(.orange)
-        case .waitingForPairing:
-            Label("기기 승인 대기 중", systemImage: "person.badge.clock.fill")
-                .foregroundStyle(.orange)
-        case .disconnected:
-            Label("OpenClaw 연결 안 됨", systemImage: "link.badge.plus")
-                .foregroundStyle(.secondary)
-        case .error:
-            Label("OpenClaw 연결 오류", systemImage: "xmark.octagon.fill")
-                .foregroundStyle(.red)
+    private var stateIcon: String {
+        switch sessionManager.state {
+        case .listening, .followUp, .waitingForWakeWord: return "mic.circle.fill"
+        case .speaking: return "speaker.wave.3.fill"
+        case .waitingForResponse, .connecting: return "arrow.triangle.2.circlepath.circle.fill"
+        case .error: return "exclamationmark.triangle.fill"
+        case .stopped: return "stop.circle.fill"
+        case .idle, .requestingPermission: return "waveform.circle.fill"
         }
+    }
+
+    private var stateColor: Color {
+        switch sessionManager.state {
+        case .error: return .red
+        case .stopped: return .secondary
+        case .speaking: return .indigo
+        case .listening, .followUp, .waitingForWakeWord: return .green
+        default: return .purple
+        }
+    }
+
+    private var isActiveState: Bool {
+        switch sessionManager.state {
+        case .listening, .speaking, .connecting, .waitingForResponse, .followUp:
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func stopAndDismiss() {
+        sessionManager.stop()
+        dismiss()
     }
 }

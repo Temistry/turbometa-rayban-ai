@@ -38,6 +38,24 @@ enum OpenClawTransportMode: String, CaseIterable {
     case meshnet
 }
 
+enum OpenClawConversationError: LocalizedError {
+    case notConfigured
+    case connectionFailed
+    case requestInProgress
+    case responseTimeout
+    case disconnected
+
+    var errorDescription: String? {
+        switch self {
+        case .notConfigured: return "OpenClaw Gateway 설정이 필요합니다."
+        case .connectionFailed: return "OpenClaw Gateway에 연결하지 못했습니다."
+        case .requestInProgress: return "이전 OpenClaw 질문을 처리하고 있습니다."
+        case .responseTimeout: return "OpenClaw 답변 대기 시간이 초과되었습니다."
+        case .disconnected: return "OpenClaw 연결이 끊어졌습니다."
+        }
+    }
+}
+
 enum OpenClawSpeechResponseFormatter {
     static let maximumLength = 1_200
 
@@ -118,6 +136,9 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private var shouldReconnect = false
     private var reconnectAttempts = 0
     private var handledFinalEventIdentities = Set<String>()
+    private var pendingConversationContinuation: CheckedContinuation<String, any Error>?
+    private var pendingConversationTimeoutTask: Task<Void, Never>?
+    private var suppressAutomaticSpeechForPendingConversation = false
     private let chatHistoryStore: OpenClawChatHistoryStore
     private lazy var deviceIdentity = OpenClawDeviceIdentityStore.loadOrCreate()
 
@@ -195,6 +216,9 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     func disconnect() {
+        finishPendingConversation(
+            with: .failure(OpenClawConversationError.disconnected)
+        )
         shouldReconnect = false
         isEnabled = false
         saveSettings()
@@ -266,6 +290,73 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
         // 사용자 대화 내용은 로그에 남기지 않는다.
         print("[OpenClaw][INFO] 채팅 전송 textLength=\(text.count) imageBytes=\(imageBytes)")
+    }
+
+    func ask(
+        _ question: String,
+        timeout: TimeInterval = 90
+    ) async throws -> String {
+        let normalized = question.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { throw OpenClawConversationError.connectionFailed }
+        guard pendingConversationContinuation == nil else {
+            throw OpenClawConversationError.requestInProgress
+        }
+        guard loadGatewayToken() != nil else {
+            throw OpenClawConversationError.notConfigured
+        }
+
+        if connectionState != .connected {
+            connect()
+            try await waitUntilConnected(timeout: 20)
+        }
+
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                pendingConversationContinuation = continuation
+                suppressAutomaticSpeechForPendingConversation = true
+                pendingConversationTimeoutTask?.cancel()
+                pendingConversationTimeoutTask = Task { @MainActor [weak self] in
+                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    guard !Task.isCancelled else { return }
+                    self?.finishPendingConversation(
+                        with: .failure(OpenClawConversationError.responseTimeout)
+                    )
+                }
+                sendChatMessage(normalized)
+            }
+        } onCancel: {
+            Task { @MainActor [weak self] in
+                self?.cancelPendingConversation()
+            }
+        }
+    }
+
+    func cancelPendingConversation() {
+        finishPendingConversation(with: .failure(CancellationError()))
+    }
+
+    private func waitUntilConnected(timeout: TimeInterval) async throws {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            switch connectionState {
+            case .connected:
+                return
+            case .error, .waitingForPairing:
+                throw OpenClawConversationError.connectionFailed
+            case .disconnected, .connecting:
+                try await Task.sleep(nanoseconds: 200_000_000)
+            }
+        }
+        throw OpenClawConversationError.connectionFailed
+    }
+
+    private func finishPendingConversation(with result: Result<String, Error>) {
+        pendingConversationTimeoutTask?.cancel()
+        pendingConversationTimeoutTask = nil
+        suppressAutomaticSpeechForPendingConversation = false
+        guard let continuation = pendingConversationContinuation else { return }
+        pendingConversationContinuation = nil
+        continuation.resume(with: result)
     }
 
     func addLocalChatNotice(_ text: String) {
@@ -704,7 +795,16 @@ final class OpenClawNodeService: NSObject, ObservableObject {
                 eventIdentity: eventIdentity
             )
         )
-        speakFinalChatResponse(text)
+
+        if pendingConversationContinuation != nil {
+            let shouldSuppressSpeech = suppressAutomaticSpeechForPendingConversation
+            finishPendingConversation(with: .success(text))
+            if !shouldSuppressSpeech {
+                speakFinalChatResponse(text)
+            }
+        } else {
+            speakFinalChatResponse(text)
+        }
     }
 
     private func speakFinalChatResponse(_ text: String) {
@@ -896,6 +996,9 @@ final class OpenClawNodeService: NSObject, ObservableObject {
               handledDisconnectGeneration != generation,
               connectionState != .disconnected else { return }
         handledDisconnectGeneration = generation
+        finishPendingConversation(
+            with: .failure(OpenClawConversationError.disconnected)
+        )
 
         webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
         webSocketTransport = nil

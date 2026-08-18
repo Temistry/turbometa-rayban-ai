@@ -266,8 +266,8 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
             findings.append(Finding("치명", relative(info_plist), 1, "앱 기본 언어가 ko로 고정되어 있지 않습니다"))
         if "ko" not in plist.get("CFBundleLocalizations", []):
             findings.append(Finding("치명", relative(info_plist), 1, "CFBundleLocalizations에 ko가 없습니다"))
-        if plist.get("CFBundleSpokenName") != "터보메타":
-            findings.append(Finding("경고", relative(info_plist), 1, "Siri용 한국어 앱 발음 이름이 터보메타로 설정되지 않았습니다"))
+        if plist.get("CFBundleSpokenName") != "갈비스":
+            findings.append(Finding("경고", relative(info_plist), 1, "Siri용 한국어 앱 발음 이름이 갈비스로 설정되지 않았습니다"))
         if not plist.get("NSSiriUsageDescription"):
             findings.append(Finding("치명", relative(info_plist), 1, "NSSiriUsageDescription이 비어 있습니다"))
 
