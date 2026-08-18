@@ -6,6 +6,7 @@ import SwiftUI
 
 struct OpenClawSettingsView: View {
     @ObservedObject var nodeService = OpenClawNodeService.shared
+    @ObservedObject private var ttsService = TTSService.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var host = ""
@@ -88,6 +89,28 @@ struct OpenClawSettingsView: View {
                                 .foregroundColor(.orange)
                         }
                     }
+                }
+
+                Section {
+                    Toggle(
+                        "openclaw.speech.enabled".localized,
+                        isOn: Binding(
+                            get: { nodeService.isSpeechResponseEnabled },
+                            set: { nodeService.updateSpeechResponseEnabled($0) }
+                        )
+                    )
+
+                    if ttsService.isSpeaking {
+                        Button(role: .destructive) {
+                            nodeService.stopSpeechResponse()
+                        } label: {
+                            Label("openclaw.speech.stop".localized, systemImage: "stop.circle.fill")
+                        }
+                    }
+                } header: {
+                    Text("openclaw.speech.section".localized)
+                } footer: {
+                    Text("openclaw.speech.footer".localized)
                 }
 
                 Section {

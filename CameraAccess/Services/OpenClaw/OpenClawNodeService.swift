@@ -38,6 +38,55 @@ enum OpenClawTransportMode: String, CaseIterable {
     case meshnet
 }
 
+enum OpenClawSpeechResponseFormatter {
+    static let maximumLength = 1_200
+
+    static func shouldSpeak(
+        state: String,
+        isEnabled: Bool,
+        text: String,
+        lastSpokenText: String?
+    ) -> Bool {
+        state == "final" && isEnabled && !text.isEmpty && text != lastSpokenText
+    }
+
+    static func textForSpeech(_ text: String) -> String? {
+        var result = text
+
+        result = replacing(pattern: "```[\\s\\S]*?```", in: result, with: " ")
+        result = replacing(pattern: "`([^`]+)`", in: result, with: "$1")
+        result = replacing(pattern: "!\\[([^\\]]*)\\]\\([^)]*\\)", in: result, with: "$1")
+        result = replacing(pattern: "\\[([^\\]]+)\\]\\([^)]*\\)", in: result, with: "$1")
+        result = replacing(pattern: "https?://\\S+", in: result, with: " ")
+        result = replacing(pattern: "(?m)^\\s{0,3}#{1,6}\\s*", in: result, with: "")
+        result = replacing(pattern: "(?m)^\\s*[-*+]\\s+", in: result, with: "")
+        result = replacing(pattern: "(?m)^\\s*\\d+[.)]\\s+", in: result, with: "")
+        result = replacing(pattern: "[*_~>|]", in: result, with: "")
+        result = replacing(pattern: "\\s+", in: result, with: " ")
+        result = result.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !result.isEmpty else { return nil }
+        guard result.count > maximumLength else { return result }
+
+        let limit = result.index(result.startIndex, offsetBy: maximumLength)
+        let prefix = String(result[..<limit])
+        if let sentenceEnd = prefix.lastIndex(where: { ".?!。？！".contains($0) }) {
+            return String(prefix[...sentenceEnd]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return prefix.trimmingCharacters(in: .whitespacesAndNewlines) + "…"
+    }
+
+    private static func replacing(pattern: String, in text: String, with replacement: String) -> String {
+        guard let expression = try? NSRegularExpression(pattern: pattern) else { return text }
+        let range = NSRange(text.startIndex..., in: text)
+        return expression.stringByReplacingMatches(
+            in: text,
+            range: range,
+            withTemplate: replacement
+        )
+    }
+}
+
 // MARK: - Service
 
 final class OpenClawNodeService: NSObject, ObservableObject {
@@ -50,6 +99,11 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     @Published var transportMode = OpenClawTransportMode(
         rawValue: UserDefaults.standard.string(forKey: "openclaw_transport_mode") ?? ""
     ) ?? .standard
+    @Published var isSpeechResponseEnabled: Bool = {
+        let defaults = UserDefaults.standard
+        guard defaults.object(forKey: "openclaw_speech_response_enabled") != nil else { return true }
+        return defaults.bool(forKey: "openclaw_speech_response_enabled")
+    }()
 
     private var webSocketTransport: OpenClawWebSocketTransport?
     private var connectionGeneration = 0
@@ -61,6 +115,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private var pendingNonce: String?
     private var shouldReconnect = false
     private var reconnectAttempts = 0
+    private var lastSpokenFinalResponse: String?
     private lazy var deviceIdentity = OpenClawDeviceIdentityStore.loadOrCreate()
 
     private let keychainService = "com.smartview.glassai.openclaw"
@@ -100,6 +155,25 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         saveSettings()
     }
 
+    func updateSpeechResponseEnabled(_ isEnabled: Bool) {
+        isSpeechResponseEnabled = isEnabled
+        if !isEnabled {
+            lastSpokenFinalResponse = nil
+        }
+        saveSettings()
+        if !isEnabled {
+            Task { @MainActor in
+                TTSService.shared.stop()
+            }
+        }
+    }
+
+    func stopSpeechResponse() {
+        Task { @MainActor in
+            TTSService.shared.stop()
+        }
+    }
+
     func connect() {
         guard connectionState != .connected && connectionState != .connecting else {
             print("[OpenClaw][WARN] 이미 연결 중이거나 연결됨 state=\(connectionState)")
@@ -117,6 +191,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         shouldReconnect = false
         isEnabled = false
         saveSettings()
+        stopSpeechResponse()
 
         reconnectTask?.cancel()
         reconnectTask = nil
@@ -135,6 +210,8 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     func sendChatMessage(_ text: String, image: UIImage? = nil) {
+        stopSpeechResponse()
+        lastSpokenFinalResponse = nil
         guard connectionState == .connected else {
             print("[OpenClaw][WARN] 연결되지 않아 채팅 전송 취소 textLength=\(text.count)")
             return
@@ -339,6 +416,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         UserDefaults.standard.set(gatewayHost, forKey: "openclaw_host")
         UserDefaults.standard.set(gatewayPort, forKey: "openclaw_port")
         UserDefaults.standard.set(transportMode.rawValue, forKey: "openclaw_transport_mode")
+        UserDefaults.standard.set(isSpeechResponseEnabled, forKey: "openclaw_speech_response_enabled")
     }
 
     // MARK: - WebSocket messaging
@@ -540,6 +618,9 @@ final class OpenClawNodeService: NSObject, ObservableObject {
                 let text = content.compactMap { $0["text"] as? String }.joined()
                 if !text.isEmpty {
                     DispatchQueue.main.async {
+                        if state == "final" {
+                            self.speakFinalChatResponse(text)
+                        }
                         self.onChatEvent?(state == "final" ? "[[FINAL]]\(text)" : text)
                     }
                     print("[OpenClaw][INFO] 채팅 응답 전달 state=\(state) textLength=\(text.count)")
@@ -552,6 +633,23 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         default:
             print("[OpenClaw][INFO] 기타 이벤트 method=\(method)")
         }
+    }
+
+    private func speakFinalChatResponse(_ text: String) {
+        guard OpenClawSpeechResponseFormatter.shouldSpeak(
+            state: "final",
+            isEnabled: isSpeechResponseEnabled,
+            text: text,
+            lastSpokenText: lastSpokenFinalResponse
+        ), let speechText = OpenClawSpeechResponseFormatter.textForSpeech(text) else {
+            return
+        }
+        lastSpokenFinalResponse = text
+
+        Task { @MainActor in
+            TTSService.shared.speak(speechText)
+        }
+        print("[OpenClaw][INFO] 최종 채팅 음성 재생 요청 textLength=\(speechText.count)")
     }
 
     private func handleRequest(json: [String: Any]) {

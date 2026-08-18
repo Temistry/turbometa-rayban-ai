@@ -436,3 +436,7 @@
 "openclaw.chat.sending" = "전송 중...";
 "openclaw.chat.noframe" = "안경 화면을 가져올 수 없습니다. 안경 연결 상태를 확인하세요";
 "openclaw.chat.text" = "키보드";
+"openclaw.speech.section" = "음성 응답";
+"openclaw.speech.enabled" = "OpenClaw 응답 음성으로 읽기";
+"openclaw.speech.stop" = "음성 중지";
+"openclaw.speech.footer" = "최종 답변만 읽습니다. Ray-Ban Meta가 iPhone의 Bluetooth 오디오 출력으로 선택되어 있으면 안경에서 재생됩니다.";

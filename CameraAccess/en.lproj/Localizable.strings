@@ -445,3 +445,7 @@
 "openclaw.chat.sending" = "Sending...";
 "openclaw.chat.noframe" = "Cannot get glasses frame, please check connection";
 "openclaw.chat.text" = "Text";
+"openclaw.speech.section" = "Voice Responses";
+"openclaw.speech.enabled" = "Read OpenClaw responses aloud";
+"openclaw.speech.stop" = "Stop Speaking";
+"openclaw.speech.footer" = "Only final responses are read. Audio plays through the glasses when Ray-Ban Meta is selected as the iPhone Bluetooth audio output.";
