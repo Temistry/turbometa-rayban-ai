@@ -235,7 +235,7 @@ workflows:
           xcode-project build-ipa \
             --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME" \
-            --archive-xcargs "-onlyUsePackageVersionsFromResolvedFile CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN"
+            --archive-xcargs "-onlyUsePackageVersionsFromResolvedFile CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD"
 
     artifacts:
       - audit-report.txt
