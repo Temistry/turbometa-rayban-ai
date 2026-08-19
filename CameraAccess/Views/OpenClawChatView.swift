@@ -18,6 +18,7 @@ struct OpenClawChatView: View {
     @State private var showTextInput = false
     @State private var showClearHistoryConfirmation = false
     @State private var playingMessageID: UUID?
+    @State private var playingRequestID: UUID?
 
     init(
         streamViewModel: StreamSessionViewModel,
@@ -49,7 +50,10 @@ struct OpenClawChatView: View {
                             ForEach(openClawService.chatMessages) { msg in
                                 ChatBubble(
                                     message: msg,
-                                    isPlaying: playingMessageID == msg.id && ttsService.isSpeaking,
+                                    isPlaying: playingMessageID == msg.id
+                                        && playingRequestID.map {
+                                            ttsService.isActive(requestID: $0)
+                                        } == true,
                                     onSpeechButtonTapped: { toggleSpeech(for: msg) }
                                 )
                                 .id(msg.id)
@@ -184,13 +188,16 @@ struct OpenClawChatView: View {
                 openClawService.connect()
             }
         }
-        .onChange(of: ttsService.isSpeaking) { isSpeaking in
-            if !isSpeaking {
+        .onChange(of: ttsService.playbackState) { state in
+            guard let playingRequestID else { return }
+            if !state.isActive(requestID: playingRequestID) {
+                self.playingRequestID = nil
                 playingMessageID = nil
             }
         }
         .onDisappear {
             ttsService.stop()
+            playingRequestID = nil
             playingMessageID = nil
         }
         .alert(
@@ -220,8 +227,11 @@ struct OpenClawChatView: View {
     private func toggleSpeech(for message: OpenClawChatMessage) {
         guard message.role == "assistant" else { return }
 
-        if playingMessageID == message.id && ttsService.isSpeaking {
+        if playingMessageID == message.id,
+           let playingRequestID,
+           ttsService.isActive(requestID: playingRequestID) {
             ttsService.stop()
+            self.playingRequestID = nil
             playingMessageID = nil
             return
         }
@@ -235,11 +245,13 @@ struct OpenClawChatView: View {
         }
 
         ttsService.stop()
-        guard ttsService.speak(speechText) else {
+        guard let requestID = ttsService.enqueue(speechText) else {
+            playingRequestID = nil
             playingMessageID = nil
             print("[OpenClaw][TTS][ERROR] 음성 재생 요청 실패 speechLength=\(speechText.count)")
             return
         }
+        playingRequestID = requestID
         playingMessageID = message.id
         print("[OpenClaw][TTS] 음성 재생 요청 접수 speechLength=\(speechText.count)")
     }

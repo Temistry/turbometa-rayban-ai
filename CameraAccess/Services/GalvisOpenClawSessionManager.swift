@@ -22,10 +22,12 @@ final class GalvisOpenClawSessionManager: ObservableObject {
     private let openClaw = OpenClawNodeService.shared
     private let recognizer = GalvisSpeechRecognizer()
     private let audioSession = GalvisAudioSessionController()
+    private let tts = TTSService.shared
     private var sessionTask: Task<Void, Never>?
     private var followUpTimeoutTask: Task<Void, Never>?
     private var backgroundObserver: NSObjectProtocol?
     private var isActive = false
+    private var sessionGeneration = 0
 
     private let followUpSeconds: TimeInterval = 15
     private let stopPhrases = ["갈비스 종료", "대화 종료", "그만 들어", "마이크 꺼"]
@@ -49,6 +51,7 @@ final class GalvisOpenClawSessionManager: ObservableObject {
     func start() {
         guard !isActive else { return }
         isActive = true
+        sessionGeneration += 1
         sessionTask = Task { [weak self] in
             await self?.runSession()
         }
@@ -62,6 +65,7 @@ final class GalvisOpenClawSessionManager: ObservableObject {
         sessionTask?.cancel()
         sessionTask = nil
         recognizer.cancel()
+        tts.stop()
         openClaw.cancelPendingConversation()
         audioSession.deactivate()
         state = .stopped
@@ -179,6 +183,85 @@ final class GalvisOpenClawSessionManager: ObservableObject {
         state = .waitingForResponse
         let answer = try await openClaw.ask(question)
         lastAnswer = answer
+
+        guard let speechText = GalvisSpeechResponseFormatter.speechText(from: answer) else {
+            print("[Galvis][TTS][WARN] 읽을 수 있는 최종 답변 없음 answerLength=\(answer.count)")
+            return
+        }
+
+        try await speakAnswerAndRestoreConversation(speechText)
+    }
+
+    private func speakAnswerAndRestoreConversation(_ speechText: String) async throws {
+        let activeGeneration = sessionGeneration
+        audioSession.deactivate()
+
+        guard let requestID = tts.enqueue(speechText) else {
+            print("[Galvis][TTS][ERROR] 자동 음성 요청 실패 speechLength=\(speechText.count)")
+            try restoreConversationSessionIfNeeded(activeGeneration: activeGeneration)
+            return
+        }
+
+        print("[Galvis][TTS] 자동 음성 요청 접수 speechLength=\(speechText.count)")
+        await waitForSpeech(requestID: requestID, speechLength: speechText.count)
+        try restoreConversationSessionIfNeeded(activeGeneration: activeGeneration)
+    }
+
+    private func waitForSpeech(requestID: UUID, speechLength: Int) async {
+        let startDeadline = Date().addingTimeInterval(4)
+        var didStart = false
+
+        while isActive && !Task.isCancelled && Date() < startDeadline {
+            switch tts.playbackState {
+            case let .speaking(activeRequestID) where activeRequestID == requestID:
+                didStart = true
+            case .idle:
+                return
+            case let .failed(activeRequestID) where activeRequestID == requestID:
+                return
+            case let .queued(activeRequestID) where activeRequestID == requestID:
+                break
+            case .queued, .speaking, .failed:
+                return
+            }
+
+            if didStart { break }
+            do {
+                try await Task.sleep(nanoseconds: 100_000_000)
+            } catch {
+                return
+            }
+        }
+
+        guard didStart else {
+            print("[Galvis][TTS][ERROR] 자동 음성 시작 timeout speechLength=\(speechLength)")
+            tts.stop()
+            return
+        }
+
+        let estimatedDuration = min(45.0, max(8.0, Double(speechLength) / 5.0 + 5.0))
+        let finishDeadline = Date().addingTimeInterval(estimatedDuration)
+        while isActive && !Task.isCancelled && Date() < finishDeadline {
+            guard tts.isActive(requestID: requestID) else { return }
+            do {
+                try await Task.sleep(nanoseconds: 100_000_000)
+            } catch {
+                return
+            }
+        }
+
+        if tts.isActive(requestID: requestID) {
+            print("[Galvis][TTS][WARN] 자동 음성 완료 timeout speechLength=\(speechLength)")
+            tts.stop()
+        }
+    }
+
+    private func restoreConversationSessionIfNeeded(
+        activeGeneration: Int
+    ) throws {
+        guard isActive, !Task.isCancelled, sessionGeneration == activeGeneration else { return }
+        try audioSession.activateConversationSession()
+        print("[Galvis][AUDIO] TTS 이후 음성 대화 세션 복구 완료")
     }
 
     private func waitForConnection() async throws {
