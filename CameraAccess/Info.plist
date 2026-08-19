@@ -70,7 +70,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>갈비스 OpenClaw 음성 대화에서 사용자의 질문을 기기에서 글자로 변환하기 위해 음성 인식 접근이 필요합니다.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Meta 스마트 안경으로 촬영한 사진을 사진 앱에 저장하기 위해 접근이 필요합니다.</string>
+	<string>Meta 스마트 안경으로 촬영한 사진과 동영상을 iPhone 사진 앱에 저장하기 위해 접근이 필요합니다.</string>
 	<key>NSSiriUsageDescription</key>
 	<string>한국어 Siri 명령으로 퀵비전과 실시간 대화를 실행하기 위해 Siri 접근이 필요합니다.</string>
 	<key>UIApplicationSceneManifest</key>

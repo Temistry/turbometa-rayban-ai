@@ -38,27 +38,80 @@ enum OpenClawTransportMode: String, CaseIterable {
     case meshnet
 }
 
-enum OpenClawConversationError: LocalizedError {
+enum OpenClawConversationError: LocalizedError, Equatable, Sendable {
     case notConfigured
     case connectionFailed
     case requestInProgress
     case responseTimeout
     case disconnected
+    case invalidImage
+    case gatewayRejected(String)
+    case deliveryAmbiguous
 
     var errorDescription: String? {
         switch self {
         case .notConfigured: return "OpenClaw Gateway 설정이 필요합니다."
         case .connectionFailed: return "OpenClaw Gateway에 연결하지 못했습니다."
-        case .requestInProgress: return "이전 OpenClaw 질문을 처리하고 있습니다."
+        case .requestInProgress: return "이전 OpenClaw 요청을 처리하고 있습니다."
         case .responseTimeout: return "OpenClaw 답변 대기 시간이 초과되었습니다."
         case .disconnected: return "OpenClaw 연결이 끊어졌습니다."
+        case .invalidImage: return "OpenClaw에 보낼 이미지를 준비하지 못했습니다."
+        case .gatewayRejected: return "OpenClaw Gateway가 요청을 거부했습니다."
+        case .deliveryAmbiguous: return "요청 전달 여부를 확인할 수 없습니다. 자동으로 다시 보내지 않습니다."
         }
     }
 }
 
+enum OpenClawConversationOwner: String, Equatable, Sendable {
+    case chat
+    case galvis
+    case quickShot
+}
+
+struct OpenClawConversationReceipt: Equatable, Sendable {
+    let requestID: UUID
+    let idempotencyKey: UUID
+    let userMessageID: UUID
+}
+
+struct OpenClawConversationResult: Equatable, Sendable {
+    let receipt: OpenClawConversationReceipt
+    let assistantMessageID: UUID
+    let responseText: String
+}
+
 enum OpenClawFinalSpeechPolicy {
-    static func shouldAutoSpeak(hasPendingConversation: Bool) -> Bool {
-        !hasPendingConversation
+    static func shouldAutoSpeak(owner: OpenClawConversationOwner?) -> Bool {
+        owner != .galvis
+    }
+}
+
+enum OpenClawConversationDeliveryPhase: Equatable, Sendable {
+    case notStarted
+    case writeStarted
+    case writeCompleted
+    case gatewayAcknowledged
+
+    var timeoutError: OpenClawConversationError {
+        switch self {
+        case .notStarted:
+            return .responseTimeout
+        case .writeStarted, .writeCompleted:
+            return .deliveryAmbiguous
+        case .gatewayAcknowledged:
+            return .responseTimeout
+        }
+    }
+
+    var disconnectError: OpenClawConversationError {
+        switch self {
+        case .notStarted:
+            return .disconnected
+        case .writeStarted, .writeCompleted:
+            return .deliveryAmbiguous
+        case .gatewayAcknowledged:
+            return .responseTimeout
+        }
     }
 }
 
@@ -72,6 +125,23 @@ enum OpenClawDisconnectPolicy {
         callbackGeneration == currentGeneration
             && handledGeneration != callbackGeneration
             && !isDisconnected
+    }
+}
+
+/// Governs when the reconnect backoff counter is allowed to reset after a successful
+/// handshake. A connection is only considered "stable" — and therefore safe to reset
+/// `reconnectAttempts` for — once it has stayed on the *same* connection generation and in
+/// the *connected* state for the full `stableConnectionWindow`. Any reconnect or explicit
+/// disconnect in that window bumps the generation, which this policy treats as disqualifying:
+/// resetting the counter for a connection that already churned would let a flapping gateway
+/// make the client hammer it at full speed forever instead of backing off.
+enum OpenClawStableConnectionPolicy {
+    static func shouldResetReconnectAttempts(
+        timerGeneration: Int,
+        currentGeneration: Int,
+        isConnected: Bool
+    ) -> Bool {
+        timerGeneration == currentGeneration && isConnected
     }
 }
 
@@ -144,12 +214,28 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private var handledDisconnectGeneration: Int?
     private var commandRouter: OpenClawCommandRouter?
     private var reconnectTask: Task<Void, Never>?
+    private var stableConnectionTask: Task<Void, Never>?
     private var nodeId: String
     private var pendingNonce: String?
     private var shouldReconnect = false
     private var reconnectAttempts = 0
+    /// Synchronous re-entrancy guard for `connect()`. `connectionState` is only ever updated via
+    /// `DispatchQueue.main.async`, so two calls to `connect()` made back-to-back on the same run
+    /// loop turn (e.g. two SwiftUI `onAppear`s firing together) could both observe the stale
+    /// pre-connect state and each start their own `startConnection()`, bumping
+    /// `connectionGeneration` twice and opening duplicate transports. This flag is set/cleared
+    /// synchronously so `connect()` stays idempotent regardless of caller timing.
+    private var isConnectionAttemptInFlight = false
+    private struct PendingConversation {
+        let owner: OpenClawConversationOwner
+        let receipt: OpenClawConversationReceipt
+        let gatewayRequestID: String
+        let continuation: CheckedContinuation<OpenClawConversationResult, any Error>
+        var deliveryPhase: OpenClawConversationDeliveryPhase
+    }
+
     private var handledFinalEventIdentities = Set<String>()
-    private var pendingConversationContinuation: CheckedContinuation<String, any Error>?
+    private var pendingConversation: PendingConversation?
     private var pendingConversationTimeoutTask: Task<Void, Never>?
     private let chatHistoryStore: OpenClawChatHistoryStore
     private lazy var deviceIdentity = OpenClawDeviceIdentityStore.loadOrCreate()
@@ -160,6 +246,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     static let minimumProtocolVersion = 3
     static let maximumProtocolVersion = 4
     private static let maxReconnectAttempts = 5
+    private static let stableConnectionWindow: TimeInterval = 10
     private static let maximumWebSocketMessageSize = 8 * 1024 * 1024
     private static let maximumImageUploadSize = 4 * 1024 * 1024
 
@@ -198,28 +285,52 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     func connect() {
-        guard connectionState != .connected && connectionState != .connecting else {
-            print("[OpenClaw][WARN] 이미 연결 중이거나 연결됨 state=\(connectionState)")
+        guard !isConnectionAttemptInFlight,
+              connectionState != .connected,
+              connectionState != .connecting else {
+            print("[OpenClaw][WARN] 이미 연결 중이거나 연결됨 state=\(connectionState) inFlight=\(isConnectionAttemptInFlight)")
             return
         }
 
         isEnabled = true
         shouldReconnect = true
         reconnectAttempts = 0
+        isConnectionAttemptInFlight = true
         saveSettings()
         startConnection()
     }
 
+    /// Idempotent connection entry point for every screen that wants OpenClaw connected —
+    /// the root auto-connect in `MainAppView.onAppear`, plus Home/Chat/Galvis' own `onAppear`.
+    /// Calling this redundantly from several call sites in the same run-loop turn (e.g. two
+    /// views appearing together) is safe: it no-ops while already connected, connecting, or
+    /// while another attempt is in flight, so it never spins up a second transport or bumps
+    /// `connectionGeneration` twice. `reason` is logged only, to make it possible to trace which
+    /// caller triggered a given connection attempt from the device diagnostics console.
+    @discardableResult
+    func ensureConnected(reason: String) -> Bool {
+        guard !isConnectionAttemptInFlight,
+              connectionState != .connected,
+              connectionState != .connecting else {
+            print("[OpenClaw][INFO] ensureConnected 무시 reason=\(reason) state=\(connectionState) inFlight=\(isConnectionAttemptInFlight)")
+            return false
+        }
+        print("[OpenClaw][INFO] ensureConnected 연결 시작 reason=\(reason)")
+        connect()
+        return true
+    }
+
     func disconnect() {
-        finishPendingConversation(
-            with: .failure(OpenClawConversationError.disconnected)
-        )
+        failPendingConversationForDisconnect()
         shouldReconnect = false
         isEnabled = false
+        isConnectionAttemptInFlight = false
         saveSettings()
 
         reconnectTask?.cancel()
         reconnectTask = nil
+        stableConnectionTask?.cancel()
+        stableConnectionTask = nil
 
         webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
         webSocketTransport = nil
@@ -232,64 +343,56 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         print("[OpenClaw][INFO] 사용자가 연결을 해제함")
     }
 
-    func sendChatMessage(_ text: String, image: UIImage? = nil) {
-        guard connectionState == .connected else {
-            print("[OpenClaw][WARN] 연결되지 않아 채팅 전송 취소 textLength=\(text.count)")
-            return
-        }
-
-        var attachments: [[String: Any]] = []
-        var imageBytes = 0
-
-        if let image {
-            if let jpegData = compressedImageData(image) {
-                imageBytes = jpegData.count
-                attachments.append([
-                    "type": "image",
-                    "mimeType": "image/jpeg",
-                    "content": jpegData.base64EncodedString()
-                ])
-            } else {
-                print("[OpenClaw][ERROR] 첨부 이미지를 제한 크기 이하로 압축하지 못해 텍스트만 전송")
-            }
-        }
-
-        var params: [String: Any] = [
-            "sessionKey": chatSessionKey,
-            "message": text,
-            "idempotencyKey": UUID().uuidString
-        ]
-        if !attachments.isEmpty {
-            params["attachments"] = attachments
-        }
-
-        appendChatMessage(
-            OpenClawChatMessage(
-                role: "user",
-                text: text,
-                image: image
-            )
+    @discardableResult
+    func sendChatMessage(
+        _ text: String,
+        image: UIImage? = nil
+    ) async throws -> OpenClawConversationResult {
+        try await sendConversation(
+            text,
+            image: image,
+            owner: .chat
         )
-        pendingChatResponse = ""
-
-        sendJSON([
-            "type": "req",
-            "id": UUID().uuidString,
-            "method": "chat.send",
-            "params": params
-        ])
-
-        // 사용자 대화 내용은 로그에 남기지 않는다.
-        print("[OpenClaw][INFO] 채팅 전송 textLength=\(text.count) imageBytes=\(imageBytes)")
     }
 
-    func ask(
-        _ question: String,
+    @discardableResult
+    func sendConversation(
+        _ text: String,
+        imageJPEGData: Data? = nil,
+        owner: OpenClawConversationOwner,
+        requestID: UUID = UUID(),
+        idempotencyKey: UUID = UUID(),
+        userMessageID: UUID = UUID(),
         timeout: TimeInterval = 90
-    ) async throws -> String {
-        let normalized = question.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { throw OpenClawConversationError.connectionFailed }
-        guard pendingConversationContinuation == nil else {
+    ) async throws -> OpenClawConversationResult {
+        try await sendConversation(
+            text,
+            image: nil,
+            imageJPEGData: imageJPEGData,
+            owner: owner,
+            requestID: requestID,
+            idempotencyKey: idempotencyKey,
+            userMessageID: userMessageID,
+            timeout: timeout
+        )
+    }
+
+    @MainActor
+    private func sendConversation(
+        _ text: String,
+        image: UIImage?,
+        imageJPEGData: Data? = nil,
+        owner: OpenClawConversationOwner,
+        requestID: UUID = UUID(),
+        idempotencyKey: UUID = UUID(),
+        userMessageID: UUID = UUID(),
+        timeout: TimeInterval = 90
+    ) async throws -> OpenClawConversationResult {
+        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw OpenClawConversationError.connectionFailed
+        }
+        guard pendingConversation == nil else {
             throw OpenClawConversationError.requestInProgress
         }
         guard loadGatewayToken() != nil else {
@@ -297,28 +400,115 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
 
         if connectionState != .connected {
-            connect()
+            ensureConnected(reason: "OpenClawNodeService.sendConversation.\(owner.rawValue)")
             try await waitUntilConnected(timeout: 20)
+        }
+
+        let attachmentData: Data?
+        if let imageJPEGData {
+            guard !imageJPEGData.isEmpty,
+                  imageJPEGData.count <= Self.maximumImageUploadSize else {
+                throw OpenClawConversationError.invalidImage
+            }
+            attachmentData = imageJPEGData
+        } else if let image {
+            guard let compressed = compressedImageData(image) else {
+                throw OpenClawConversationError.invalidImage
+            }
+            attachmentData = compressed
+        } else {
+            attachmentData = nil
+        }
+
+        let userMessage = OpenClawChatMessage(
+            id: userMessageID,
+            role: "user",
+            text: normalized,
+            image: image,
+            hadImage: attachmentData != nil
+        )
+        let receipt = OpenClawConversationReceipt(
+            requestID: requestID,
+            idempotencyKey: idempotencyKey,
+            userMessageID: userMessage.id
+        )
+        let gatewayRequestID = requestID.uuidString
+        let boundedTimeout = timeout.isFinite ? min(max(timeout, 1), 300) : 90
+
+        var attachments: [[String: Any]] = []
+        if let attachmentData {
+            attachments.append([
+                "type": "image",
+                "mimeType": "image/jpeg",
+                "content": attachmentData.base64EncodedString()
+            ])
+        }
+        var params: [String: Any] = [
+            "sessionKey": chatSessionKey,
+            "message": normalized,
+            "idempotencyKey": idempotencyKey.uuidString
+        ]
+        if !attachments.isEmpty {
+            params["attachments"] = attachments
         }
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
-                pendingConversationContinuation = continuation
+                pendingConversation = PendingConversation(
+                    owner: owner,
+                    receipt: receipt,
+                    gatewayRequestID: gatewayRequestID,
+                    continuation: continuation,
+                    deliveryPhase: .notStarted
+                )
                 pendingConversationTimeoutTask?.cancel()
                 pendingConversationTimeoutTask = Task { @MainActor [weak self] in
-                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
+                    try? await Task.sleep(
+                        nanoseconds: UInt64(boundedTimeout * 1_000_000_000)
+                    )
                     guard !Task.isCancelled else { return }
-                    self?.finishPendingConversation(
-                        with: .failure(OpenClawConversationError.responseTimeout)
+                    self?.finishPendingConversationForTimeout()
+                }
+
+                appendChatMessage(userMessage)
+                pendingChatResponse = ""
+                markPendingSocketWriteStarted(gatewayRequestID: gatewayRequestID)
+                sendJSON([
+                    "type": "req",
+                    "id": gatewayRequestID,
+                    "method": "chat.send",
+                    "params": params
+                ]) { [weak self] error in
+                    self?.handleConversationSendCompletion(
+                        gatewayRequestID: gatewayRequestID,
+                        error: error
                     )
                 }
-                sendChatMessage(normalized)
+
+                // 사용자 대화 내용은 로그에 남기지 않는다.
+                print(
+                    "[OpenClaw][INFO] 채팅 전송 owner=\(owner.rawValue) "
+                    + "textLength=\(normalized.count) imageBytes=\(attachmentData?.count ?? 0)"
+                )
             }
         } onCancel: {
             Task { @MainActor [weak self] in
                 self?.cancelPendingConversation()
             }
         }
+    }
+
+    func ask(
+        _ question: String,
+        timeout: TimeInterval = 90
+    ) async throws -> String {
+        let result = try await sendConversation(
+            question,
+            imageJPEGData: nil,
+            owner: .galvis,
+            timeout: timeout
+        )
+        return result.responseText
     }
 
     func analyzeDiagnosticReport(_ prompt: String) async throws -> String {
@@ -332,6 +522,16 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     func cancelPendingConversation() {
         finishPendingConversation(with: .failure(CancellationError()))
+    }
+
+    @MainActor
+    private func finishPendingConversationForTimeout() {
+        guard let pendingConversation else { return }
+        finishPendingConversation(
+            with: .failure(
+                pendingConversation.deliveryPhase.timeoutError
+            )
+        )
     }
 
     private func waitUntilConnected(timeout: TimeInterval) async throws {
@@ -349,12 +549,58 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         throw OpenClawConversationError.connectionFailed
     }
 
-    private func finishPendingConversation(with result: Result<String, Error>) {
+    private func markPendingSocketWriteStarted(gatewayRequestID: String) {
+        guard var pendingConversation,
+              pendingConversation.gatewayRequestID == gatewayRequestID else { return }
+        pendingConversation.deliveryPhase = .writeStarted
+        self.pendingConversation = pendingConversation
+    }
+
+    private func handleConversationSendCompletion(
+        gatewayRequestID: String,
+        error: Error?
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  var pendingConversation = self.pendingConversation,
+                  pendingConversation.gatewayRequestID == gatewayRequestID else {
+                return
+            }
+
+            if let error {
+                let nsError = error as NSError
+                print(
+                    "[OpenClaw][ERROR] 대화 전송 실패 owner=\(pendingConversation.owner.rawValue) "
+                    + "domain=\(nsError.domain) code=\(nsError.code)"
+                )
+                self.finishPendingConversation(
+                    with: .failure(OpenClawConversationError.deliveryAmbiguous)
+                )
+                return
+            }
+
+            pendingConversation.deliveryPhase = .writeCompleted
+            self.pendingConversation = pendingConversation
+        }
+    }
+
+    private func finishPendingConversation(
+        with result: Result<OpenClawConversationResult, Error>
+    ) {
         pendingConversationTimeoutTask?.cancel()
         pendingConversationTimeoutTask = nil
-        guard let continuation = pendingConversationContinuation else { return }
-        pendingConversationContinuation = nil
-        continuation.resume(with: result)
+        guard let pendingConversation else { return }
+        self.pendingConversation = nil
+        pendingConversation.continuation.resume(with: result)
+    }
+
+    private func failPendingConversationForDisconnect() {
+        guard let pendingConversation else { return }
+        finishPendingConversation(
+            with: .failure(
+                pendingConversation.deliveryPhase.disconnectError
+            )
+        )
     }
 
     func addLocalChatNotice(_ text: String) {
@@ -452,11 +698,17 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     // MARK: - Connection
 
     private func startConnection() {
+        // A fresh connection attempt invalidates any pending "reset reconnectAttempts after
+        // 10s stable" timer left over from a previous, now-superseded generation.
+        stableConnectionTask?.cancel()
+        stableConnectionTask = nil
+
         let url: URL
         do {
             url = try makeGatewayURL()
         } catch {
             let message = error.localizedDescription
+            isConnectionAttemptInFlight = false
             DispatchQueue.main.async {
                 self.connectionState = .error(message)
             }
@@ -467,6 +719,11 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
         DispatchQueue.main.async {
             self.connectionState = .connecting
+            // Once the published state flips to .connecting, the state-based guards in
+            // connect()/ensureConnected() are sufficient on their own — clear the synchronous
+            // flag here (rather than immediately after calling startConnection) so no window
+            // exists where a reentrant call on the same thread could see neither guard engaged.
+            self.isConnectionAttemptInFlight = false
         }
 
         let transportKind = OpenClawWebSocketTransportSelector.kind(
@@ -566,20 +823,26 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
     }
 
-    private func sendJSON(_ dictionary: [String: Any]) {
+    private func sendJSON(
+        _ dictionary: [String: Any],
+        completion: ((Error?) -> Void)? = nil
+    ) {
         guard let data = try? JSONSerialization.data(withJSONObject: dictionary),
               let text = String(data: data, encoding: .utf8) else {
             print("[OpenClaw][ERROR] 전송 JSON 직렬화 실패")
+            completion?(OpenClawConversationError.connectionFailed)
             return
         }
 
         guard let transport = webSocketTransport, transport.state == .running else {
             print("[OpenClaw][ERROR] WebSocket이 실행 중이 아니어서 전송 실패 state=\(String(describing: self.webSocketTransport?.state))")
+            completion?(OpenClawConversationError.disconnected)
             return
         }
 
         let generation = connectionGeneration
         transport.send(.string(text)) { [weak self] error in
+            completion?(error)
             guard let error else { return }
             let nsError = error as NSError
             print("[OpenClaw][ERROR] 전송 실패 domain=\(nsError.domain) code=\(nsError.code)")
@@ -715,11 +978,39 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     private func handleHelloOK(json: [String: Any]) {
+        // `handleHelloOK` is only ever invoked from `handleMessage`, which `receiveMessage`
+        // already gates on `connectionGeneration == generation`. So `connectionGeneration` here
+        // is guaranteed to be the generation of the connection that just finished its handshake.
+        let generation = connectionGeneration
         DispatchQueue.main.async {
             self.connectionState = .connected
-            self.reconnectAttempts = 0
         }
-        print("[OpenClaw][INFO] Gateway 연결 성공")
+        scheduleReconnectAttemptsReset(generation: generation)
+        print("[OpenClaw][INFO] Gateway 연결 성공, \(Int(Self.stableConnectionWindow))초 안정 연결 후 재연결 횟수 초기화 예정")
+    }
+
+    /// Only resets `reconnectAttempts` after the connection has stayed up for
+    /// `stableConnectionWindow` seconds. A connection that flaps immediately after `hello-ok`
+    /// (e.g. the gateway accepts then drops the socket) must not get its backoff counter reset,
+    /// or a flapping gateway would make the client reconnect at full speed forever instead of
+    /// backing off. Any reconnect/disconnect in the meantime bumps `connectionGeneration`, which
+    /// invalidates this task before it can fire.
+    private func scheduleReconnectAttemptsReset(generation: Int) {
+        stableConnectionTask?.cancel()
+        stableConnectionTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.stableConnectionWindow * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await MainActor.run {
+                guard let self,
+                      OpenClawStableConnectionPolicy.shouldResetReconnectAttempts(
+                          timerGeneration: generation,
+                          currentGeneration: self.connectionGeneration,
+                          isConnected: self.connectionState == .connected
+                      ) else { return }
+                self.reconnectAttempts = 0
+                print("[OpenClaw][INFO] \(Int(Self.stableConnectionWindow))초 안정 연결 확인, 재연결 횟수 초기화")
+            }
+        }
     }
 
     // MARK: - Events and requests
@@ -793,7 +1084,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         )
         appendChatMessage(message)
 
-        let hasPendingConversation = pendingConversationContinuation != nil
+        let conversationOwner = pendingConversation?.owner
         if let summary = GalvisSpeechResponseFormatter.speechText(from: text) {
             OpenClawNotificationService.shared.postFinalResponse(
                 summary: summary,
@@ -801,7 +1092,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             )
 
             if OpenClawFinalSpeechPolicy.shouldAutoSpeak(
-                hasPendingConversation: hasPendingConversation
+                owner: conversationOwner
             ) {
                 let requestID = TTSService.shared.enqueue(summary)
                 print(
@@ -812,15 +1103,20 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             } else {
                 print(
                     "[OpenClaw][TTS] 요청 호출부에 발화 소유권 위임 "
-                    + "owner=conversation summaryLength=\(summary.count)"
+                    + "owner=galvis summaryLength=\(summary.count)"
                 )
             }
         } else {
             print("[OpenClaw][TTS][WARN] 최종 답변 요약을 만들 수 없음")
         }
 
-        if hasPendingConversation {
-            finishPendingConversation(with: .success(text))
+        if let pendingConversation {
+            let result = OpenClawConversationResult(
+                receipt: pendingConversation.receipt,
+                assistantMessageID: message.id,
+                responseText: text
+            )
+            finishPendingConversation(with: .success(result))
         }
     }
 
@@ -863,11 +1159,30 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         let id = json["id"] as? String ?? ""
         let ok = json["ok"] as? Bool ?? false
 
-        guard !ok else { return }
+        if ok {
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      var pendingConversation = self.pendingConversation,
+                      pendingConversation.gatewayRequestID == id else {
+                    return
+                }
+                pendingConversation.deliveryPhase = .gatewayAcknowledged
+                self.pendingConversation = pendingConversation
+            }
+            return
+        }
         let error = json["error"] as? [String: Any]
         let code = error?["code"] as? String ?? "UNKNOWN"
         let message = error?["message"] as? String ?? "설명 없음"
-        print("[OpenClaw][ERROR] Gateway 응답 오류 requestID=\(id.prefix(8)) code=\(code) message=\(message)")
+        print("[OpenClaw][ERROR] Gateway 응답 오류 requestID=\(id.prefix(8)) code=\(code) messageLength=\(message.count)")
+
+        if pendingConversation?.gatewayRequestID == id {
+            DispatchQueue.main.async {
+                self.finishPendingConversation(
+                    with: .failure(OpenClawConversationError.gatewayRejected(code))
+                )
+            }
+        }
 
         if code == "NOT_PAIRED" {
             DispatchQueue.main.async {
@@ -980,14 +1295,14 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             isDisconnected: connectionState == .disconnected
         ) else { return }
         handledDisconnectGeneration = generation
-        finishPendingConversation(
-            with: .failure(OpenClawConversationError.disconnected)
-        )
+        failPendingConversationForDisconnect()
 
         webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
         webSocketTransport = nil
         reconnectTask?.cancel()
         reconnectTask = nil
+        stableConnectionTask?.cancel()
+        stableConnectionTask = nil
 
         guard shouldReconnect else {
             connectionState = .disconnected

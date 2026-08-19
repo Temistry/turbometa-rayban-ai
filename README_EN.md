@@ -89,6 +89,19 @@ The developer does **not** automatically collect or upload these diagnostics. Ex
 
 OpenClaw final-response notifications contain only the same Markdown/URL/code-stripped summary used for speech, limited to three sentences and 250 characters. While the app is running and can process the Gateway final event, it also speaks that summary through the current iPhone media output (Ray-Ban or iPhone). A local notification cannot force the iOS system Announce Notifications feature, and if iOS suspends or terminates the app before it receives the final event, the app cannot create or speak that response.
 
+## OpenClaw Quick Shot and protected Gallery
+
+The top of the Home screen provides large **Photo** and **Video** Quick Shot actions. Each capture freezes the selected mode name and prompt at capture start. Modes can be created, edited, duplicated, deleted, and reordered in the app, with separate photo/video defaults and recent selections.
+
+- Photos preserve the exact JPEG bytes returned by the DAT SDK in protected app storage, then use OpenClaw's validated JPEG attachment path for analysis.
+- Videos preserve a bounded H.264 MP4 original for up to 10 seconds. The app does **not** upload that MP4 to OpenClaw. It sends only a 2×3 JPEG contact sheet built from up to six representative frames, and labels the result as representative-frame analysis.
+- The app-owned repository in protected Application Support is the Gallery source of truth. Copies to iPhone Photos use add-only access; the app does not read or enumerate the existing photo library.
+- A Photos export or OpenClaw analysis failure never removes the protected original. The Gallery provides explicit retry actions.
+- Deleting a Gallery item removes only the app original, thumbnail, and index entry. A copy already saved in iPhone Photos remains untouched.
+- An ambiguous delivery is never resent automatically. It remains marked as needing confirmation until the user checks for possible duplication and explicitly retries with a new request attempt.
+
+Completed analyses reuse protected OpenClaw chat history, final-event deduplication, local notifications, and summarized TTS. Notifications and speech cannot be guaranteed if iOS suspends or terminates the app before it processes the Gateway final event.
+
 ## OpenClaw Nord Meshnet remote connection
 
 To use OpenClaw away from the office without router port forwarding or public Internet exposure, link the Windows PC and iPhone as **personally approved Nord Meshnet peers**, then explicitly select **Nord Meshnet** mode in TurboMeta's OpenClaw settings.

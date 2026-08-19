@@ -143,7 +143,48 @@
 
 // MARK: - Gallery
 "gallery.title" = "갤러리";
-"gallery.empty" = "사진이 없습니다";
+"gallery.empty" = "저장된 미디어가 없습니다";
+"gallery.empty.hint" = "OpenClaw Quick Shot으로 촬영한 사진과 동영상이 여기에 보호 저장됩니다.";
+"gallery.filter.title" = "필터";
+"gallery.filter.all" = "전체";
+"gallery.filter.photo" = "사진";
+"gallery.filter.video" = "동영상";
+"gallery.kind.photo" = "사진";
+"gallery.kind.video" = "동영상";
+"gallery.item.accessibility" = "%@, %@ 모드";
+"gallery.share" = "미디어 공유";
+"gallery.error.title" = "갤러리 작업 실패";
+"gallery.result.title" = "갤러리 작업 결과";
+"gallery.error.photos.permission" = "사진 보관함 추가 권한이 필요합니다. iOS 설정에서 권한을 확인하세요.";
+"gallery.error.analysis.ambiguous" = "OpenClaw가 요청을 받았는지 확인할 수 없습니다. 중복 가능성을 확인한 뒤에만 다시 시도하세요.";
+"gallery.delete.title" = "앱 갤러리에서 삭제할까요?";
+"gallery.delete.message" = "보호된 앱 원본과 썸네일만 삭제합니다. iPhone 사진 앱에 복사된 항목은 삭제되지 않습니다.";
+"gallery.missing.title" = "항목을 찾을 수 없습니다";
+"gallery.missing.message" = "갤러리를 새로 고친 뒤 다시 시도하세요.";
+"gallery.missing.media" = "미디어 파일이 없습니다";
+"gallery.missing.media.message" = "보호 저장 파일이 손상되었거나 제거되었습니다. 항목을 삭제할 수 있습니다.";
+"gallery.detail.captured" = "촬영 시각";
+"gallery.detail.mode" = "촬영 모드";
+"gallery.detail.duration" = "길이";
+"gallery.detail.seconds" = "%.1f초";
+"gallery.detail.photos" = "iPhone 사진 앱";
+"gallery.detail.analysis" = "OpenClaw 분석";
+"gallery.status.pending" = "처리 중";
+"gallery.status.failed" = "실패";
+"gallery.status.photos.notrequested" = "복사하지 않음";
+"gallery.status.photos.saved" = "복사됨";
+"gallery.status.photos.permission" = "권한 필요";
+"gallery.status.analysis.notrequested" = "요청하지 않음";
+"gallery.status.analysis.completed" = "완료";
+"gallery.status.analysis.ambiguous" = "전달 여부 확인 필요";
+"gallery.action.photos.retry" = "iPhone 사진 앱에 다시 저장";
+"gallery.action.analysis.retry" = "OpenClaw 분석 다시 시도";
+"gallery.action.analysis.retry.ambiguous" = "중복 가능성을 확인하고 다시 시도";
+"gallery.action.answer" = "OpenClaw 답변 보기";
+"gallery.action.delete" = "앱 원본 삭제";
+"gallery.analysis.completed.title" = "분석 완료";
+"gallery.analysis.completed.message" = "OpenClaw 분석 결과가 보호된 채팅 기록에 저장되었습니다.";
+"gallery.video.retry.prompt" = "중요: 첨부 이미지는 전체 동영상 파일이 아니라 이전 촬영에서 추출한 대표 프레임 contact sheet입니다. 대표 프레임 기반 분석임을 답변에 명시하고, 약 %@초 구간에서 관찰 가능한 내용만 설명하세요. 프레임 사이의 동작이나 소리는 추정하지 마세요.";
 
 // MARK: - Settings
 "settings.title" = "내 정보";
@@ -458,3 +499,98 @@
 "openclaw.chat.speech.play" = "답변 읽기";
 "openclaw.chat.speech.stop" = "읽기 중지";
 "openclaw.notification.title" = "OpenClaw 답변";
+
+// OpenClaw Capture Modes
+"openclaw.capturemode.settings.entry" = "촬영 모드";
+"openclaw.capturemode.settings.section" = "촬영 모드";
+"openclaw.capturemode.settings.section.footer" = "사진이나 영상을 촬영할 때 사용할 프롬프트 프리셋을 관리합니다 (통용, 코딩, 체스, 스쿼트 자세, 그리고 직접 추가한 사용자 지정 모드).";
+"openclaw.capturemode.settings.title" = "촬영 모드";
+"openclaw.capturemode.settings.modes" = "모드";
+"openclaw.capturemode.settings.modes.footer.v2" = "드래그하여 순서를 바꾸고, 스와이프하여 복제하거나 삭제하세요. \"내장\" 표시는 앱에 기본 포함되어 있다는 뜻일 뿐이며, 다른 모드와 동일하게 편집하거나 삭제할 수 있습니다.";
+"openclaw.capturemode.settings.defaults" = "기본값";
+"openclaw.capturemode.settings.photodefault" = "사진 기본 모드";
+"openclaw.capturemode.settings.videodefault" = "영상 기본 모드";
+"openclaw.capturemode.settings.new" = "새 모드";
+"openclaw.capturemode.duplicate" = "복제";
+"openclaw.capturemode.duplicate.suffix" = "사본";
+"openclaw.capturemode.builtin.badge" = "내장";
+"openclaw.capturemode.delete.title" = "모드 삭제";
+"openclaw.capturemode.delete.confirm" = "\"%@\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.";
+
+"openclaw.capturemode.editor.new" = "새 모드";
+"openclaw.capturemode.editor.edit" = "모드 편집";
+"openclaw.capturemode.section.details" = "기본 정보";
+"openclaw.capturemode.section.media" = "적용 매체";
+"openclaw.capturemode.field.name" = "이름";
+"openclaw.capturemode.field.summary" = "요약";
+"openclaw.capturemode.field.symbol" = "아이콘 심볼";
+"openclaw.capturemode.field.symbol.help" = "SF Symbol 이름을 입력하세요. 예: \"eye.circle\" 또는 \"camera.circle\".";
+"openclaw.capturemode.field.media" = "지원하는 매체";
+"openclaw.capturemode.field.media.help" = "사진 또는 영상 중 하나는 반드시 켜져 있어야 합니다.";
+"openclaw.capturemode.field.prompt" = "프롬프트";
+"openclaw.capturemode.field.prompt.help" = "촬영한 사진이나 영상과 함께 AI에 전달됩니다. 보호된 로컬 저장소에만 저장되며 로그에 남지 않습니다.";
+"openclaw.capturemode.discard.title" = "변경 사항을 취소할까요?";
+"openclaw.capturemode.discard.message" = "저장하지 않은 변경 사항이 있습니다. 정말 취소하시겠습니까?";
+"openclaw.capturemode.discard.confirm" = "변경 사항 취소";
+
+"openclaw.capturemode.picker.title" = "모드 선택";
+"openclaw.capturemode.picker.empty" = "이 촬영 유형에 사용할 수 있는 모드가 없습니다.";
+
+"openclaw.capturemode.media.photo" = "사진";
+"openclaw.capturemode.media.video" = "영상";
+"openclaw.capturemode.media.both" = "사진 및 영상";
+"openclaw.capturemode.media.none" = "없음";
+
+"openclaw.capturemode.error.namerequired" = "이름을 입력해 주세요.";
+"openclaw.capturemode.error.nametoolong" = "이름은 %@자 이하여야 합니다.";
+"openclaw.capturemode.error.duplicatename" = "이미 같은 이름의 모드가 존재합니다.";
+"openclaw.capturemode.error.summarytoolong" = "요약은 %@자 이하여야 합니다.";
+"openclaw.capturemode.error.promptrequired" = "프롬프트를 입력해 주세요.";
+"openclaw.capturemode.error.prompttoolong" = "프롬프트는 %@자 이하여야 합니다.";
+"openclaw.capturemode.error.symbolrequired" = "아이콘 심볼 이름을 입력해 주세요.";
+"openclaw.capturemode.error.mediarequired" = "사진 또는 영상 중 하나는 켜 주세요.";
+"openclaw.capturemode.error.notfound" = "해당 모드를 찾을 수 없습니다.";
+
+// OpenClaw Capture Modes — Seeded Built-in Modes
+"openclaw.capturemode.seed.general.name" = "통용";
+"openclaw.capturemode.seed.general.summary" = "안경에 보이는 것을 설명";
+"openclaw.capturemode.seed.general.prompt" = "당신은 착용자의 스마트 안경 카메라를 통해 보고 있습니다. 보이는 내용을 명확하고 간결하게 설명하고, 착용자가 주변 상황에서 알고 싶어할 만한 부분을 짚어 주세요.";
+"openclaw.capturemode.seed.coding.name" = "코딩";
+"openclaw.capturemode.seed.coding.summary" = "화면의 코드나 오류를 읽어줌";
+"openclaw.capturemode.seed.coding.prompt" = "당신은 착용자의 스마트 안경 카메라를 통해 화면, 코드 편집기 또는 터미널을 보고 있습니다. 보이는 코드, 오류 메시지, 출력 내용을 옮겨 적고 설명하며, 문제가 있다면 해결 방법이나 다음 단계를 제안해 주세요.";
+"openclaw.capturemode.seed.chess.name" = "체스";
+"openclaw.capturemode.seed.chess.summary" = "체스 포지션 분석";
+"openclaw.capturemode.seed.chess.prompt" = "당신은 착용자의 스마트 안경 카메라를 통해 체스판을 보고 있습니다. 기물의 위치를 파악하고 누구 차례일지 판단한 후, 강력한 다음 수를 간단한 설명과 함께 제안해 주세요.";
+"openclaw.capturemode.seed.squat.name" = "스쿼트 자세";
+"openclaw.capturemode.seed.squat.summary" = "영상으로 스쿼트 자세 점검";
+"openclaw.capturemode.seed.squat.prompt" = "당신은 착용자의 스마트 안경 카메라를 통해 누군가 스쿼트를 하는 모습을 보고 있습니다. 자세(깊이, 무릎 방향, 등 각도, 균형)를 평가하고 간결하고 실행 가능한 코칭 피드백을 제공해 주세요.";
+
+// OpenClaw Quick Shot
+"openclaw.quickshot.photo.title" = "사진 Quick Shot";
+"openclaw.quickshot.video.title" = "동영상 Quick Shot";
+"openclaw.quickshot.state.idle" = "촬영을 준비합니다.";
+"openclaw.quickshot.state.preparing" = "안경 카메라를 준비하는 중…";
+"openclaw.quickshot.state.capturing" = "사진을 촬영하는 중…";
+"openclaw.quickshot.state.recording" = "녹화 중";
+"openclaw.quickshot.recording.elapsed" = "%.1f / %.0f초";
+"openclaw.quickshot.recording.limit" = "최대 10초 후 자동으로 저장합니다.";
+"openclaw.quickshot.recording.stop" = "녹화 종료";
+"openclaw.quickshot.state.saving" = "보호된 앱 갤러리에 저장하는 중…";
+"openclaw.quickshot.state.exporting" = "iPhone 사진 앱에 복사하는 중…";
+"openclaw.quickshot.state.sending" = "OpenClaw에 분석 요청을 보내는 중…";
+"openclaw.quickshot.state.awaiting" = "OpenClaw 답변을 기다리는 중…";
+"openclaw.quickshot.completed" = "분석이 완료되었습니다";
+"openclaw.quickshot.video.samplednotice" = "전체 동영상이 아닌 대표 프레임 기반 분석입니다.";
+"openclaw.quickshot.failed.title" = "Quick Shot 실패";
+"openclaw.quickshot.failed.ambiguous.title" = "전달 여부 확인 필요";
+"openclaw.quickshot.failed.ambiguous.message" = "중복 요청을 막기 위해 자동 재전송하지 않았습니다. 앱 갤러리에서 상태를 확인한 뒤 명시적으로 다시 시도하세요.";
+"openclaw.quickshot.cancelled" = "촬영을 취소했습니다";
+
+// OpenClaw Video Recorder Errors
+"video.recorder.error.alreadyrecording" = "이미 동영상을 녹화하고 있습니다.";
+"video.recorder.error.notrecording" = "진행 중인 동영상 녹화를 찾을 수 없습니다.";
+"video.recorder.error.cancelled" = "동영상 녹화를 취소했습니다.";
+"video.recorder.error.setup" = "동영상 녹화를 준비하지 못했습니다.";
+"video.recorder.error.writer" = "동영상 파일을 완성하지 못했습니다.";
+"video.recorder.error.noframes" = "저장할 동영상 프레임을 받지 못했습니다.";
+"video.recorder.error.tooshort" = "동영상이 너무 짧습니다. 0.5초 이상 녹화해 주세요.";

@@ -92,7 +92,7 @@ final class GalvisOpenClawSessionManager: ObservableObject {
                 guard openClaw.loadGatewayToken() != nil else {
                     throw OpenClawConversationError.notConfigured
                 }
-                openClaw.connect()
+                openClaw.ensureConnected(reason: "GalvisOpenClawSessionManager.runSession")
                 try await waitForConnection()
             }
 

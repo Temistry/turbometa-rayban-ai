@@ -188,7 +188,9 @@ struct ControlsView: View {
 
       CircleButton(icon: "camera.fill", text: nil) {
         print("[StreamView][INFO] 사진 촬영 요청")
-        viewModel.capturePhoto()
+        Task {
+          await viewModel.capturePhoto()
+        }
       }
     }
   }

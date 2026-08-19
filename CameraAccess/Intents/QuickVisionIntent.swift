@@ -330,32 +330,30 @@ final class QuickVisionManager: ObservableObject {
 
             try await Task.sleep(nanoseconds: 500_000_000)
             streamViewModel.dismissPhotoPreview()
-            streamViewModel.capturePhoto()
-            print("[QuickVision][INFO] 사진 촬영 요청 완료")
-
-            var photoWaitCount = 0
-            while streamViewModel.capturedPhoto == nil && photoWaitCount < 30 {
-                try await Task.sleep(nanoseconds: 100_000_000)
-                photoWaitCount += 1
-            }
 
             let photo: UIImage
-            if let capturedPhoto = streamViewModel.capturedPhoto {
+            do {
+                let capturedPhoto = try await streamViewModel.capturePhoto(owner: .quickVision)
                 photo = capturedPhoto
                 record.captureSource = "photo"
                 print(
-                    "[QuickVision][INFO] 촬영 사진 사용 size=\(capturedPhoto.size.width)x\(capturedPhoto.size.height) "
-                    + "elapsedMs=\(photoWaitCount * 100)"
+                    "[QuickVision][INFO] 촬영 사진 사용 size=\(capturedPhoto.size.width)x\(capturedPhoto.size.height)"
                 )
-            } else if let videoFrame = streamViewModel.currentVideoFrame {
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch let captureError as StreamCaptureError
+                where captureError == .captureBusy {
+                throw captureError
+            } catch {
+                guard let videoFrame = streamViewModel.currentVideoFrame else {
+                    throw QuickVisionError.frameTimeout
+                }
                 photo = videoFrame
                 record.captureSource = "videoFrame"
                 print(
-                    "[QuickVision][WARN] 촬영 사진이 없어 최신 영상 프레임 사용 "
+                    "[QuickVision][WARN] 사진 촬영 실패로 최신 영상 프레임 사용 "
                     + "size=\(videoFrame.size.width)x\(videoFrame.size.height)"
                 )
-            } else {
-                throw QuickVisionError.frameTimeout
             }
 
             record.setThumbnail(photo)
@@ -374,6 +372,18 @@ final class QuickVisionManager: ObservableObject {
             QuickVisionStorage.shared.upsertRecord(record)
             print("[QuickVision][INFO] 인식 성공 resultLength=\(result.count)")
             tts.speak(result)
+        } catch let error as StreamCaptureError {
+            let message = error.localizedDescription
+            errorMessage = message
+            record.status = .rejected
+            record.errorCode = error == .captureBusy ? "capture_busy" : "capture_interrupted"
+            record.errorMessage = message
+            QuickVisionStorage.shared.upsertRecord(record)
+            print("[QuickVision][WARN] 촬영 요청 거부 code=\(record.errorCode ?? "capture_error")")
+            tts.speak(message)
+            if error != .captureBusy {
+                await streamViewModel.stopSession()
+            }
         } catch let error as QuickVisionError {
             let message = "인식에 실패했습니다. 다시 시도하세요"
             errorMessage = message

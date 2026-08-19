@@ -135,10 +135,12 @@ struct OpenClawChatView: View {
                             TextField("openclaw.chat.placeholder".localized, text: $inputText)
                                 .textFieldStyle(.roundedBorder)
                                 .submitLabel(.send)
-                                .onSubmit { sendText() }
+                                .onSubmit {
+                                    Task { await sendText() }
+                                }
 
                             Button {
-                                sendText()
+                                Task { await sendText() }
                             } label: {
                                 Image(systemName: "arrow.up.circle.fill")
                                     .font(.system(size: 30))
@@ -187,7 +189,7 @@ struct OpenClawChatView: View {
             OpenClawNotificationService.shared.requestAuthorizationIfNeeded()
             if openClawService.connectionState != .connected,
                openClawService.loadGatewayToken() != nil {
-                openClawService.connect()
+                openClawService.ensureConnected(reason: "OpenClawChatView.onAppear")
             }
         }
         .onChange(of: ttsService.playbackState) { state in
@@ -217,11 +219,18 @@ struct OpenClawChatView: View {
 
     // MARK: - Text
 
-    private func sendText() {
+    private func sendText() async {
         let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
+        guard !text.isEmpty, !isSending else { return }
         inputText = ""
-        openClawService.sendChatMessage(text)
+        isSending = true
+        defer { isSending = false }
+
+        do {
+            _ = try await openClawService.sendChatMessage(text)
+        } catch {
+            openClawService.addLocalChatNotice(error.localizedDescription)
+        }
     }
 
     // MARK: - Speech
@@ -303,7 +312,11 @@ struct OpenClawChatView: View {
 
         let text = inputText.isEmpty ? "openclaw.chat.photoprompt".localized : inputText
         inputText = ""
-        openClawService.sendChatMessage(text, image: frame)
+        do {
+            _ = try await openClawService.sendChatMessage(text, image: frame)
+        } catch {
+            openClawService.addLocalChatNotice(error.localizedDescription)
+        }
 
         if needsStreamStop { await streamViewModel.stopSession() }
     }

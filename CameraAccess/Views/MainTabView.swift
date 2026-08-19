@@ -10,6 +10,7 @@ struct MainTabView: View {
     @ObservedObject var wearablesViewModel: WearablesViewModel
 
     @State private var selectedTab = 0
+    @ObservedObject private var galvisLaunchCoordinator = GalvisLaunchCoordinator.shared
 
     private var apiKey: String {
         APIKeyManager.shared.getGoogleAPIKey() ?? ""
@@ -46,5 +47,20 @@ struct MainTabView: View {
                 .tag(3)
         }
         .accentColor(AppColors.primary)
+        .fullScreenCover(
+            isPresented: $galvisLaunchCoordinator.isOpenClawChatPresented,
+            onDismiss: { galvisLaunchCoordinator.dismissOpenClawChat() }
+        ) {
+            OpenClawChatView(
+                streamViewModel: streamViewModel,
+                selectedMessageID: galvisLaunchCoordinator.selectedOpenClawMessageID
+            )
+        }
+        .fullScreenCover(
+            isPresented: $galvisLaunchCoordinator.isOpenClawSessionPresented,
+            onDismiss: { galvisLaunchCoordinator.dismissOpenClawSession() }
+        ) {
+            GalvisOpenClawSessionView(streamViewModel: streamViewModel)
+        }
     }
 }

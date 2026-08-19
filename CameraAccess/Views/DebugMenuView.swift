@@ -48,6 +48,61 @@ struct DeveloperLogEntry: Identifiable {
   let message: String
 }
 
+// MARK: - Line framing
+
+/// Pure buffering logic for turning arbitrary stdout/stderr byte chunks into discrete log
+/// lines. Pulled out of `DeveloperConsole` so the framing rules — in particular "a partial
+/// line must never silently merge with unrelated text written later" — can be unit tested
+/// without touching the console's file handles, pipes, or `Darwin.write` side effects.
+///
+/// `append(_:)` only returns lines that ended in a newline (or that overflowed
+/// `maximumPendingBytes`, to bound unbounded buffering from a caller that never emits a
+/// newline). Any trailing fragment without a terminator is kept in `pendingText` until either
+/// a later `append(_:)` completes it with a newline, or the owner explicitly calls
+/// `flushPending()` — which the console does on an idle timer, so a stalled fragment becomes
+/// its own entry instead of being concatenated with whatever the next unrelated writer sends.
+struct DeveloperConsoleLineFramer {
+  private(set) var pendingText: String = ""
+  let maximumPendingBytes: Int
+
+  init(maximumPendingBytes: Int = 8_192) {
+    self.maximumPendingBytes = maximumPendingBytes
+  }
+
+  var hasPendingText: Bool { !pendingText.isEmpty }
+
+  mutating func append(_ text: String) -> [String] {
+    pendingText.append(text)
+
+    var completedLines: [String] = []
+    while let newlineRange = pendingText.rangeOfCharacter(from: .newlines) {
+      let line = String(pendingText[..<newlineRange.lowerBound])
+      pendingText.removeSubrange(pendingText.startIndex...newlineRange.lowerBound)
+      completedLines.append(line)
+    }
+
+    if pendingText.utf8.count > maximumPendingBytes {
+      completedLines.append(pendingText)
+      pendingText.removeAll(keepingCapacity: true)
+    }
+
+    return completedLines
+  }
+
+  /// Forcibly emits and clears whatever fragment is currently buffered, if any. The console
+  /// calls this after a short idle window with no new writes, or when the console is cleared.
+  mutating func flushPending() -> String? {
+    guard !pendingText.isEmpty else { return nil }
+    let line = pendingText
+    pendingText.removeAll(keepingCapacity: true)
+    return line
+  }
+
+  mutating func reset() {
+    pendingText.removeAll(keepingCapacity: true)
+  }
+}
+
 // MARK: - In-app and persistent console
 
 final class DeveloperConsole: ObservableObject {
@@ -61,15 +116,21 @@ final class DeveloperConsole: ObservableObject {
   private let maximumLineLength = 4_000
   private let maximumPersistentFileBytes: UInt64 = 3_000_000
   private let maximumExportAge: TimeInterval = 60 * 60 * 24
+  /// Every log line — whether it comes from the redirected stdout/stderr pipe or from a direct
+  /// `log()`/`record()` call anywhere in the app — is framed and enqueued exclusively on this
+  /// queue. That keeps entry ordering deterministic and prevents concurrent `Darwin.write`
+  /// calls from `mirrorToXcodeConsole` interleaving mid-line.
   private let parsingQueue = DispatchQueue(label: "com.turbometa.developer-console")
+  private let pendingLineFlushDelay: TimeInterval = 0.5
 
   private let sessionID = UUID().uuidString
   private let sessionStateKey = "developer_console_session_finished_cleanly"
 
-  private var capturePipe: Pipe?
+  private var capturePipes: [Pipe] = []
   private var originalStandardOutput: Int32 = -1
   private var originalStandardError: Int32 = -1
-  private var pendingText = ""
+  private var lineFramers: [Int32: DeveloperConsoleLineFramer] = [:]
+  private var pendingFlushWorkItems: [Int32: DispatchWorkItem] = [:]
   private var isCapturing = false
 
   private var diagnosticsDirectoryURL: URL?
@@ -104,24 +165,30 @@ final class DeveloperConsole: ObservableObject {
     fflush(stdout)
     fflush(stderr)
 
-    let pipe = Pipe()
+    let outputPipe = Pipe()
+    let errorPipe = Pipe()
     originalStandardOutput = dup(STDOUT_FILENO)
     originalStandardError = dup(STDERR_FILENO)
 
     guard originalStandardOutput >= 0,
           originalStandardError >= 0,
-          dup2(pipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO) >= 0,
-          dup2(pipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO) >= 0 else {
+          dup2(outputPipe.fileHandleForWriting.fileDescriptor, STDOUT_FILENO) >= 0,
+          dup2(errorPipe.fileHandleForWriting.fileDescriptor, STDERR_FILENO) >= 0 else {
       isCapturing = false
       log(.error, category: "DeveloperConsole", "표준 출력 캡처를 시작하지 못했습니다")
       return
     }
 
-    capturePipe = pipe
-    pipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+    capturePipes = [outputPipe, errorPipe]
+    outputPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
       let data = handle.availableData
       guard !data.isEmpty else { return }
-      self?.consume(data)
+      self?.consume(data, source: STDOUT_FILENO)
+    }
+    errorPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
+      let data = handle.availableData
+      guard !data.isEmpty else { return }
+      self?.consume(data, source: STDERR_FILENO)
     }
 
     log(
@@ -149,11 +216,18 @@ final class DeveloperConsole: ObservableObject {
   }
 
   func clear() {
-    entries.removeAll(keepingCapacity: true)
-    unreadErrorCount = 0
-
     parsingQueue.async { [weak self] in
-      self?.resetPersistentDiagnostics()
+      guard let self else { return }
+      // Drop any in-flight partial line and its idle-flush timer so a fragment captured before
+      // the clear doesn't reappear as an orphaned entry afterwards.
+      pendingFlushWorkItems.values.forEach { $0.cancel() }
+      pendingFlushWorkItems.removeAll()
+      lineFramers.removeAll()
+      resetPersistentDiagnostics()
+      DispatchQueue.main.async {
+        self.entries.removeAll(keepingCapacity: true)
+        self.unreadErrorCount = 0
+      }
     }
   }
 
@@ -169,7 +243,16 @@ final class DeveloperConsole: ObservableObject {
       .joined(separator: " ")
 
     let suffix = metadataText.isEmpty ? "" : " \(metadataText)"
-    enqueue("[\(category)][\(levelToken(level))] \(message)\(suffix)", forcedLevel: level)
+    let line = "[\(category)][\(levelToken(level))] \(message)\(suffix)"
+
+    // Callers can invoke `log()` from any thread (main actor UI code, background Tasks,
+    // OpenClaw's socket delegate queue, etc). Route the formatted line through the same
+    // `parsingQueue` that frames the redirected stdout/stderr pipe so direct log calls and
+    // piped output are appended to `entries` in one deterministic, non-interleaved order
+    // rather than racing each other in from different threads.
+    parsingQueue.async { [weak self] in
+      self?.enqueue(line, forcedLevel: level)
+    }
   }
 
   func record(
@@ -325,25 +408,43 @@ final class DeveloperConsole: ObservableObject {
     }
   }
 
-  private func consume(_ data: Data) {
+  private func consume(_ data: Data, source: Int32) {
     parsingQueue.async { [weak self] in
       guard let self,
             let text = String(data: data, encoding: .utf8) else { return }
 
-      pendingText.append(text)
+      // stdout and stderr use independent framers. A partial stdout write must never be completed
+      // by an unrelated stderr newline (or vice versa), even if both descriptors become readable
+      // during the same run-loop turn.
+      pendingFlushWorkItems[source]?.cancel()
+      pendingFlushWorkItems[source] = nil
 
-      while let newlineRange = pendingText.rangeOfCharacter(from: .newlines) {
-        let line = String(pendingText[..<newlineRange.lowerBound])
-        pendingText.removeSubrange(pendingText.startIndex...newlineRange.lowerBound)
+      var framer = lineFramers[source] ?? DeveloperConsoleLineFramer()
+      for line in framer.append(text) {
         enqueue(line)
       }
+      lineFramers[source] = framer
 
-      if pendingText.utf8.count > 8_192 {
-        let line = pendingText
-        pendingText.removeAll(keepingCapacity: true)
-        enqueue(line)
-      }
+      scheduleIdleFlushIfNeeded(source: source)
     }
+  }
+
+  /// `stdout`/`stderr` writes arrive as arbitrary byte chunks, not as whole lines. Scheduling an
+  /// independent flush for each descriptor ensures a stalled fragment becomes its own entry
+  /// instead of being silently merged with later output from the same source.
+  private func scheduleIdleFlushIfNeeded(source: Int32) {
+    guard lineFramers[source]?.hasPendingText == true else { return }
+
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      pendingFlushWorkItems[source] = nil
+      guard var framer = lineFramers[source],
+            let line = framer.flushPending() else { return }
+      lineFramers[source] = framer
+      enqueue(line)
+    }
+    pendingFlushWorkItems[source] = workItem
+    parsingQueue.asyncAfter(deadline: .now() + pendingLineFlushDelay, execute: workItem)
   }
 
   private func enqueue(_ rawLine: String, forcedLevel: DeveloperLogLevel? = nil) {

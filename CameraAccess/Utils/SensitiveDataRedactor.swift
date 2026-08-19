@@ -26,6 +26,14 @@ enum SensitiveDataRedactor {
             (#"(?i)(\b(?:세션 ID|sessionID|deviceID|pairingID)\s*[:=]\s*)[^\s,;]+"#, "$1<식별정보 숨김>"),
             (#"(?i)(socketPath\s+from\s+app\s*=\s*)\S+"#, "$1<식별정보 숨김>"),
             (#"(?i)(IAPAppAccessoryCert(?:Data|SerialNumber)Key\s*=\s*)\{[^\r\n]*\}"#, "$1<대용량 데이터 생략>"),
+            // BLE/ExternalAccessory pairing frequently synthesizes a display name by appending a
+            // random disambiguation suffix to the marketing name, e.g. `Ray-Ban Meta-4F2A` or
+            // `Ray-Ban Meta (4F2A9C)`. The base name alone is not sensitive, but the generated
+            // suffix is effectively a per-unit identifier, so only the suffix is masked.
+            (#"(?i)(\b(?:accessoryDisplayName|peripheralName|localName)\s*[:=]\s*\"?[\w .'-]*?)[- ]\(?[0-9A-Fa-f]{4,}\)?(\"?)"#, "$1<식별정보 숨김>$2"),
+            (#"(?i)(\b(?:firmware|firmwareVersion|firmware[_ -]?build|buildNumber|buildVersion)\s*[:=]\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
+            (#"(?i)(\b(?:nodeId|node[_ -]?id|localNode|remoteNode|localNodeId|remoteNodeId)\s*[:=]\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
+            (#"(?i)(\b(?:serviceUUID|serviceId|characteristicUUID|channelId|channel[_ -]?id)\s*[:=]\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
             (#"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b"#, "<식별정보 숨김>"),
             (#"(?i)\b(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\b"#, "<식별정보 숨김>"),
             (#"(?<![A-Za-z0-9])[A-Za-z0-9+/]{256,}={0,2}(?![A-Za-z0-9])"#, "<대용량 데이터 생략>")

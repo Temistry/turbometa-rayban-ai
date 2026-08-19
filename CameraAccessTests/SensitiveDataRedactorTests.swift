@@ -99,4 +99,99 @@ final class SensitiveDataRedactorTests: XCTestCase {
         XCTAssertFalse(output.contains(String(repeating: "A", count: 120)))
         XCTAssertTrue(output.contains("<대용량 데이터 생략>"))
     }
+
+    func testRedactsSyntheticAccessoryDisplayNameSuffix() {
+        let input = """
+        accessoryDisplayName: Ray-Ban Meta-4F2A
+        peripheralName = "Ray-Ban Meta (4F2A9C)"
+        localName: Oakley Meta-1A2B3C
+        """
+
+        let output = SensitiveDataRedactor.redact(input)
+
+        [
+            "4F2A",
+            "4F2A9C",
+            "1A2B3C",
+        ].forEach { suffix in
+            XCTAssertFalse(output.contains(suffix), "마스킹되지 않은 액세서리 표시 이름 접미사: \(suffix)")
+        }
+        // The marketing name itself is not a secret and must survive redaction.
+        XCTAssertTrue(output.contains("Ray-Ban Meta"))
+        XCTAssertTrue(output.contains("Oakley Meta"))
+        XCTAssertTrue(output.contains("<식별정보 숨김>"))
+    }
+
+    func testPreservesAccessoryDisplayNameWithoutSyntheticSuffix() {
+        let input = "accessoryDisplayName: Ray-Ban Meta Glasses"
+        let output = SensitiveDataRedactor.redact(input)
+
+        // No hex-looking disambiguation suffix present, so nothing should be masked here.
+        XCTAssertEqual(output, input)
+    }
+
+    func testRedactsFirmwareAndBuildIdentifiers() {
+        let input = """
+        firmwareVersion: 20.3.145-release
+        firmware=20.3.145
+        buildNumber: 1452
+        buildVersion=B20452
+        """
+
+        let output = SensitiveDataRedactor.redact(input)
+
+        [
+            "20.3.145-release",
+            "1452",
+            "B20452",
+        ].forEach { value in
+            XCTAssertFalse(output.contains(value), "마스킹되지 않은 펌웨어/빌드 값: \(value)")
+        }
+        XCTAssertTrue(output.contains("<식별정보 숨김>"))
+    }
+
+    func testRedactsLocalAndRemoteNodeIdentifiers() {
+        let input = """
+        nodeId: rayban-a1b2c3d4
+        localNode=rayban-abcdef01
+        remoteNodeId: gateway-primary-9f8e
+        localNodeId=node-local-77
+        """
+
+        let output = SensitiveDataRedactor.redact(input)
+
+        [
+            "rayban-a1b2c3d4",
+            "rayban-abcdef01",
+            "gateway-primary-9f8e",
+            "node-local-77",
+        ].forEach { value in
+            XCTAssertFalse(output.contains(value), "마스킹되지 않은 노드 식별자: \(value)")
+        }
+        XCTAssertTrue(output.contains("<식별정보 숨김>"))
+    }
+
+    func testRedactsServiceAndChannelIdentifiers() {
+        let input = """
+        serviceUUID: 0000180a-0000-1000-8000-00805f9b34fb
+        serviceId=svc-gateway-42
+        characteristicUUID: 00002a29-0000-1000-8000-00805f9b34fb
+        channelId=chan-5f2a
+        channel_id: 42
+        """
+
+        let output = SensitiveDataRedactor.redact(input)
+
+        [
+            "svc-gateway-42",
+            "chan-5f2a",
+        ].forEach { value in
+            XCTAssertFalse(output.contains(value), "마스킹되지 않은 서비스/채널 식별자: \(value)")
+        }
+        // UUID-shaped service/characteristic values are also caught by the generic UUID rule.
+        XCTAssertFalse(output.contains("0000180a-0000-1000-8000-00805f9b34fb"))
+        XCTAssertFalse(output.contains("00002a29-0000-1000-8000-00805f9b34fb"))
+        XCTAssertFalse(output.contains("42"), "channel_id 숫자 값이 마스킹되지 않음")
+        XCTAssertTrue(output.contains("<식별정보 숨김>"))
+    }
 }

@@ -51,17 +51,11 @@ final class OpenClawNotificationTests: XCTestCase {
         XCTAssertFalse(content.body.contains("네 번째"))
     }
 
-    func testFinalSpeechPolicyDelegatesPendingConversationToGalvis() {
-        XCTAssertTrue(
-            OpenClawFinalSpeechPolicy.shouldAutoSpeak(
-                hasPendingConversation: false
-            )
-        )
-        XCTAssertFalse(
-            OpenClawFinalSpeechPolicy.shouldAutoSpeak(
-                hasPendingConversation: true
-            )
-        )
+    func testFinalSpeechPolicyDelegatesOnlyGalvisConversation() {
+        XCTAssertTrue(OpenClawFinalSpeechPolicy.shouldAutoSpeak(owner: nil))
+        XCTAssertTrue(OpenClawFinalSpeechPolicy.shouldAutoSpeak(owner: .chat))
+        XCTAssertTrue(OpenClawFinalSpeechPolicy.shouldAutoSpeak(owner: .quickShot))
+        XCTAssertFalse(OpenClawFinalSpeechPolicy.shouldAutoSpeak(owner: .galvis))
     }
 
     func testEmptyResponseDoesNotCreateNotificationContent() {

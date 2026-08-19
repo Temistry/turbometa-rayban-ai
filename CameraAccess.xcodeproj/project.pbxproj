@@ -96,6 +96,7 @@
 		OC1004000400040004 /* OpenClawSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2004000400040004 /* OpenClawSettingsView.swift */; };
 		OC1005000500050005 /* OpenClawDeviceIdentity.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2005000500050005 /* OpenClawDeviceIdentity.swift */; };
 		OC1006000600060006 /* OpenClawChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2006000600060006 /* OpenClawChatView.swift */; };
+		OQS10001000100010001 /* OpenClawQuickShotView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OQS20001000100010001 /* OpenClawQuickShotView.swift */; };
 		OC1007000700070007 /* OpenClawWebSocketTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2007000700070007 /* OpenClawWebSocketTransport.swift */; };
 		OC1008000800080008 /* OpenClawChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2008000800080008 /* OpenClawChatHistoryStore.swift */; };
 		OC1009000900090009 /* OpenClawNotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2009000900090009 /* OpenClawNotificationService.swift */; };
@@ -108,6 +109,18 @@
 		GV1005000500050005 /* GalvisAudioSessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2005000500050005 /* GalvisAudioSessionController.swift */; };
 		GV1006000600060006 /* GalvisOpenClawSessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2006000600060006 /* GalvisOpenClawSessionManager.swift */; };
 		GV1007000700070007 /* GalvisSpeechResponseFormatter.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2007000700070007 /* GalvisSpeechResponseFormatter.swift */; };
+		OCM10001000100010001 /* OpenClawCaptureMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = OCM20001000100010001 /* OpenClawCaptureMode.swift */; };
+		OCM10002000200020002 /* OpenClawCaptureModeStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = OCM20002000200020002 /* OpenClawCaptureModeStorage.swift */; };
+		OCM10003000300030003 /* OpenClawCaptureModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = OCM20003000300030003 /* OpenClawCaptureModeManager.swift */; };
+		OCM10004000400040004 /* OpenClawCaptureModeEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OCM20004000400040004 /* OpenClawCaptureModeEditorView.swift */; };
+		OCM10005000500050005 /* OpenClawCaptureModePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OCM20005000500050005 /* OpenClawCaptureModePickerView.swift */; };
+		OCM10006000600060006 /* OpenClawCaptureModeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OCM20006000600060006 /* OpenClawCaptureModeSettingsView.swift */; };
+		OMD10001000100010001 /* OpenClawMediaItem.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20001000100010001 /* OpenClawMediaItem.swift */; };
+		OMD10002000200020002 /* OpenClawMediaRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20002000200020002 /* OpenClawMediaRepository.swift */; };
+		OMD10003000300030003 /* PhotoLibrarySaver.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20003000300030003 /* PhotoLibrarySaver.swift */; };
+		OMD10004000400040004 /* OpenClawVideoContactSheetBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20004000400040004 /* OpenClawVideoContactSheetBuilder.swift */; };
+		OMD10005000500050005 /* OpenClawVideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20005000500050005 /* OpenClawVideoRecorder.swift */; };
+		OMD10006000600060006 /* OpenClawQuickShotCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20006000600060006 /* OpenClawQuickShotCoordinator.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -222,6 +235,7 @@
 		OC2004000400040004 /* OpenClawSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawSettingsView.swift; sourceTree = "<group>"; };
 		OC2005000500050005 /* OpenClawDeviceIdentity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawDeviceIdentity.swift; sourceTree = "<group>"; };
 		OC2006000600060006 /* OpenClawChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawChatView.swift; sourceTree = "<group>"; };
+		OQS20001000100010001 /* OpenClawQuickShotView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawQuickShotView.swift; sourceTree = "<group>"; };
 		OC2007000700070007 /* OpenClawWebSocketTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawWebSocketTransport.swift; sourceTree = "<group>"; };
 		OC2008000800080008 /* OpenClawChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawChatHistoryStore.swift; sourceTree = "<group>"; };
 		OC2009000900090009 /* OpenClawNotificationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawNotificationService.swift; sourceTree = "<group>"; };
@@ -234,6 +248,18 @@
 		GV2005000500050005 /* GalvisAudioSessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisAudioSessionController.swift; sourceTree = "<group>"; };
 		GV2006000600060006 /* GalvisOpenClawSessionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisOpenClawSessionManager.swift; sourceTree = "<group>"; };
 		GV2007000700070007 /* GalvisSpeechResponseFormatter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisSpeechResponseFormatter.swift; sourceTree = "<group>"; };
+		OCM20001000100010001 /* OpenClawCaptureMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawCaptureMode.swift; sourceTree = "<group>"; };
+		OCM20002000200020002 /* OpenClawCaptureModeStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawCaptureModeStorage.swift; sourceTree = "<group>"; };
+		OCM20003000300030003 /* OpenClawCaptureModeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawCaptureModeManager.swift; sourceTree = "<group>"; };
+		OCM20004000400040004 /* OpenClawCaptureModeEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawCaptureModeEditorView.swift; sourceTree = "<group>"; };
+		OCM20005000500050005 /* OpenClawCaptureModePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawCaptureModePickerView.swift; sourceTree = "<group>"; };
+		OCM20006000600060006 /* OpenClawCaptureModeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawCaptureModeSettingsView.swift; sourceTree = "<group>"; };
+		OMD20001000100010001 /* OpenClawMediaItem.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawMediaItem.swift; sourceTree = "<group>"; };
+		OMD20002000200020002 /* OpenClawMediaRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawMediaRepository.swift; sourceTree = "<group>"; };
+		OMD20003000300030003 /* PhotoLibrarySaver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoLibrarySaver.swift; sourceTree = "<group>"; };
+		OMD20004000400040004 /* OpenClawVideoContactSheetBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawVideoContactSheetBuilder.swift; sourceTree = "<group>"; };
+		OMD20005000500050005 /* OpenClawVideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawVideoRecorder.swift; sourceTree = "<group>"; };
+		OMD20006000600060006 /* OpenClawQuickShotCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawQuickShotCoordinator.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -259,6 +285,7 @@
 		1F487DDEA091C1D0291D50B1 /* Managers */ = {
 			isa = PBXGroup;
 			children = (
+				OCM20003000300030003 /* OpenClawCaptureModeManager.swift */,
 				4BB5DFF02F06C06D00AF7BD0 /* LiveAIModeManager.swift */,
 				0080AFEB87FC4CF85E53FE97 /* LanguageManager.swift */,
 				1111827A1CF7A278A6DC6934 /* APIProviderManager.swift */,
@@ -289,6 +316,7 @@
 		4BA57A8C2EF8227E002EC214 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				OCM20001000100010001 /* OpenClawCaptureMode.swift */,
 				4BB5DFEE2F06C05E00AF7BD0 /* LiveAIModels.swift */,
 				4BA57A8A2EF8227E002EC214 /* ConversationRecord.swift */,
 				4BA57A8B2EF8227E002EC214 /* FoodNutritionModel.swift */,
@@ -423,6 +451,10 @@
 				LT1005000500050005 /* LiveTranslateSettingsView.swift */,
 				OC2004000400040004 /* OpenClawSettingsView.swift */,
 				OC2006000600060006 /* OpenClawChatView.swift */,
+				OQS20001000100010001 /* OpenClawQuickShotView.swift */,
+				OCM20004000400040004 /* OpenClawCaptureModeEditorView.swift */,
+				OCM20005000500050005 /* OpenClawCaptureModePickerView.swift */,
+				OCM20006000600060006 /* OpenClawCaptureModeSettingsView.swift */,
 				GV2003000300030003 /* GalvisOpenClawSessionView.swift */,
 			);
 			path = Views;
@@ -495,6 +527,13 @@
 				OC2009000900090009 /* OpenClawNotificationService.swift */,
 				OC2010001000100010 /* OpenClawNotificationCoordinator.swift */,
 				OC2011001100110011 /* OpenClawDiagnosticReportBuilder.swift */,
+				OCM20002000200020002 /* OpenClawCaptureModeStorage.swift */,
+				OMD20001000100010001 /* OpenClawMediaItem.swift */,
+				OMD20002000200020002 /* OpenClawMediaRepository.swift */,
+				OMD20003000300030003 /* PhotoLibrarySaver.swift */,
+				OMD20004000400040004 /* OpenClawVideoContactSheetBuilder.swift */,
+				OMD20005000500050005 /* OpenClawVideoRecorder.swift */,
+				OMD20006000600060006 /* OpenClawQuickShotCoordinator.swift */,
 			);
 			path = OpenClaw;
 			sourceTree = "<group>";
@@ -688,6 +727,7 @@
 				OC1004000400040004 /* OpenClawSettingsView.swift in Sources */,
 				OC1005000500050005 /* OpenClawDeviceIdentity.swift in Sources */,
 				OC1006000600060006 /* OpenClawChatView.swift in Sources */,
+				OQS10001000100010001 /* OpenClawQuickShotView.swift in Sources */,
 				OC1007000700070007 /* OpenClawWebSocketTransport.swift in Sources */,
 				OC1008000800080008 /* OpenClawChatHistoryStore.swift in Sources */,
 				OC1009000900090009 /* OpenClawNotificationService.swift in Sources */,
@@ -700,6 +740,18 @@
 				GV1005000500050005 /* GalvisAudioSessionController.swift in Sources */,
 				GV1006000600060006 /* GalvisOpenClawSessionManager.swift in Sources */,
 				GV1007000700070007 /* GalvisSpeechResponseFormatter.swift in Sources */,
+				OCM10001000100010001 /* OpenClawCaptureMode.swift in Sources */,
+				OCM10002000200020002 /* OpenClawCaptureModeStorage.swift in Sources */,
+				OCM10003000300030003 /* OpenClawCaptureModeManager.swift in Sources */,
+				OCM10004000400040004 /* OpenClawCaptureModeEditorView.swift in Sources */,
+				OCM10005000500050005 /* OpenClawCaptureModePickerView.swift in Sources */,
+				OCM10006000600060006 /* OpenClawCaptureModeSettingsView.swift in Sources */,
+				OMD10001000100010001 /* OpenClawMediaItem.swift in Sources */,
+				OMD10002000200020002 /* OpenClawMediaRepository.swift in Sources */,
+				OMD10003000300030003 /* PhotoLibrarySaver.swift in Sources */,
+				OMD10004000400040004 /* OpenClawVideoContactSheetBuilder.swift in Sources */,
+				OMD10005000500050005 /* OpenClawVideoRecorder.swift in Sources */,
+				OMD10006000600060006 /* OpenClawQuickShotCoordinator.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

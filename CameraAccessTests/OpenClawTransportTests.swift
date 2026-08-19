@@ -43,6 +43,80 @@ final class OpenClawTransportTests: XCTestCase {
         )
     }
 
+    func testConversationDeliveryPhaseClassifiesTimeouts() {
+        XCTAssertEqual(
+            OpenClawConversationDeliveryPhase.notStarted.timeoutError,
+            .responseTimeout
+        )
+        XCTAssertEqual(
+            OpenClawConversationDeliveryPhase.writeStarted.timeoutError,
+            .deliveryAmbiguous
+        )
+        XCTAssertEqual(
+            OpenClawConversationDeliveryPhase.writeCompleted.timeoutError,
+            .deliveryAmbiguous
+        )
+        XCTAssertEqual(
+            OpenClawConversationDeliveryPhase.gatewayAcknowledged.timeoutError,
+            .responseTimeout
+        )
+    }
+
+    func testConversationDeliveryPhaseClassifiesDisconnects() {
+        XCTAssertEqual(
+            OpenClawConversationDeliveryPhase.notStarted.disconnectError,
+            .disconnected
+        )
+        XCTAssertEqual(
+            OpenClawConversationDeliveryPhase.writeStarted.disconnectError,
+            .deliveryAmbiguous
+        )
+        XCTAssertEqual(
+            OpenClawConversationDeliveryPhase.writeCompleted.disconnectError,
+            .deliveryAmbiguous
+        )
+        XCTAssertEqual(
+            OpenClawConversationDeliveryPhase.gatewayAcknowledged.disconnectError,
+            .responseTimeout
+        )
+    }
+
+    func testStableConnectionPolicyResetsOnlyForTheSameGenerationWhileConnected() {
+        // Same generation, still connected 10s later: safe to reset the backoff counter.
+        XCTAssertTrue(
+            OpenClawStableConnectionPolicy.shouldResetReconnectAttempts(
+                timerGeneration: 2,
+                currentGeneration: 2,
+                isConnected: true
+            )
+        )
+        // The connection churned (reconnected or was replaced) since the timer was scheduled —
+        // resetting now would wipe out backoff state for a connection that already flapped.
+        XCTAssertFalse(
+            OpenClawStableConnectionPolicy.shouldResetReconnectAttempts(
+                timerGeneration: 2,
+                currentGeneration: 3,
+                isConnected: true
+            )
+        )
+        // Same generation but no longer connected (e.g. dropped right before the timer fired).
+        XCTAssertFalse(
+            OpenClawStableConnectionPolicy.shouldResetReconnectAttempts(
+                timerGeneration: 2,
+                currentGeneration: 2,
+                isConnected: false
+            )
+        )
+        // Both stale generation and disconnected.
+        XCTAssertFalse(
+            OpenClawStableConnectionPolicy.shouldResetReconnectAttempts(
+                timerGeneration: 1,
+                currentGeneration: 5,
+                isConnected: false
+            )
+        )
+    }
+
     func testMeshnetCIDRBoundariesAreExact() {
         XCTAssertTrue(OpenClawGatewayEndpoint.isMeshnetHost("100.64.0.0"))
         XCTAssertTrue(OpenClawGatewayEndpoint.isMeshnetHost("100.127.255.255"))

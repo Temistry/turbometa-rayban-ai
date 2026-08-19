@@ -6,6 +6,7 @@ import SwiftUI
 
 struct OpenClawSettingsView: View {
     @ObservedObject var nodeService = OpenClawNodeService.shared
+    @ObservedObject var captureModeManager = OpenClawCaptureModeManager.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var host = ""
@@ -13,6 +14,7 @@ struct OpenClawSettingsView: View {
     @State private var token = ""
     @State private var showValidationError = false
     @State private var validationMessage = ""
+    @State private var showCaptureModeSettings = false
 
     var body: some View {
         NavigationView {
@@ -131,6 +133,30 @@ struct OpenClawSettingsView: View {
                 }
 
                 Section {
+                    Button {
+                        showCaptureModeSettings = true
+                    } label: {
+                        HStack {
+                            Image(systemName: "camera.aperture")
+                                .foregroundColor(.blue)
+                            Text("openclaw.capturemode.settings.entry".localized)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Text("\(captureModeManager.modes.count)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                } header: {
+                    Text("openclaw.capturemode.settings.section".localized)
+                } footer: {
+                    Text("openclaw.capturemode.settings.section.footer".localized)
+                }
+
+                Section {
                     VStack(alignment: .leading, spacing: 8) {
                         Label("보안 정책", systemImage: "lock.shield.fill")
                             .font(AppTypography.headline)
@@ -174,6 +200,9 @@ struct OpenClawSettingsView: View {
                 host = nodeService.gatewayHost
                 portText = "\(nodeService.gatewayPort)"
                 token = nodeService.loadGatewayToken() ?? ""
+            }
+            .sheet(isPresented: $showCaptureModeSettings) {
+                OpenClawCaptureModeSettingsView(modeManager: captureModeManager)
             }
         }
     }

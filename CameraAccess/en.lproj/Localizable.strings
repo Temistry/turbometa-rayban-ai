@@ -143,7 +143,48 @@
 
 // MARK: - Gallery
 "gallery.title" = "Gallery";
-"gallery.empty" = "No Photos";
+"gallery.empty" = "No Saved Media";
+"gallery.empty.hint" = "Photos and videos captured with OpenClaw Quick Shot are stored here in protected app storage.";
+"gallery.filter.title" = "Filter";
+"gallery.filter.all" = "All";
+"gallery.filter.photo" = "Photos";
+"gallery.filter.video" = "Videos";
+"gallery.kind.photo" = "Photo";
+"gallery.kind.video" = "Video";
+"gallery.item.accessibility" = "%@, %@ mode";
+"gallery.share" = "Share media";
+"gallery.error.title" = "Gallery Action Failed";
+"gallery.result.title" = "Gallery Action Result";
+"gallery.error.photos.permission" = "Photos add-only access is required. Check permission in iOS Settings.";
+"gallery.error.analysis.ambiguous" = "It is unclear whether OpenClaw received this request. Check for a duplicate before retrying.";
+"gallery.delete.title" = "Delete from the app gallery?";
+"gallery.delete.message" = "This deletes only the protected app original and thumbnail. A copy already saved in iPhone Photos is not deleted.";
+"gallery.missing.title" = "Item Not Found";
+"gallery.missing.message" = "Refresh the gallery and try again.";
+"gallery.missing.media" = "Media File Missing";
+"gallery.missing.media.message" = "The protected file is damaged or was removed. You can delete this item.";
+"gallery.detail.captured" = "Captured";
+"gallery.detail.mode" = "Capture Mode";
+"gallery.detail.duration" = "Duration";
+"gallery.detail.seconds" = "%.1fs";
+"gallery.detail.photos" = "iPhone Photos";
+"gallery.detail.analysis" = "OpenClaw Analysis";
+"gallery.status.pending" = "In Progress";
+"gallery.status.failed" = "Failed";
+"gallery.status.photos.notrequested" = "Not Copied";
+"gallery.status.photos.saved" = "Copied";
+"gallery.status.photos.permission" = "Permission Required";
+"gallery.status.analysis.notrequested" = "Not Requested";
+"gallery.status.analysis.completed" = "Complete";
+"gallery.status.analysis.ambiguous" = "Delivery Needs Confirmation";
+"gallery.action.photos.retry" = "Save to iPhone Photos Again";
+"gallery.action.analysis.retry" = "Retry OpenClaw Analysis";
+"gallery.action.analysis.retry.ambiguous" = "Check for a Duplicate and Retry";
+"gallery.action.answer" = "View OpenClaw Response";
+"gallery.action.delete" = "Delete App Original";
+"gallery.analysis.completed.title" = "Analysis Complete";
+"gallery.analysis.completed.message" = "The OpenClaw analysis result was saved to protected chat history.";
+"gallery.video.retry.prompt" = "Important: the attached image is not the full video file. It is the representative-frame contact sheet extracted from the earlier capture. State that this is a representative-frame analysis and describe only what is observable across approximately %@ seconds. Do not infer motion between frames or any audio.";
 
 // MARK: - Settings
 "settings.title" = "Settings";
@@ -467,3 +508,98 @@
 "openclaw.chat.speech.play" = "Read response";
 "openclaw.chat.speech.stop" = "Stop reading";
 "openclaw.notification.title" = "OpenClaw response";
+
+// OpenClaw Capture Modes
+"openclaw.capturemode.settings.entry" = "Capture Modes";
+"openclaw.capturemode.settings.section" = "Capture Modes";
+"openclaw.capturemode.settings.section.footer" = "Manage the prompt presets used when capturing photos or video (General, Coding, Chess, Squat Form, and any custom modes you add).";
+"openclaw.capturemode.settings.title" = "Capture Modes";
+"openclaw.capturemode.settings.modes" = "Modes";
+"openclaw.capturemode.settings.modes.footer.v2" = "Drag to reorder. Swipe a mode to duplicate or delete it. \"Built-in\" just means it shipped with the app — it can still be edited or deleted like any mode.";
+"openclaw.capturemode.settings.defaults" = "Defaults";
+"openclaw.capturemode.settings.photodefault" = "Photo Default";
+"openclaw.capturemode.settings.videodefault" = "Video Default";
+"openclaw.capturemode.settings.new" = "New Mode";
+"openclaw.capturemode.duplicate" = "Duplicate";
+"openclaw.capturemode.duplicate.suffix" = "copy";
+"openclaw.capturemode.builtin.badge" = "Built-in";
+"openclaw.capturemode.delete.title" = "Delete Mode";
+"openclaw.capturemode.delete.confirm" = "Delete \"%@\"? This can't be undone.";
+
+"openclaw.capturemode.editor.new" = "New Mode";
+"openclaw.capturemode.editor.edit" = "Edit Mode";
+"openclaw.capturemode.section.details" = "Details";
+"openclaw.capturemode.section.media" = "Media";
+"openclaw.capturemode.field.name" = "Name";
+"openclaw.capturemode.field.summary" = "Summary";
+"openclaw.capturemode.field.symbol" = "Symbol";
+"openclaw.capturemode.field.symbol.help" = "An SF Symbol name, e.g. \"eye.circle\" or \"camera.circle\".";
+"openclaw.capturemode.field.media" = "Supported Media";
+"openclaw.capturemode.field.media.help" = "At least one of Photo or Video must be on.";
+"openclaw.capturemode.field.prompt" = "Prompt";
+"openclaw.capturemode.field.prompt.help" = "Sent to the AI along with the captured photo or video. Stored only in protected on-device storage and never logged.";
+"openclaw.capturemode.discard.title" = "Discard Changes?";
+"openclaw.capturemode.discard.message" = "You have unsaved changes. Are you sure you want to discard them?";
+"openclaw.capturemode.discard.confirm" = "Discard Changes";
+
+"openclaw.capturemode.picker.title" = "Choose Mode";
+"openclaw.capturemode.picker.empty" = "No modes available for this capture type.";
+
+"openclaw.capturemode.media.photo" = "Photo";
+"openclaw.capturemode.media.video" = "Video";
+"openclaw.capturemode.media.both" = "Photo & Video";
+"openclaw.capturemode.media.none" = "None";
+
+"openclaw.capturemode.error.namerequired" = "Please enter a name.";
+"openclaw.capturemode.error.nametoolong" = "Name must be %@ characters or fewer.";
+"openclaw.capturemode.error.duplicatename" = "A mode with this name already exists.";
+"openclaw.capturemode.error.summarytoolong" = "Summary must be %@ characters or fewer.";
+"openclaw.capturemode.error.promptrequired" = "Please enter a prompt.";
+"openclaw.capturemode.error.prompttoolong" = "Prompt must be %@ characters or fewer.";
+"openclaw.capturemode.error.symbolrequired" = "Please enter a symbol name.";
+"openclaw.capturemode.error.mediarequired" = "Turn on at least Photo or Video.";
+"openclaw.capturemode.error.notfound" = "That mode could not be found.";
+
+// OpenClaw Capture Modes — Seeded Built-in Modes
+"openclaw.capturemode.seed.general.name" = "General";
+"openclaw.capturemode.seed.general.summary" = "Describe what the glasses see";
+"openclaw.capturemode.seed.general.prompt" = "You are looking through the wearer's smart glasses camera. Describe what is visible clearly and concisely, calling out anything the wearer likely wants to know about their surroundings.";
+"openclaw.capturemode.seed.coding.name" = "Coding";
+"openclaw.capturemode.seed.coding.summary" = "Read code or errors on screen";
+"openclaw.capturemode.seed.coding.prompt" = "You are looking through the wearer's smart glasses camera at a screen, code editor, or terminal. Transcribe and explain the visible code, error messages, or output, and suggest a fix or next step if something is broken.";
+"openclaw.capturemode.seed.chess.name" = "Chess";
+"openclaw.capturemode.seed.chess.summary" = "Analyze a chess position";
+"openclaw.capturemode.seed.chess.prompt" = "You are looking through the wearer's smart glasses camera at a chess board. Identify the position of the pieces, whose move it likely is, and suggest a strong next move with a brief explanation.";
+"openclaw.capturemode.seed.squat.name" = "Squat Form";
+"openclaw.capturemode.seed.squat.summary" = "Check squat form on video";
+"openclaw.capturemode.seed.squat.prompt" = "You are looking through the wearer's smart glasses camera at someone performing a squat. Assess their form (depth, knee tracking, back angle, balance) and give concise, actionable coaching feedback.";
+
+// OpenClaw Quick Shot
+"openclaw.quickshot.photo.title" = "Photo Quick Shot";
+"openclaw.quickshot.video.title" = "Video Quick Shot";
+"openclaw.quickshot.state.idle" = "Preparing the capture.";
+"openclaw.quickshot.state.preparing" = "Preparing the glasses camera…";
+"openclaw.quickshot.state.capturing" = "Capturing the photo…";
+"openclaw.quickshot.state.recording" = "Recording";
+"openclaw.quickshot.recording.elapsed" = "%.1f / %.0fs";
+"openclaw.quickshot.recording.limit" = "Automatically saves after 10 seconds.";
+"openclaw.quickshot.recording.stop" = "Stop Recording";
+"openclaw.quickshot.state.saving" = "Saving to the protected app gallery…";
+"openclaw.quickshot.state.exporting" = "Copying to iPhone Photos…";
+"openclaw.quickshot.state.sending" = "Sending the analysis request to OpenClaw…";
+"openclaw.quickshot.state.awaiting" = "Waiting for the OpenClaw response…";
+"openclaw.quickshot.completed" = "Analysis complete";
+"openclaw.quickshot.video.samplednotice" = "This analysis uses representative frames, not the complete video.";
+"openclaw.quickshot.failed.title" = "Quick Shot Failed";
+"openclaw.quickshot.failed.ambiguous.title" = "Delivery Needs Confirmation";
+"openclaw.quickshot.failed.ambiguous.message" = "The request was not resent automatically to avoid duplicates. Check its status in the app gallery, then retry explicitly if needed.";
+"openclaw.quickshot.cancelled" = "Capture cancelled";
+
+// OpenClaw Video Recorder Errors
+"video.recorder.error.alreadyrecording" = "A video recording is already in progress.";
+"video.recorder.error.notrecording" = "No active video recording was found.";
+"video.recorder.error.cancelled" = "The video recording was cancelled.";
+"video.recorder.error.setup" = "The video recorder could not be prepared.";
+"video.recorder.error.writer" = "The video file could not be finalized.";
+"video.recorder.error.noframes" = "No video frames were received for saving.";
+"video.recorder.error.tooshort" = "The video is too short. Record at least 0.5 seconds.";
