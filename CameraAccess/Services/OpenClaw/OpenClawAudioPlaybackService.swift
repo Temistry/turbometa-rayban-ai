@@ -39,7 +39,8 @@ final class OpenClawAudioPlaybackService: NSObject, ObservableObject {
         )
 
         try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
+            try await withCheckedThrowingContinuation {
+                (continuation: CheckedContinuation<Void, any Error>) in
                 guard activePlaybackID == playbackID else {
                     continuation.resume(throwing: CancellationError())
                     return
