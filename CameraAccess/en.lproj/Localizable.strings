@@ -17,6 +17,22 @@
 "retry" = "Retry";
 "back" = "Back";
 
+// MARK: - OpenClaw Diagnostic
+"openclaw.diagnostic.button" = "Diagnose TTS with OpenClaw";
+"openclaw.diagnostic.title" = "TTS Diagnostics";
+"openclaw.diagnostic.message.title" = "Your description (required)";
+"openclaw.diagnostic.message.hint" = "Describe what you did, what happened, and what you expected. Your text is automatically redacted before sending.";
+"openclaw.diagnostic.scope.title" = "Data sent";
+"openclaw.diagnostic.scope.lines" = "%d selected TTS and audio log lines";
+"openclaw.diagnostic.scope.detail" = "The full report, speech transcripts, AI responses, tokens, IP addresses, and device names are not sent. The request and analysis may remain in protected OpenClaw chat history and the configured private conversation archive.";
+"openclaw.diagnostic.review" = "Review";
+"openclaw.diagnostic.confirm.title" = "Send this diagnostic request to OpenClaw?";
+"openclaw.diagnostic.confirm.send" = "Redact and Send";
+"openclaw.diagnostic.confirm.message" = "Only your required description and selected TTS/audio status are sent. OpenClaw diagnoses the cause and recommends changes but does not modify code or the app automatically.";
+"openclaw.diagnostic.error.title" = "Diagnostic Request Failed";
+"openclaw.diagnostic.error.message_required" = "Describe the symptom and expected behavior first.";
+"openclaw.diagnostic.error.no_logs" = "No TTS or audio diagnostic logs are available. Reproduce the issue and try again.";
+
 // MARK: - Home Screen
 "home.title" = "Home";
 "home.liveai.title" = "Live AI";

@@ -1007,6 +1007,11 @@ struct DeveloperLogView: View {
   @State private var exportErrorMessage = ""
   @State private var showExportError = false
   @State private var isPreparingExport = false
+  @State private var showOpenClawDiagnosticComposer = false
+  @State private var diagnosticUserMessage = ""
+  @State private var isSendingOpenClawDiagnostic = false
+  @State private var diagnosticErrorMessage = ""
+  @State private var showDiagnosticError = false
 
   private var filteredEntries: [DeveloperLogEntry] {
     console.entries.filter { entry in
@@ -1029,6 +1034,16 @@ struct DeveloperLogView: View {
 
   private var warningCount: Int {
     console.entries.lazy.filter { $0.level == .warning }.count
+  }
+
+  private var diagnosticLineCount: Int {
+    (try? OpenClawDiagnosticReportBuilder.makePrompt(
+      userMessage: "진단 미리보기",
+      entries: console.entries
+    ))?
+    .components(separatedBy: .newlines)
+    .filter { $0.hasPrefix("[") && $0.contains("][") }
+    .count ?? 0
   }
 
   var body: some View {
@@ -1078,6 +1093,22 @@ struct DeveloperLogView: View {
           items: shareItems,
           subject: "TurboMeta TestFlight 진단 로그"
         )
+      }
+      .sheet(isPresented: $showOpenClawDiagnosticComposer) {
+        OpenClawDiagnosticComposer(
+          userMessage: $diagnosticUserMessage,
+          isSending: isSendingOpenClawDiagnostic,
+          diagnosticLineCount: diagnosticLineCount,
+          onCancel: {
+            showOpenClawDiagnosticComposer = false
+          },
+          onSend: sendDiagnosticToOpenClaw
+        )
+      }
+      .alert("openclaw.diagnostic.error.title".localized, isPresented: $showDiagnosticError) {
+        Button("ok".localized, role: .cancel) {}
+      } message: {
+        Text(diagnosticErrorMessage)
       }
       .onAppear {
         console.markAllRead()
@@ -1243,6 +1274,17 @@ struct DeveloperLogView: View {
 
       Menu {
         Button {
+          diagnosticUserMessage = ""
+          showOpenClawDiagnosticComposer = true
+        } label: {
+          Label(
+            "openclaw.diagnostic.button".localized,
+            systemImage: "stethoscope"
+          )
+        }
+        .disabled(isSendingOpenClawDiagnostic)
+
+        Button {
           autoScroll.toggle()
         } label: {
           Label(
@@ -1271,6 +1313,41 @@ struct DeveloperLogView: View {
   }
 
   @MainActor
+  private func sendDiagnosticToOpenClaw() {
+    guard !isSendingOpenClawDiagnostic else { return }
+
+    let prompt: String
+    do {
+      prompt = try OpenClawDiagnosticReportBuilder.makePrompt(
+        userMessage: diagnosticUserMessage,
+        entries: console.entries
+      )
+    } catch {
+      diagnosticErrorMessage = error.localizedDescription
+      showDiagnosticError = true
+      return
+    }
+
+    isSendingOpenClawDiagnostic = true
+    Task { @MainActor in
+      do {
+        _ = try await OpenClawNodeService.shared.analyzeDiagnosticReport(prompt)
+        isSendingOpenClawDiagnostic = false
+        showOpenClawDiagnosticComposer = false
+        diagnosticUserMessage = ""
+        console.isPresented = false
+        dismiss()
+        try? await Task.sleep(nanoseconds: 200_000_000)
+        GalvisLaunchCoordinator.shared.requestOpenClawChat()
+      } catch {
+        isSendingOpenClawDiagnostic = false
+        diagnosticErrorMessage = error.localizedDescription
+        showDiagnosticError = true
+      }
+    }
+  }
+
+  @MainActor
   private func prepareDiagnosticExport() {
     guard !isPreparingExport else { return }
     isPreparingExport = true
@@ -1289,6 +1366,89 @@ struct DeveloperLogView: View {
         isPreparingExport = false
         exportErrorMessage = error.localizedDescription
         showExportError = true
+      }
+    }
+  }
+}
+
+private struct OpenClawDiagnosticComposer: View {
+  @Binding var userMessage: String
+  let isSending: Bool
+  let diagnosticLineCount: Int
+  let onCancel: () -> Void
+  let onSend: () -> Void
+
+  @State private var showConfirmation = false
+
+  private var normalizedMessage: String {
+    userMessage.trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  var body: some View {
+    NavigationStack {
+      Form {
+        Section("openclaw.diagnostic.message.title".localized) {
+          TextEditor(text: $userMessage)
+            .frame(minHeight: 150)
+            .onChange(of: userMessage) { value in
+              if value.count > OpenClawDiagnosticReportBuilder.maximumUserMessageLength {
+                userMessage = String(
+                  value.prefix(OpenClawDiagnosticReportBuilder.maximumUserMessageLength)
+                )
+              }
+            }
+
+          Text("openclaw.diagnostic.message.hint".localized)
+            .font(.caption)
+            .foregroundColor(.secondary)
+
+          Text("\(userMessage.count)/\(OpenClawDiagnosticReportBuilder.maximumUserMessageLength)")
+            .font(.caption.monospacedDigit())
+            .foregroundColor(.secondary)
+            .frame(maxWidth: .infinity, alignment: .trailing)
+        }
+
+        Section("openclaw.diagnostic.scope.title".localized) {
+          Label(
+            "openclaw.diagnostic.scope.lines".localized(diagnosticLineCount),
+            systemImage: "checkmark.shield"
+          )
+          Text("openclaw.diagnostic.scope.detail".localized)
+            .font(.caption)
+            .foregroundColor(.secondary)
+        }
+      }
+      .navigationTitle("openclaw.diagnostic.title".localized)
+      .navigationBarTitleDisplayMode(.inline)
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("cancel".localized, action: onCancel)
+            .disabled(isSending)
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button {
+            showConfirmation = true
+          } label: {
+            if isSending {
+              ProgressView()
+            } else {
+              Text("openclaw.diagnostic.review".localized)
+            }
+          }
+          .disabled(normalizedMessage.isEmpty || diagnosticLineCount == 0 || isSending)
+        }
+      }
+      .confirmationDialog(
+        "openclaw.diagnostic.confirm.title".localized,
+        isPresented: $showConfirmation,
+        titleVisibility: .visible
+      ) {
+        Button("openclaw.diagnostic.confirm.send".localized) {
+          onSend()
+        }
+        Button("cancel".localized, role: .cancel) {}
+      } message: {
+        Text("openclaw.diagnostic.confirm.message".localized)
       }
     }
   }

@@ -306,6 +306,15 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
     }
 
+    func analyzeDiagnosticReport(_ prompt: String) async throws -> String {
+        let normalized = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else {
+            throw OpenClawConversationError.connectionFailed
+        }
+        print("[OpenClaw][DIAGNOSTIC] 진단 분석 요청 promptLength=\(normalized.count)")
+        return try await ask(normalized, timeout: 90)
+    }
+
     func cancelPendingConversation() {
         finishPendingConversation(with: .failure(CancellationError()))
     }

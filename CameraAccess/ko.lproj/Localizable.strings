@@ -17,6 +17,22 @@
 "retry" = "다시 시도";
 "back" = "뒤로";
 
+// MARK: - OpenClaw Diagnostic
+"openclaw.diagnostic.button" = "OpenClaw로 TTS 진단";
+"openclaw.diagnostic.title" = "TTS 문제 진단";
+"openclaw.diagnostic.message.title" = "사용자 설명 (필수)";
+"openclaw.diagnostic.message.hint" = "어떤 동작을 했는지, 실제로 무엇이 일어났는지, 무엇을 기대했는지 입력하세요. 입력 내용도 전송 전에 자동 마스킹됩니다.";
+"openclaw.diagnostic.scope.title" = "전송 범위";
+"openclaw.diagnostic.scope.lines" = "선별된 TTS·오디오 로그 %d줄";
+"openclaw.diagnostic.scope.detail" = "전체 진단 파일, 사용자 발화, AI 답변, 토큰, IP와 기기 이름은 보내지 않습니다. 전송 내용과 분석 답변은 보호된 OpenClaw 채팅 및 설정된 비공개 대화 보관소에 남을 수 있습니다.";
+"openclaw.diagnostic.review" = "검토";
+"openclaw.diagnostic.confirm.title" = "OpenClaw에 진단 요청을 보낼까요?";
+"openclaw.diagnostic.confirm.send" = "마스킹 후 전송";
+"openclaw.diagnostic.confirm.message" = "필수 사용자 설명과 선별된 TTS·오디오 상태만 전송합니다. OpenClaw는 원인과 수정 방향을 진단하지만 코드나 앱을 자동으로 수정하지 않습니다.";
+"openclaw.diagnostic.error.title" = "진단 요청 실패";
+"openclaw.diagnostic.error.message_required" = "증상과 기대 동작을 먼저 입력해 주세요.";
+"openclaw.diagnostic.error.no_logs" = "전송할 TTS 또는 오디오 진단 로그가 없습니다. 문제를 다시 재현한 뒤 시도해 주세요.";
+
 // MARK: - Home Screen
 "home.title" = "홈";
 "home.liveai.title" = "Live AI";
