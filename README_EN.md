@@ -79,6 +79,16 @@ Instead, the user selects a folder in the iOS Files document picker. That can be
 
 Folder access and sync must be selected and authorized by the user. Re-select the folder if a bookmark becomes stale or the provider revokes access.
 
+## On-device developer diagnostics
+
+`DEBUG` builds include the full developer toolset. TestFlight builds from this branch use the narrowly scoped `TESTFLIGHT_TTS_DIAGNOSTICS` condition to include only the protected diagnostics console and **Diagnose TTS with OpenClaw** flow; general mock and debug settings remain excluded.
+
+The on-device console displays up to 2,000 recent lines. Internal/TestFlight diagnostics keep a bounded rotating log in protected Application Support so a physical-device failure can be reviewed after reproduction. Before display, persistence, export, or an explicitly confirmed OpenClaw diagnostic request, the app redacts credentials, URLs containing credentials, UUIDs, MAC addresses, accessory identifiers, socket paths, certificate dumps, and large payloads. It does not write raw speech transcripts or OpenClaw answer text into diagnostic logs.
+
+The developer does **not** automatically collect or upload these diagnostics. Exporting a file or sending the allowlisted TTS/audio metadata to OpenClaw requires a user action and review. Redaction is defense in depth, so users should still inspect a report before sharing it.
+
+OpenClaw final-response notifications contain only the same Markdown/URL/code-stripped summary used for speech, limited to three sentences and 250 characters. While the app is running and can process the Gateway final event, it also speaks that summary through the current iPhone media output (Ray-Ban or iPhone). A local notification cannot force the iOS system Announce Notifications feature, and if iOS suspends or terminates the app before it receives the final event, the app cannot create or speak that response.
+
 ## OpenClaw Nord Meshnet remote connection
 
 To use OpenClaw away from the office without router port forwarding or public Internet exposure, link the Windows PC and iPhone as **personally approved Nord Meshnet peers**, then explicitly select **Nord Meshnet** mode in TurboMeta's OpenClaw settings.

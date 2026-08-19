@@ -4,28 +4,25 @@ import UserNotifications
 struct OpenClawNotificationContent: Equatable {
     static let categoryIdentifier = "OPENCLAW_FINAL_RESPONSE"
     static let messageIDKey = "openClawMessageID"
-    static let maximumPreviewLength = 240
 
     let title: String
     let body: String
     let messageID: UUID
 
     static func make(text: String, messageID: UUID) -> OpenClawNotificationContent? {
-        guard let cleaned = OpenClawSpeechResponseFormatter.textForSpeech(text) else {
+        guard let summary = GalvisSpeechResponseFormatter.speechText(from: text) else {
             return nil
         }
+        return make(summary: summary, messageID: messageID)
+    }
 
-        let body: String
-        if cleaned.count <= maximumPreviewLength {
-            body = cleaned
-        } else {
-            let end = cleaned.index(cleaned.startIndex, offsetBy: maximumPreviewLength)
-            body = String(cleaned[..<end]).trimmingCharacters(in: .whitespacesAndNewlines) + "…"
-        }
+    static func make(summary: String, messageID: UUID) -> OpenClawNotificationContent? {
+        let normalized = summary.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return nil }
 
         return OpenClawNotificationContent(
             title: "openclaw.notification.title".localized,
-            body: body,
+            body: normalized,
             messageID: messageID
         )
     }
@@ -55,7 +52,21 @@ final class OpenClawNotificationService {
             print("[OpenClawNotification][WARN] 알림 미리보기를 만들 수 없음")
             return
         }
+        postFinalResponse(content)
+    }
 
+    func postFinalResponse(summary: String, messageID: UUID) {
+        guard let content = OpenClawNotificationContent.make(
+            summary: summary,
+            messageID: messageID
+        ) else {
+            print("[OpenClawNotification][WARN] 알림 미리보기를 만들 수 없음")
+            return
+        }
+        postFinalResponse(content)
+    }
+
+    private func postFinalResponse(_ content: OpenClawNotificationContent) {
         center.getNotificationSettings { [weak self] settings in
             guard let self else { return }
             switch settings.authorizationStatus {

@@ -218,7 +218,7 @@ final class OpenClawMeshnetWebSocketTransport: OpenClawWebSocketTransport {
             guard let self else { return }
             switch newState {
             case .ready:
-                self.timeoutWorkItem?.cancel()
+                self.finishTimeout()
                 self.state = .running
                 self.onOpen?()
             case .failed(let error):
@@ -324,7 +324,7 @@ final class OpenClawMeshnetWebSocketTransport: OpenClawWebSocketTransport {
 
     func cancel(closeCode: Int) {
         guard state != .completed else { return }
-        timeoutWorkItem?.cancel()
+        finishTimeout()
         state = .canceling
         connection.cancel()
     }
@@ -332,7 +332,7 @@ final class OpenClawMeshnetWebSocketTransport: OpenClawWebSocketTransport {
     private func finishWithFailure(_ error: Error) {
         guard !didFinish else { return }
         didFinish = true
-        timeoutWorkItem?.cancel()
+        finishTimeout()
         state = .completed
         onFailure?(error)
     }
@@ -340,9 +340,14 @@ final class OpenClawMeshnetWebSocketTransport: OpenClawWebSocketTransport {
     private func finishClose(code: Int, reason: String?) {
         guard !didFinish else { return }
         didFinish = true
-        timeoutWorkItem?.cancel()
+        finishTimeout()
         state = .completed
         onClose?(code, reason)
+    }
+
+    private func finishTimeout() {
+        timeoutWorkItem?.cancel()
+        timeoutWorkItem = nil
     }
 }
 

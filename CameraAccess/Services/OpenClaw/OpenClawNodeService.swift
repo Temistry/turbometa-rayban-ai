@@ -56,6 +56,25 @@ enum OpenClawConversationError: LocalizedError {
     }
 }
 
+enum OpenClawFinalSpeechPolicy {
+    static func shouldAutoSpeak(hasPendingConversation: Bool) -> Bool {
+        !hasPendingConversation
+    }
+}
+
+enum OpenClawDisconnectPolicy {
+    static func shouldHandle(
+        callbackGeneration: Int,
+        currentGeneration: Int,
+        handledGeneration: Int?,
+        isDisconnected: Bool
+    ) -> Bool {
+        callbackGeneration == currentGeneration
+            && handledGeneration != callbackGeneration
+            && !isDisconnected
+    }
+}
+
 enum OpenClawSpeechResponseFormatter {
     static let maximumLength = 1_200
 
@@ -537,7 +556,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             case .failure(let error):
                 let nsError = error as NSError
                 let state = self.webSocketTransport?.state
-                print("[OpenClaw][ERROR] 수신 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) socketState=\(String(describing: state)) reconnect=\(self.shouldReconnect)")
+                print("[OpenClaw][ERROR] 수신 실패 domain=\(nsError.domain) code=\(nsError.code) socketState=\(String(describing: state)) reconnect=\(self.shouldReconnect)")
 
                 if state == .canceling || state == .completed || !self.shouldReconnect {
                     return
@@ -563,7 +582,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         transport.send(.string(text)) { [weak self] error in
             guard let error else { return }
             let nsError = error as NSError
-            print("[OpenClaw][ERROR] 전송 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+            print("[OpenClaw][ERROR] 전송 실패 domain=\(nsError.domain) code=\(nsError.code)")
             if self?.shouldReconnect == true {
                 self?.scheduleDisconnectHandling(generation: generation)
             }
@@ -752,6 +771,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
     }
 
+    @MainActor
     private func handleFinalChatResponse(
         _ text: String,
         eventIdentity: String?
@@ -772,12 +792,34 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             eventIdentity: eventIdentity
         )
         appendChatMessage(message)
-        OpenClawNotificationService.shared.postFinalResponse(
-            text: text,
-            messageID: message.id
-        )
 
-        if pendingConversationContinuation != nil {
+        let hasPendingConversation = pendingConversationContinuation != nil
+        if let summary = GalvisSpeechResponseFormatter.speechText(from: text) {
+            OpenClawNotificationService.shared.postFinalResponse(
+                summary: summary,
+                messageID: message.id
+            )
+
+            if OpenClawFinalSpeechPolicy.shouldAutoSpeak(
+                hasPendingConversation: hasPendingConversation
+            ) {
+                let requestID = TTSService.shared.enqueue(summary)
+                print(
+                    "[OpenClaw][TTS] 최종 답변 자동 발화 "
+                    + "owner=general summaryLength=\(summary.count) "
+                    + "enqueued=\(requestID != nil)"
+                )
+            } else {
+                print(
+                    "[OpenClaw][TTS] 요청 호출부에 발화 소유권 위임 "
+                    + "owner=conversation summaryLength=\(summary.count)"
+                )
+            }
+        } else {
+            print("[OpenClaw][TTS][WARN] 최종 답변 요약을 만들 수 없음")
+        }
+
+        if hasPendingConversation {
             finishPendingConversation(with: .success(text))
         }
     }
@@ -913,11 +955,11 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private func handleTransportFailure(_ error: Error, generation: Int) {
         guard connectionGeneration == generation else { return }
         let nsError = error as NSError
-        print("[OpenClaw][ERROR] 연결 작업 종료 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+        print("[OpenClaw][ERROR] 연결 작업 종료 domain=\(nsError.domain) code=\(nsError.code)")
 
         if shouldReconnect {
             DispatchQueue.main.async {
-                self.connectionState = .error("Gateway 네트워크 연결 오류: \(nsError.localizedDescription)")
+                self.connectionState = .error("Gateway 네트워크 연결 오류가 발생했습니다.")
             }
             scheduleDisconnectHandling(generation: generation)
         }
@@ -931,9 +973,12 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     @MainActor
     private func handleDisconnectOnMain(generation: Int) {
-        guard connectionGeneration == generation,
-              handledDisconnectGeneration != generation,
-              connectionState != .disconnected else { return }
+        guard OpenClawDisconnectPolicy.shouldHandle(
+            callbackGeneration: generation,
+            currentGeneration: connectionGeneration,
+            handledGeneration: handledDisconnectGeneration,
+            isDisconnected: connectionState == .disconnected
+        ) else { return }
         handledDisconnectGeneration = generation
         finishPendingConversation(
             with: .failure(OpenClawConversationError.disconnected)

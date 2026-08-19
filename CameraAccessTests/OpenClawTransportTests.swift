@@ -8,6 +8,41 @@ final class OpenClawTransportTests: XCTestCase {
         XCTAssertEqual(OpenClawNodeService.maximumProtocolVersion, 4)
     }
 
+    func testDisconnectPolicyHandlesEachCurrentGenerationOnce() {
+        XCTAssertTrue(
+            OpenClawDisconnectPolicy.shouldHandle(
+                callbackGeneration: 4,
+                currentGeneration: 4,
+                handledGeneration: nil,
+                isDisconnected: false
+            )
+        )
+        XCTAssertFalse(
+            OpenClawDisconnectPolicy.shouldHandle(
+                callbackGeneration: 4,
+                currentGeneration: 4,
+                handledGeneration: 4,
+                isDisconnected: false
+            )
+        )
+        XCTAssertFalse(
+            OpenClawDisconnectPolicy.shouldHandle(
+                callbackGeneration: 3,
+                currentGeneration: 4,
+                handledGeneration: nil,
+                isDisconnected: false
+            )
+        )
+        XCTAssertFalse(
+            OpenClawDisconnectPolicy.shouldHandle(
+                callbackGeneration: 4,
+                currentGeneration: 4,
+                handledGeneration: nil,
+                isDisconnected: true
+            )
+        )
+    }
+
     func testMeshnetCIDRBoundariesAreExact() {
         XCTAssertTrue(OpenClawGatewayEndpoint.isMeshnetHost("100.64.0.0"))
         XCTAssertTrue(OpenClawGatewayEndpoint.isMeshnetHost("100.127.255.255"))
