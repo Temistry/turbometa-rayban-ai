@@ -9,7 +9,7 @@ struct UnifiedSettingsView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
     @ObservedObject private var quickVisionModeManager = QuickVisionModeManager.shared
     @ObservedObject private var openClawService = OpenClawNodeService.shared
-    #if DEBUG || INTERNAL_BUILD
+    #if DEBUG
     @ObservedObject private var developerConsole = DeveloperConsole.shared
     #endif
     @ObservedObject private var knowledgeLog = KnowledgeLogService.shared
@@ -33,7 +33,7 @@ struct UnifiedSettingsView: View {
                 googleAISection
                 knowledgeLogSection
                 integrationSection
-                #if DEBUG || INTERNAL_BUILD
+                #if DEBUG
                 developerSection
                 #endif
                 aboutSection
@@ -229,7 +229,7 @@ struct UnifiedSettingsView: View {
         }
     }
 
-    #if DEBUG || INTERNAL_BUILD
+    #if DEBUG
     private var developerSection: some View {
         Section {
             Button {

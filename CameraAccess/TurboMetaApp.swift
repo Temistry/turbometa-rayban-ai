@@ -23,7 +23,7 @@ struct TurboMetaApp: App {
   )
   #endif
 
-  #if DEBUG || INTERNAL_BUILD
+  #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
   @StateObject private var developerConsole = DeveloperConsole.shared
   #endif
 
@@ -31,7 +31,7 @@ struct TurboMetaApp: App {
   @StateObject private var wearablesViewModel: WearablesViewModel
 
   init() {
-    #if DEBUG || INTERNAL_BUILD
+    #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
     // 내부 TestFlight 빌드는 사용자가 직접 공유할 수 있는 보호된 기기 로그를 남긴다.
     DeveloperConsole.shared.startCapturing()
     #endif
@@ -40,7 +40,7 @@ struct TurboMetaApp: App {
 
     if #available(iOS 16.0, *) {
       TurboMetaShortcuts.updateAppShortcutParameters()
-      #if DEBUG || INTERNAL_BUILD
+      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
       DeveloperConsole.shared.log(
         .info,
         category: "Siri",
@@ -51,7 +51,7 @@ struct TurboMetaApp: App {
 
     do {
       try Wearables.configure()
-      #if DEBUG || INTERNAL_BUILD
+      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
       DeveloperConsole.shared.log(
         .info,
         category: "TurboMeta",
@@ -59,7 +59,7 @@ struct TurboMetaApp: App {
       )
       #endif
     } catch {
-      #if DEBUG || INTERNAL_BUILD
+      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
       DeveloperConsole.shared.record(
         error: error,
         category: "TurboMeta",
@@ -89,7 +89,7 @@ struct TurboMetaApp: App {
 
         RegistrationView(viewModel: wearablesViewModel)
 
-        #if DEBUG || INTERNAL_BUILD
+        #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
         DeveloperConsoleButton(console: developerConsole)
           .padding(.trailing, 12)
           .padding(.bottom, 90)
@@ -106,7 +106,7 @@ struct TurboMetaApp: App {
         #endif
       }
       .environment(\.locale, Locale(identifier: "ko-KR"))
-      #if DEBUG || INTERNAL_BUILD
+      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
       .onChange(of: wearablesViewModel.showError) { isPresented in
         guard isPresented else { return }
         developerConsole.log(

@@ -12,7 +12,7 @@ struct SettingsView: View {
     @ObservedObject var providerManager = APIProviderManager.shared
     @ObservedObject var quickVisionModeManager = QuickVisionModeManager.shared
     @ObservedObject var openClawService = OpenClawNodeService.shared
-    #if DEBUG || INTERNAL_BUILD
+    #if DEBUG
     @ObservedObject var developerConsole = DeveloperConsole.shared
     #endif
 
@@ -47,7 +47,7 @@ struct SettingsView: View {
                 koreanLanguageSection
                 visionAISection
                 integrationSection
-                #if DEBUG || INTERNAL_BUILD
+                #if DEBUG
                 developerSection
                 #endif
                 aboutSection
@@ -222,7 +222,7 @@ struct SettingsView: View {
         }
     }
 
-    #if DEBUG || INTERNAL_BUILD
+    #if DEBUG
     private var developerSection: some View {
         Section {
             Button {

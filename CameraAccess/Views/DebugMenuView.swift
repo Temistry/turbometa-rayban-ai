@@ -802,7 +802,7 @@ final class DeveloperConsole: ObservableObject {
   private static func distributionChannel() -> String {
     #if DEBUG
     return "Xcode Debug"
-    #elseif INTERNAL_BUILD
+    #elseif TESTFLIGHT_TTS_DIAGNOSTICS
     let receiptName = Bundle.main.appStoreReceiptURL?.lastPathComponent ?? "-"
     return receiptName == "sandboxReceipt" ? "TestFlight / Sandbox" : "내부 Release"
     #else

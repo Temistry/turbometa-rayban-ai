@@ -161,8 +161,31 @@ def audit_package_resolution(findings: list[Finding]) -> None:
             r"(?ms)^  ios-testflight:\n(?P<body>.*?)(?=^  [A-Za-z0-9_-]+:|\Z)",
             codemagic_text,
         )
-        if testflight_block and "SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD" in testflight_block.group("body"):
-            findings.append(Finding("치명", "codemagic.yaml", 1, "ios-testflight 워크플로에 INTERNAL_BUILD가 설정되어 있습니다"))
+        if testflight_block:
+            testflight_body = testflight_block.group("body")
+            if "SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD" in testflight_body:
+                findings.append(Finding("치명", "codemagic.yaml", 1, "ios-testflight 워크플로에 INTERNAL_BUILD가 설정되어 있습니다"))
+            if "SWIFT_ACTIVE_COMPILATION_CONDITIONS=TESTFLIGHT_TTS_DIAGNOSTICS" not in testflight_body:
+                findings.append(Finding("치명", "codemagic.yaml", 1, "ios-testflight 워크플로에 제한된 TTS 진단 조건이 없습니다"))
+
+    allowed_testflight_diagnostic_files = {
+        "CameraAccess/TurboMetaApp.swift",
+        "CameraAccess/Views/DebugMenuView.swift",
+    }
+    for path in SOURCE_ROOT.rglob("*.swift"):
+        text = path.read_text(encoding="utf-8", errors="replace")
+        if "TESTFLIGHT_TTS_DIAGNOSTICS" not in text:
+            continue
+        path_text = relative(path)
+        if path_text not in allowed_testflight_diagnostic_files:
+            findings.append(
+                Finding(
+                    "치명",
+                    path_text,
+                    1,
+                    "TestFlight TTS 진단 조건이 허용되지 않은 소스에 사용되었습니다",
+                )
+            )
 
 
 def audit_openclaw_cloud_inference(findings: list[Finding]) -> None:
@@ -314,7 +337,7 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
         "CameraAccess/TurboMetaApp.swift": [
             "TurboMetaShortcuts.updateAppShortcutParameters()",
             'Locale(identifier: "ko-KR")',
-            "DEBUG || INTERNAL_BUILD",
+            "DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS",
         ],
         "CameraAccess/Info.plist": [
             "NSSiriUsageDescription",
