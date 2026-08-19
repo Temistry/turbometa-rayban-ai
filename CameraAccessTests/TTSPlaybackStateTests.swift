@@ -38,6 +38,32 @@ final class TTSPlaybackStateTests: XCTestCase {
         )
     }
 
+    func testSpeechActionDebounceRejectsImmediateDuplicateOnly() {
+        let messageID = UUID()
+
+        XCTAssertFalse(
+            OpenClawChatView.shouldAcceptSpeechAction(
+                messageID: messageID,
+                previousMessageID: messageID,
+                elapsed: 0.01
+            )
+        )
+        XCTAssertTrue(
+            OpenClawChatView.shouldAcceptSpeechAction(
+                messageID: messageID,
+                previousMessageID: messageID,
+                elapsed: 0.75
+            )
+        )
+        XCTAssertTrue(
+            OpenClawChatView.shouldAcceptSpeechAction(
+                messageID: UUID(),
+                previousMessageID: messageID,
+                elapsed: 0.01
+            )
+        )
+    }
+
     func testRequestIdentityIsPreservedByNonIdleStates() {
         let requestID = UUID()
 

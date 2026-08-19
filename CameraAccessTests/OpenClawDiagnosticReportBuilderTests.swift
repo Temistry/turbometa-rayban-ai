@@ -81,6 +81,26 @@ final class OpenClawDiagnosticReportBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("<식별정보 숨김>"))
     }
 
+    func testRemovesHardwareIdentifiersFromAllowedLog() throws {
+        let entries = [
+            entry(
+                "[TTS][ERROR] route=BluetoothA2DPOutput "
+                + "mac=80:AA:1C:77:8F:A4 "
+                + "device=082A06F3-E05A-43DD-9584-75A56720D064 code=-50"
+            )
+        ]
+
+        let prompt = try OpenClawDiagnosticReportBuilder.makePrompt(
+            userMessage: "재생 실패",
+            entries: entries
+        )
+
+        XCTAssertFalse(prompt.contains("80:AA:1C:77:8F:A4"))
+        XCTAssertFalse(prompt.contains("082A06F3-E05A-43DD-9584-75A56720D064"))
+        XCTAssertTrue(prompt.contains("BluetoothA2DPOutput"))
+        XCTAssertTrue(prompt.contains("code=-50"))
+    }
+
     func testBoundsUserMessageAndLogCount() throws {
         let entries = (0..<200).map { index in
             entry("[TTS][INFO] event=\(index) textLength=10")

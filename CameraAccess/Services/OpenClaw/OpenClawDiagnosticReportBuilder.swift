@@ -111,6 +111,7 @@ struct OpenClawDiagnosticReportBuilder {
             (#"(?i)(\b(?:token|apiKey|authorization|cookie|session|deviceId|pairingId)\s*[:=]\s*)[^\s,]+"#, "$1<보안상 숨김>"),
             (#"\b(?:\d{1,3}\.){3}\d{1,3}\b"#, "<식별정보 숨김>"),
             (#"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b"#, "<식별정보 숨김>"),
+            (#"(?i)\b(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\b"#, "<식별정보 숨김>"),
             (#"https?://\S+"#, "<식별정보 숨김>"),
             (#"(?<![A-Za-z0-9])[A-Za-z0-9+/]{128,}={0,2}(?![A-Za-z0-9])"#, "<식별정보 숨김>")
         ]

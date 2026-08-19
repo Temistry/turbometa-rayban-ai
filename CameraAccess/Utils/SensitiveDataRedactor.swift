@@ -22,6 +22,12 @@ enum SensitiveDataRedactor {
             (#"(?i)(rtmps?://[^/\s]+)(?:/[^\s]*)?"#, "$1/<송출 경로 숨김>"),
             (#"data:(?:image|audio)/[^;\s]+;base64,[A-Za-z0-9+/=]+"#, "<대용량 데이터 생략>"),
             (#"(?i)(\"(?:audio|image|data)\"\s*:\s*\")[A-Za-z0-9+/=]{80,}(\")"#, "$1<대용량 데이터 생략>$2"),
+            (#"(?i)(\b(?:ACCExternalAccessoryPPIDKey|ACCExternalAccessoryPrimaryUUID|ACCExternalAccessoryProtocolEndpointUUID|IAPAppAccessoryMacAddressKey|IAPAppAccessorySerialNumberKey|IAPAppAccessoryPreferredAppKey|IAPAppAccessoryNameKey)\s*=\s*)[^;\r\n]+"#, "$1<식별정보 숨김>"),
+            (#"(?i)(\b(?:세션 ID|sessionID|deviceID|pairingID)\s*[:=]\s*)[^\s,;]+"#, "$1<식별정보 숨김>"),
+            (#"(?i)(socketPath\s+from\s+app\s*=\s*)\S+"#, "$1<식별정보 숨김>"),
+            (#"(?i)(IAPAppAccessoryCert(?:Data|SerialNumber)Key\s*=\s*)\{[^\r\n]*\}"#, "$1<대용량 데이터 생략>"),
+            (#"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b"#, "<식별정보 숨김>"),
+            (#"(?i)\b(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\b"#, "<식별정보 숨김>"),
             (#"(?<![A-Za-z0-9])[A-Za-z0-9+/]{256,}={0,2}(?![A-Za-z0-9])"#, "<대용량 데이터 생략>")
         ]
 

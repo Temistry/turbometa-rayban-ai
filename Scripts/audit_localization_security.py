@@ -332,7 +332,12 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
         ],
         "CameraAccess/Utils/SensitiveDataRedactor.swift": [
             "Bearer\\s+",
+            "ACCExternalAccessoryPrimaryUUID",
+            "IAPAppAccessoryMacAddressKey",
+            "IAPAppAccessorySerialNumberKey",
+            "socketPath",
             "<보안상 숨김>",
+            "<식별정보 숨김>",
         ],
         "CameraAccess/TurboMetaApp.swift": [
             "TurboMetaShortcuts.updateAppShortcutParameters()",

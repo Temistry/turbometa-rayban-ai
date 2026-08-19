@@ -19,6 +19,8 @@ struct OpenClawChatView: View {
     @State private var showClearHistoryConfirmation = false
     @State private var playingMessageID: UUID?
     @State private var playingRequestID: UUID?
+    @State private var lastSpeechActionMessageID: UUID?
+    @State private var lastSpeechActionUptime: TimeInterval = 0
 
     init(
         streamViewModel: StreamSessionViewModel,
@@ -236,6 +238,18 @@ struct OpenClawChatView: View {
             return
         }
 
+        let now = ProcessInfo.processInfo.systemUptime
+        guard Self.shouldAcceptSpeechAction(
+            messageID: message.id,
+            previousMessageID: lastSpeechActionMessageID,
+            elapsed: now - lastSpeechActionUptime
+        ) else {
+            print("[OpenClaw][TTS][WARN] 중복 답변 읽기 요청 무시")
+            return
+        }
+        lastSpeechActionMessageID = message.id
+        lastSpeechActionUptime = now
+
         print("[OpenClaw][TTS] 답변 읽기 요청 textLength=\(message.text.count)")
         guard let speechText = GalvisSpeechResponseFormatter.speechText(
             from: message.text
@@ -254,6 +268,14 @@ struct OpenClawChatView: View {
         playingRequestID = requestID
         playingMessageID = message.id
         print("[OpenClaw][TTS] 음성 재생 요청 접수 speechLength=\(speechText.count)")
+    }
+
+    static func shouldAcceptSpeechAction(
+        messageID: UUID,
+        previousMessageID: UUID?,
+        elapsed: TimeInterval
+    ) -> Bool {
+        previousMessageID != messageID || elapsed >= 0.75
     }
 
     // MARK: - Camera

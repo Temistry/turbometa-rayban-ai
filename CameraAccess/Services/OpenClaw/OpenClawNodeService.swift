@@ -125,7 +125,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private var handledDisconnectGeneration: Int?
     private var commandRouter: OpenClawCommandRouter?
     private var reconnectTask: Task<Void, Never>?
-    private var tickTask: Task<Void, Never>?
     private var nodeId: String
     private var pendingNonce: String?
     private var shouldReconnect = false
@@ -141,7 +140,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     static let minimumProtocolVersion = 3
     static let maximumProtocolVersion = 4
-    private static let tickInterval: TimeInterval = 15
     private static let maxReconnectAttempts = 5
     private static let maximumWebSocketMessageSize = 8 * 1024 * 1024
     private static let maximumImageUploadSize = 4 * 1024 * 1024
@@ -203,8 +201,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
         reconnectTask?.cancel()
         reconnectTask = nil
-        tickTask?.cancel()
-        tickTask = nil
 
         webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
         webSocketTransport = nil
@@ -705,7 +701,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             self.reconnectAttempts = 0
         }
         print("[OpenClaw][INFO] Gateway 연결 성공")
-        startTickWatchdog()
     }
 
     // MARK: - Events and requests
@@ -915,22 +910,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
     // MARK: - Keepalive and reconnection
 
-    private func startTickWatchdog() {
-        tickTask?.cancel()
-        tickTask = Task { [weak self] in
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(Self.tickInterval * 1_000_000_000))
-                guard !Task.isCancelled else { break }
-                self?.sendJSON([
-                    "type": "req",
-                    "id": UUID().uuidString,
-                    "method": "tick",
-                    "params": ["ts": Int64(Date().timeIntervalSince1970 * 1_000)]
-                ])
-            }
-        }
-    }
-
     private func handleTransportFailure(_ error: Error, generation: Int) {
         guard connectionGeneration == generation else { return }
         let nsError = error as NSError
@@ -962,8 +941,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
         webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
         webSocketTransport = nil
-        tickTask?.cancel()
-        tickTask = nil
         reconnectTask?.cancel()
         reconnectTask = nil
 

@@ -265,7 +265,7 @@ final class DeveloperConsole: ObservableObject {
     sections.append(
       """
       [보안 안내]
-      API Key, Bearer 토큰, Gateway 토큰, RTMP 송출 경로와 대용량 Base64 데이터는 자동으로 마스킹됩니다.
+      API Key, 토큰, 기기·액세서리 식별정보, 송출 경로와 대용량 데이터는 자동으로 마스킹됩니다.
       MetricKit 진단과 오류 문구에는 재현에 필요한 사용자 화면의 텍스트 또는 AI 응답이 포함될 수 있습니다.
       이 파일은 사용자가 공유 버튼을 누를 때만 외부로 전달됩니다.
       """

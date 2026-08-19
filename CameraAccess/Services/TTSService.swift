@@ -166,7 +166,7 @@ final class TTSService: NSObject, ObservableObject {
             try session.setCategory(
                 .playback,
                 mode: .spokenAudio,
-                options: [.duckOthers, .allowBluetoothA2DP]
+                options: []
             )
             try session.setActive(true)
 
@@ -182,7 +182,7 @@ final class TTSService: NSObject, ObservableObject {
             let nsError = error as NSError
             print(
                 "[TTS][ERROR] AudioSession 설정 실패 domain=\(nsError.domain) "
-                + "code=\(nsError.code) description=\(nsError.localizedDescription)"
+                + "code=\(nsError.code)"
             )
             return false
         }
