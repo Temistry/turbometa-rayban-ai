@@ -441,3 +441,4 @@
 "openclaw.chat.image.attachment" = "사진 첨부";
 "openclaw.chat.speech.play" = "답변 읽기";
 "openclaw.chat.speech.stop" = "읽기 중지";
+"openclaw.notification.title" = "OpenClaw 답변";

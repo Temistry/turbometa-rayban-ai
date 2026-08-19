@@ -450,3 +450,4 @@
 "openclaw.chat.image.attachment" = "Photo attached";
 "openclaw.chat.speech.play" = "Read response";
 "openclaw.chat.speech.stop" = "Stop reading";
+"openclaw.notification.title" = "OpenClaw response";

@@ -36,6 +36,8 @@ struct TurboMetaApp: App {
     DeveloperConsole.shared.startCapturing()
     #endif
 
+    OpenClawNotificationCoordinator.shared.install()
+
     if #available(iOS 16.0, *) {
       TurboMetaShortcuts.updateAppShortcutParameters()
       #if DEBUG || INTERNAL_BUILD

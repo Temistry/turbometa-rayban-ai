@@ -26,24 +26,25 @@ final class TTSService: NSObject, ObservableObject {
     }
 
     /// `apiKey`는 이전 호출부와의 소스 호환을 위해 남겨 두지만 사용하거나 기록하지 않는다.
-    func speak(_ text: String, apiKey: String? = nil) {
+    @discardableResult
+    func speak(_ text: String, apiKey: String? = nil) -> Bool {
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
             print("[TTS][WARN] 빈 문자열 음성 요청 무시")
-            return
+            return false
         }
 
         stop()
         guard configurePlaybackAudioSession() else {
             print("[TTS][ERROR] 한국어 음성 재생 세션을 구성하지 못함")
-            return
+            return false
         }
 
         let voiceLanguage = LanguageManager.staticSystemVoiceLanguage
         guard let koreanVoice = AVSpeechSynthesisVoice(language: voiceLanguage)
             ?? AVSpeechSynthesisVoice.speechVoices().first(where: { $0.language.hasPrefix("ko") }) else {
             print("[TTS][ERROR] 설치된 한국어 시스템 음성을 찾지 못함")
-            return
+            return false
         }
 
         let engine = AVSpeechSynthesizer()
@@ -62,6 +63,7 @@ final class TTSService: NSObject, ObservableObject {
             + "quality=\(koreanVoice.quality.rawValue) textLength=\(normalizedText.count)"
         )
         engine.speak(utterance)
+        return true
     }
 
     func stop() {
@@ -82,15 +84,16 @@ final class TTSService: NSObject, ObservableObject {
         let session = AVAudioSession.sharedInstance()
 
         do {
+            try session.setActive(false, options: [.notifyOthersOnDeactivation])
             try session.setCategory(
                 .playback,
                 mode: .spokenAudio,
                 options: [.duckOthers, .allowBluetoothA2DP]
             )
-            try session.setActive(true, options: [.notifyOthersOnDeactivation])
+            try session.setActive(true)
 
             let outputs = session.currentRoute.outputs
-                .map { "\($0.portType.rawValue):\($0.portName)" }
+                .map { $0.portType.rawValue }
                 .joined(separator: ",")
             print(
                 "[TTS][AUDIO] 세션 활성 category=\(session.category.rawValue) "

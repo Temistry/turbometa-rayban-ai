@@ -13,7 +13,6 @@ struct TurboMetaHomeView: View {
 
     @State private var showLeanEat = false
     @State private var showQuickVision = false
-    @State private var showOpenClaw = false
     @ObservedObject private var openClawService = OpenClawNodeService.shared
     @ObservedObject private var galvisLaunchCoordinator = GalvisLaunchCoordinator.shared
 
@@ -64,7 +63,7 @@ struct TurboMetaHomeView: View {
                                     icon: "link.circle.fill",
                                     gradient: [Color.purple, Color.indigo]
                                 ) {
-                                    showOpenClaw = true
+                                    galvisLaunchCoordinator.requestOpenClawChat()
                                 }
                             }
 
@@ -90,8 +89,14 @@ struct TurboMetaHomeView: View {
             .fullScreenCover(isPresented: $showQuickVision) {
                 QuickVisionView(streamViewModel: streamViewModel, apiKey: apiKey)
             }
-            .fullScreenCover(isPresented: $showOpenClaw) {
-                OpenClawChatView(streamViewModel: streamViewModel)
+            .fullScreenCover(
+                isPresented: $galvisLaunchCoordinator.isOpenClawChatPresented,
+                onDismiss: { galvisLaunchCoordinator.dismissOpenClawChat() }
+            ) {
+                OpenClawChatView(
+                    streamViewModel: streamViewModel,
+                    selectedMessageID: galvisLaunchCoordinator.selectedOpenClawMessageID
+                )
             }
             .fullScreenCover(
                 isPresented: $galvisLaunchCoordinator.isOpenClawSessionPresented,

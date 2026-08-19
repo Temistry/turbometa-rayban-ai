@@ -8,6 +8,7 @@ import SwiftUI
 
 struct OpenClawChatView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
+    let selectedMessageID: UUID?
     @ObservedObject var openClawService = OpenClawNodeService.shared
     @ObservedObject private var ttsService = TTSService.shared
     @Environment(\.dismiss) private var dismiss
@@ -17,6 +18,14 @@ struct OpenClawChatView: View {
     @State private var showTextInput = false
     @State private var showClearHistoryConfirmation = false
     @State private var playingMessageID: UUID?
+
+    init(
+        streamViewModel: StreamSessionViewModel,
+        selectedMessageID: UUID? = nil
+    ) {
+        self.streamViewModel = streamViewModel
+        self.selectedMessageID = selectedMessageID
+    }
 
     var body: some View {
         NavigationView {
@@ -59,8 +68,19 @@ struct OpenClawChatView: View {
                         }
                         .padding()
                     }
+                    .onAppear {
+                        if let selectedMessageID,
+                           openClawService.chatMessages.contains(where: { $0.id == selectedMessageID }) {
+                            DispatchQueue.main.async {
+                                proxy.scrollTo(selectedMessageID, anchor: .center)
+                            }
+                        }
+                    }
                     .onChange(of: openClawService.chatMessages.count) { _ in
-                        if let last = openClawService.chatMessages.last {
+                        if let selectedMessageID,
+                           openClawService.chatMessages.contains(where: { $0.id == selectedMessageID }) {
+                            withAnimation { proxy.scrollTo(selectedMessageID, anchor: .center) }
+                        } else if let last = openClawService.chatMessages.last {
                             withAnimation { proxy.scrollTo(last.id, anchor: .bottom) }
                         }
                     }
@@ -158,6 +178,7 @@ struct OpenClawChatView: View {
             }
         }
         .onAppear {
+            OpenClawNotificationService.shared.requestAuthorizationIfNeeded()
             if openClawService.connectionState != .connected,
                openClawService.loadGatewayToken() != nil {
                 openClawService.connect()
@@ -205,16 +226,22 @@ struct OpenClawChatView: View {
             return
         }
 
+        print("[OpenClaw][TTS] 답변 읽기 요청 textLength=\(message.text.count)")
         guard let speechText = GalvisSpeechResponseFormatter.speechText(
             from: message.text
-        ) else { return }
+        ) else {
+            print("[OpenClaw][TTS][WARN] 읽을 수 있는 답변 없음")
+            return
+        }
 
         ttsService.stop()
-        playingMessageID = message.id
-        ttsService.speak(speechText)
-        if !ttsService.isSpeaking {
+        guard ttsService.speak(speechText) else {
             playingMessageID = nil
+            print("[OpenClaw][TTS][ERROR] 음성 재생 요청 실패 speechLength=\(speechText.count)")
+            return
         }
+        playingMessageID = message.id
+        print("[OpenClaw][TTS] 음성 재생 요청 접수 speechLength=\(speechText.count)")
     }
 
     // MARK: - Camera

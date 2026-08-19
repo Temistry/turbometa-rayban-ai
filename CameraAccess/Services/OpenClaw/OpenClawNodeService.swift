@@ -762,12 +762,15 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             handledFinalEventIdentities.insert(eventIdentity)
         }
         pendingChatResponse = ""
-        appendChatMessage(
-            OpenClawChatMessage(
-                role: "assistant",
-                text: text,
-                eventIdentity: eventIdentity
-            )
+        let message = OpenClawChatMessage(
+            role: "assistant",
+            text: text,
+            eventIdentity: eventIdentity
+        )
+        appendChatMessage(message)
+        OpenClawNotificationService.shared.postFinalResponse(
+            text: text,
+            messageID: message.id
         )
 
         if pendingConversationContinuation != nil {

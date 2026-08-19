@@ -6,13 +6,22 @@ final class GalvisLaunchCoordinator: ObservableObject {
 
     @Published private(set) var isAppReady = false
     @Published var isOpenClawSessionPresented = false
+    @Published var isOpenClawChatPresented = false
+    @Published private(set) var selectedOpenClawMessageID: UUID?
 
     private var hasPendingOpenClawRequest = false
+    private var hasPendingOpenClawChatRequest = false
 
     private init() {}
 
     func requestOpenClawSession() {
         hasPendingOpenClawRequest = true
+        presentPendingRequestIfReady()
+    }
+
+    func requestOpenClawChat(messageID: UUID? = nil) {
+        selectedOpenClawMessageID = messageID
+        hasPendingOpenClawChatRequest = true
         presentPendingRequestIfReady()
     }
 
@@ -25,9 +34,22 @@ final class GalvisLaunchCoordinator: ObservableObject {
         isOpenClawSessionPresented = false
     }
 
+    func dismissOpenClawChat() {
+        isOpenClawChatPresented = false
+        selectedOpenClawMessageID = nil
+    }
+
     private func presentPendingRequestIfReady() {
-        guard isAppReady, hasPendingOpenClawRequest else { return }
-        hasPendingOpenClawRequest = false
-        isOpenClawSessionPresented = true
+        guard isAppReady else { return }
+
+        if hasPendingOpenClawChatRequest {
+            hasPendingOpenClawChatRequest = false
+            isOpenClawChatPresented = true
+        }
+
+        if hasPendingOpenClawRequest {
+            hasPendingOpenClawRequest = false
+            isOpenClawSessionPresented = true
+        }
     }
 }
