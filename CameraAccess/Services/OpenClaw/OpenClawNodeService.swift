@@ -117,18 +117,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     @Published var transportMode = OpenClawTransportMode(
         rawValue: UserDefaults.standard.string(forKey: "openclaw_transport_mode") ?? ""
     ) ?? .standard
-    @Published var isSpeechResponseEnabled: Bool = {
-        let defaults = UserDefaults.standard
-        guard defaults.object(forKey: "openclaw_speech_response_enabled") != nil else { return true }
-        return defaults.bool(forKey: "openclaw_speech_response_enabled")
-    }()
-    @Published var speechRate: OpenClawSpeechRate = {
-        OpenClawSpeechRate(
-            rawValue: UserDefaults.standard.string(forKey: "openclaw_speech_rate") ?? ""
-        ) ?? .normal
-    }()
-    @Published private(set) var isSpeechPlaying = false
-    @Published private(set) var speechStatusMessage: String?
     @Published private(set) var chatMessages: [OpenClawChatMessage] = []
     @Published private(set) var pendingChatResponse = ""
 
@@ -145,10 +133,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private var handledFinalEventIdentities = Set<String>()
     private var pendingConversationContinuation: CheckedContinuation<String, any Error>?
     private var pendingConversationTimeoutTask: Task<Void, Never>?
-    private var suppressAutomaticSpeechForPendingConversation = false
-    private var pendingGatewayRequests: [String: CheckedContinuation<[String: Any], any Error>] = [:]
-    private var pendingGatewayRequestTimeouts: [String: Task<Void, Never>] = [:]
-    private var automaticSpeechTask: Task<Void, Never>?
     private let chatHistoryStore: OpenClawChatHistoryStore
     private lazy var deviceIdentity = OpenClawDeviceIdentityStore.loadOrCreate()
 
@@ -196,78 +180,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         saveSettings()
     }
 
-    func updateSpeechResponseEnabled(_ isEnabled: Bool) {
-        isSpeechResponseEnabled = isEnabled
-        saveSettings()
-        if !isEnabled {
-            stopSpeechResponse()
-        }
-    }
-
-    func updateSpeechRate(_ rate: OpenClawSpeechRate) {
-        speechRate = rate
-        saveSettings()
-    }
-
-    func stopSpeechResponse() {
-        automaticSpeechTask?.cancel()
-        automaticSpeechTask = nil
-        cancelPendingGatewayRequests(with: CancellationError())
-        speechStatusMessage = nil
-        Task { @MainActor in
-            OpenClawAudioPlaybackService.shared.stop()
-        }
-        isSpeechPlaying = false
-    }
-
-    func requestSpeechAudio(
-        for text: String,
-        timeout: TimeInterval = 45
-    ) async throws -> OpenClawSpeechAudio {
-        let normalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { throw OpenClawSpeechError.malformedResponse }
-        guard connectionState == .connected else { throw OpenClawSpeechError.notConnected }
-
-        let payload = try await sendGatewayRequest(
-            method: "talk.speak",
-            params: [
-                "text": normalized,
-                "language": "ko-KR",
-                "speed": speechRate.gatewaySpeed
-            ],
-            timeout: timeout
-        )
-        let audio = try OpenClawSpeechAudio.decode(payload: payload)
-        speechStatusMessage = "Gateway 음성 준비 완료"
-        print(
-            "[OpenClaw][SPEECH] Gateway 음성 수신 "
-            + "provider=\(audio.provider) bytes=\(audio.data.count)"
-        )
-        return audio
-    }
-
-    @MainActor
-    func playSpeechAudio(_ audio: OpenClawSpeechAudio) async throws {
-        isSpeechPlaying = true
-        defer { isSpeechPlaying = false }
-        try await OpenClawAudioPlaybackService.shared.playAndWait(audio)
-    }
-
-    func speakThroughGateway(_ text: String) async throws {
-        speechStatusMessage = "Gateway 음성 생성 중"
-        do {
-            let audio = try await requestSpeechAudio(for: text)
-            speechStatusMessage = "Gateway 음성 재생 중"
-            try await playSpeechAudio(audio)
-            speechStatusMessage = nil
-        } catch {
-            if !(error is CancellationError) {
-                speechStatusMessage = error.localizedDescription
-            }
-            throw error
-        }
-    }
-
     func connect() {
         guard connectionState != .connected && connectionState != .connecting else {
             print("[OpenClaw][WARN] 이미 연결 중이거나 연결됨 state=\(connectionState)")
@@ -285,11 +197,9 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         finishPendingConversation(
             with: .failure(OpenClawConversationError.disconnected)
         )
-        cancelPendingGatewayRequests(with: OpenClawConversationError.disconnected)
         shouldReconnect = false
         isEnabled = false
         saveSettings()
-        stopSpeechResponse()
 
         reconnectTask?.cancel()
         reconnectTask = nil
@@ -308,7 +218,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     func sendChatMessage(_ text: String, image: UIImage? = nil) {
-        stopSpeechResponse()
         guard connectionState == .connected else {
             print("[OpenClaw][WARN] 연결되지 않아 채팅 전송 취소 textLength=\(text.count)")
             return
@@ -380,7 +289,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 pendingConversationContinuation = continuation
-                suppressAutomaticSpeechForPendingConversation = true
                 pendingConversationTimeoutTask?.cancel()
                 pendingConversationTimeoutTask = Task { @MainActor [weak self] in
                     try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
@@ -420,63 +328,9 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private func finishPendingConversation(with result: Result<String, Error>) {
         pendingConversationTimeoutTask?.cancel()
         pendingConversationTimeoutTask = nil
-        suppressAutomaticSpeechForPendingConversation = false
         guard let continuation = pendingConversationContinuation else { return }
         pendingConversationContinuation = nil
         continuation.resume(with: result)
-    }
-
-    private func sendGatewayRequest(
-        method: String,
-        params: [String: Any],
-        timeout: TimeInterval
-    ) async throws -> [String: Any] {
-        guard connectionState == .connected else { throw OpenClawSpeechError.notConnected }
-        let requestID = UUID().uuidString
-
-        return try await withTaskCancellationHandler {
-            try await withCheckedThrowingContinuation { continuation in
-                pendingGatewayRequests[requestID] = continuation
-                pendingGatewayRequestTimeouts[requestID] = Task { @MainActor [weak self] in
-                    try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                    guard !Task.isCancelled else { return }
-                    self?.finishGatewayRequest(
-                        id: requestID,
-                        result: .failure(OpenClawSpeechError.requestTimeout)
-                    )
-                }
-                sendJSON([
-                    "type": "req",
-                    "id": requestID,
-                    "method": method,
-                    "params": params
-                ])
-                print("[OpenClaw][INFO] Gateway RPC 전송 method=\(method) requestID=\(requestID.prefix(8))")
-            }
-        } onCancel: {
-            Task { @MainActor [weak self] in
-                self?.finishGatewayRequest(
-                    id: requestID,
-                    result: .failure(CancellationError())
-                )
-            }
-        }
-    }
-
-    private func finishGatewayRequest(
-        id: String,
-        result: Result<[String: Any], Error>
-    ) {
-        pendingGatewayRequestTimeouts.removeValue(forKey: id)?.cancel()
-        guard let continuation = pendingGatewayRequests.removeValue(forKey: id) else { return }
-        continuation.resume(with: result)
-    }
-
-    private func cancelPendingGatewayRequests(with error: Error) {
-        let requestIDs = Array(pendingGatewayRequests.keys)
-        for requestID in requestIDs {
-            finishGatewayRequest(id: requestID, result: .failure(error))
-        }
     }
 
     func addLocalChatNotice(_ text: String) {
@@ -487,7 +341,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     func clearChatHistory() {
-        stopSpeechResponse()
         pendingChatResponse = ""
         chatMessages = []
         handledFinalEventIdentities = []
@@ -661,8 +514,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         UserDefaults.standard.set(gatewayHost, forKey: "openclaw_host")
         UserDefaults.standard.set(gatewayPort, forKey: "openclaw_port")
         UserDefaults.standard.set(transportMode.rawValue, forKey: "openclaw_transport_mode")
-        UserDefaults.standard.set(isSpeechResponseEnabled, forKey: "openclaw_speech_response_enabled")
-        UserDefaults.standard.set(speechRate.rawValue, forKey: "openclaw_speech_rate")
     }
 
     // MARK: - WebSocket messaging
@@ -751,12 +602,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         }
 
         if type == "res" || type == "response" {
-            let requestID = json["id"] as? String ?? ""
-            if pendingGatewayRequests[requestID] != nil {
-                handleResponse(json: json)
-                return
-            }
-
             let ok = json["ok"] as? Bool ?? false
             if ok,
                let payload = json["payload"] as? [String: Any],
@@ -926,44 +771,8 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         )
 
         if pendingConversationContinuation != nil {
-            let shouldSuppressSpeech = suppressAutomaticSpeechForPendingConversation
             finishPendingConversation(with: .success(text))
-            if !shouldSuppressSpeech {
-                speakFinalChatResponse(text)
-            }
-        } else {
-            speakFinalChatResponse(text)
         }
-    }
-
-    private func speakFinalChatResponse(_ text: String) {
-        guard OpenClawSpeechResponseFormatter.shouldSpeak(
-            state: "final",
-            isEnabled: isSpeechResponseEnabled,
-            text: text,
-            lastSpokenText: nil
-        ), let speechText = GalvisSpeechResponseFormatter.speechText(from: text) else {
-            print(
-                "[OpenClaw][INFO] 최종 채팅 음성 재생 생략 "
-                + "enabled=\(isSpeechResponseEnabled) textLength=\(text.count)"
-            )
-            return
-        }
-
-        automaticSpeechTask?.cancel()
-        automaticSpeechTask = Task { @MainActor [weak self] in
-            do {
-                try await self?.speakThroughGateway(speechText)
-            } catch is CancellationError {
-                return
-            } catch {
-                print(
-                    "[OpenClaw][ERROR] Gateway 음성 처리 실패 "
-                    + "domain=\((error as NSError).domain) code=\((error as NSError).code)"
-                )
-            }
-        }
-        print("[OpenClaw][INFO] Gateway 음성 packet 요청 textLength=\(speechText.count)")
     }
 
     private static func integerValue(_ value: Any?) -> Int? {
@@ -1004,27 +813,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private func handleResponse(json: [String: Any]) {
         let id = json["id"] as? String ?? ""
         let ok = json["ok"] as? Bool ?? false
-
-        if pendingGatewayRequests[id] != nil {
-            if ok, let payload = json["payload"] as? [String: Any] {
-                finishGatewayRequest(id: id, result: .success(payload))
-            } else if ok {
-                finishGatewayRequest(
-                    id: id,
-                    result: .failure(OpenClawSpeechError.malformedResponse)
-                )
-            } else {
-                let error = json["error"] as? [String: Any]
-                let code = error?["code"] as? String ?? "UNKNOWN"
-                let message = error?["message"] as? String ?? "Gateway 음성 생성에 실패했습니다."
-                finishGatewayRequest(
-                    id: id,
-                    result: .failure(OpenClawSpeechError.gateway(code: code, message: message))
-                )
-                print("[OpenClaw][ERROR] Gateway RPC 실패 requestID=\(id.prefix(8)) code=\(code)")
-            }
-            return
-        }
 
         guard !ok else { return }
         let error = json["error"] as? [String: Any]
@@ -1159,11 +947,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         finishPendingConversation(
             with: .failure(OpenClawConversationError.disconnected)
         )
-        cancelPendingGatewayRequests(with: OpenClawConversationError.disconnected)
-        automaticSpeechTask?.cancel()
-        automaticSpeechTask = nil
-        OpenClawAudioPlaybackService.shared.stop()
-        isSpeechPlaying = false
 
         webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
         webSocketTransport = nil

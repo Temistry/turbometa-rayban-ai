@@ -98,8 +98,6 @@
 		OC1006000600060006 /* OpenClawChatView.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2006000600060006 /* OpenClawChatView.swift */; };
 		OC1007000700070007 /* OpenClawWebSocketTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2007000700070007 /* OpenClawWebSocketTransport.swift */; };
 		OC1008000800080008 /* OpenClawChatHistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2008000800080008 /* OpenClawChatHistoryStore.swift */; };
-		OC1009000900090009 /* OpenClawSpeechService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2009000900090009 /* OpenClawSpeechService.swift */; };
-		OC1010001000100010 /* OpenClawAudioPlaybackService.swift in Sources */ = {isa = PBXBuildFile; fileRef = OC2010001000100010 /* OpenClawAudioPlaybackService.swift */; };
 		GV1001000100010001 /* GalvisOpenClawIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2001000100010001 /* GalvisOpenClawIntent.swift */; };
 		GV1002000200020002 /* GalvisLaunchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2002000200020002 /* GalvisLaunchCoordinator.swift */; };
 		GV1003000300030003 /* GalvisOpenClawSessionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = GV2003000300030003 /* GalvisOpenClawSessionView.swift */; };
@@ -223,8 +221,6 @@
 		OC2006000600060006 /* OpenClawChatView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawChatView.swift; sourceTree = "<group>"; };
 		OC2007000700070007 /* OpenClawWebSocketTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawWebSocketTransport.swift; sourceTree = "<group>"; };
 		OC2008000800080008 /* OpenClawChatHistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawChatHistoryStore.swift; sourceTree = "<group>"; };
-		OC2009000900090009 /* OpenClawSpeechService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawSpeechService.swift; sourceTree = "<group>"; };
-		OC2010001000100010 /* OpenClawAudioPlaybackService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawAudioPlaybackService.swift; sourceTree = "<group>"; };
 		GV2001000100010001 /* GalvisOpenClawIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisOpenClawIntent.swift; sourceTree = "<group>"; };
 		GV2002000200020002 /* GalvisLaunchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisLaunchCoordinator.swift; sourceTree = "<group>"; };
 		GV2003000300030003 /* GalvisOpenClawSessionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalvisOpenClawSessionView.swift; sourceTree = "<group>"; };
@@ -490,8 +486,6 @@
 				OC2005000500050005 /* OpenClawDeviceIdentity.swift */,
 				OC2007000700070007 /* OpenClawWebSocketTransport.swift */,
 				OC2008000800080008 /* OpenClawChatHistoryStore.swift */,
-				OC2009000900090009 /* OpenClawSpeechService.swift */,
-				OC2010001000100010 /* OpenClawAudioPlaybackService.swift */,
 			);
 			path = OpenClaw;
 			sourceTree = "<group>";
@@ -687,8 +681,6 @@
 				OC1006000600060006 /* OpenClawChatView.swift in Sources */,
 				OC1007000700070007 /* OpenClawWebSocketTransport.swift in Sources */,
 				OC1008000800080008 /* OpenClawChatHistoryStore.swift in Sources */,
-				OC1009000900090009 /* OpenClawSpeechService.swift in Sources */,
-				OC1010001000100010 /* OpenClawAudioPlaybackService.swift in Sources */,
 				GV1001000100010001 /* GalvisOpenClawIntent.swift in Sources */,
 				GV1002000200020002 /* GalvisLaunchCoordinator.swift in Sources */,
 				GV1003000300030003 /* GalvisOpenClawSessionView.swift in Sources */,

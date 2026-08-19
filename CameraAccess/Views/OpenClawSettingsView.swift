@@ -91,47 +91,6 @@ struct OpenClawSettingsView: View {
                 }
 
                 Section {
-                    Toggle(
-                        "openclaw.speech.enabled".localized,
-                        isOn: Binding(
-                            get: { nodeService.isSpeechResponseEnabled },
-                            set: { nodeService.updateSpeechResponseEnabled($0) }
-                        )
-                    )
-
-                    Picker(
-                        "발화 속도",
-                        selection: Binding(
-                            get: { nodeService.speechRate },
-                            set: { nodeService.updateSpeechRate($0) }
-                        )
-                    ) {
-                        Text("느리게").tag(OpenClawSpeechRate.slow)
-                        Text("보통").tag(OpenClawSpeechRate.normal)
-                        Text("빠르게").tag(OpenClawSpeechRate.fast)
-                    }
-                    .accessibilityLabel("OpenClaw 발화 속도")
-
-                    if let speechStatus = nodeService.speechStatusMessage {
-                        Text(speechStatus)
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                    }
-
-                    if nodeService.isSpeechPlaying {
-                        Button(role: .destructive) {
-                            nodeService.stopSpeechResponse()
-                        } label: {
-                            Label("openclaw.speech.stop".localized, systemImage: "stop.circle.fill")
-                        }
-                    }
-                } header: {
-                    Text("openclaw.speech.section".localized)
-                } footer: {
-                    Text("openclaw.speech.footer".localized)
-                }
-
-                Section {
                     if nodeService.connectionState == .connected {
                         Button(role: .destructive) {
                             nodeService.disconnect()

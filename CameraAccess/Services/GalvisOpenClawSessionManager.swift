@@ -9,8 +9,6 @@ final class GalvisOpenClawSessionManager: ObservableObject {
         case connecting
         case listening
         case waitingForResponse
-        case generatingSpeech
-        case speaking
         case followUp
         case waitingForWakeWord
         case error(String)
@@ -65,7 +63,6 @@ final class GalvisOpenClawSessionManager: ObservableObject {
         sessionTask = nil
         recognizer.cancel()
         openClaw.cancelPendingConversation()
-        openClaw.stopSpeechResponse()
         audioSession.deactivate()
         state = .stopped
         print("[Galvis][INFO] 음성 대화 종료")
@@ -95,7 +92,6 @@ final class GalvisOpenClawSessionManager: ObservableObject {
                 try await waitForConnection()
             }
 
-            try await speak("OpenClaw에 연결했습니다. 말씀하세요.")
             try await conversationLoop()
         } catch is CancellationError {
             return
@@ -104,7 +100,6 @@ final class GalvisOpenClawSessionManager: ObservableObject {
             state = .error(error.localizedDescription)
             isActive = false
             recognizer.cancel()
-            openClaw.stopSpeechResponse()
             audioSession.deactivate()
         }
     }
@@ -178,28 +173,12 @@ final class GalvisOpenClawSessionManager: ObservableObject {
     }
 
     private func processQuestion(_ question: String) async throws {
-        guard !question.isEmpty else {
-            try await speak("무엇을 도와드릴까요?")
-            return
-        }
+        guard !question.isEmpty else { return }
 
         recognizer.cancel()
         state = .waitingForResponse
         let answer = try await openClaw.ask(question)
         lastAnswer = answer
-
-        if let speechText = GalvisSpeechResponseFormatter.speechText(from: answer) {
-            try await speak(speechText)
-        }
-    }
-
-    private func speak(_ text: String) async throws {
-        recognizer.cancel()
-        state = .generatingSpeech
-        let audio = try await openClaw.requestSpeechAudio(for: text)
-        guard isActive && !Task.isCancelled else { throw CancellationError() }
-        state = .speaking
-        try await openClaw.playSpeechAudio(audio)
     }
 
     private func waitForConnection() async throws {

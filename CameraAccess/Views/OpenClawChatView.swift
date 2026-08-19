@@ -9,12 +9,14 @@ import SwiftUI
 struct OpenClawChatView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
     @ObservedObject var openClawService = OpenClawNodeService.shared
+    @ObservedObject private var ttsService = TTSService.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var inputText = ""
     @State private var isSending = false
     @State private var showTextInput = false
     @State private var showClearHistoryConfirmation = false
+    @State private var playingMessageID: UUID?
 
     var body: some View {
         NavigationView {
@@ -36,12 +38,23 @@ struct OpenClawChatView: View {
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 12) {
                             ForEach(openClawService.chatMessages) { msg in
-                                ChatBubble(message: msg).id(msg.id)
+                                ChatBubble(
+                                    message: msg,
+                                    isPlaying: playingMessageID == msg.id && ttsService.isSpeaking,
+                                    onSpeechButtonTapped: { toggleSpeech(for: msg) }
+                                )
+                                .id(msg.id)
                             }
                             if !openClawService.pendingChatResponse.isEmpty {
-                                ChatBubble(message: OpenClawChatMessage(
-                                    role: "assistant", text: openClawService.pendingChatResponse, image: nil
-                                ))
+                                ChatBubble(
+                                    message: OpenClawChatMessage(
+                                        role: "assistant",
+                                        text: openClawService.pendingChatResponse,
+                                        image: nil
+                                    ),
+                                    isPlaying: false,
+                                    onSpeechButtonTapped: nil
+                                )
                             }
                         }
                         .padding()
@@ -150,6 +163,15 @@ struct OpenClawChatView: View {
                 openClawService.connect()
             }
         }
+        .onChange(of: ttsService.isSpeaking) { isSpeaking in
+            if !isSpeaking {
+                playingMessageID = nil
+            }
+        }
+        .onDisappear {
+            ttsService.stop()
+            playingMessageID = nil
+        }
         .alert(
             "openclaw.chat.history.clear".localized,
             isPresented: $showClearHistoryConfirmation
@@ -170,6 +192,29 @@ struct OpenClawChatView: View {
         guard !text.isEmpty else { return }
         inputText = ""
         openClawService.sendChatMessage(text)
+    }
+
+    // MARK: - Speech
+
+    private func toggleSpeech(for message: OpenClawChatMessage) {
+        guard message.role == "assistant" else { return }
+
+        if playingMessageID == message.id && ttsService.isSpeaking {
+            ttsService.stop()
+            playingMessageID = nil
+            return
+        }
+
+        guard let speechText = GalvisSpeechResponseFormatter.speechText(
+            from: message.text
+        ) else { return }
+
+        ttsService.stop()
+        playingMessageID = message.id
+        ttsService.speak(speechText)
+        if !ttsService.isSpeaking {
+            playingMessageID = nil
+        }
     }
 
     // MARK: - Camera
@@ -207,6 +252,8 @@ struct OpenClawChatView: View {
 
 private struct ChatBubble: View {
     let message: OpenClawChatMessage
+    let isPlaying: Bool
+    let onSpeechButtonTapped: (() -> Void)?
 
     var body: some View {
         HStack {
@@ -240,6 +287,27 @@ private struct ChatBubble: View {
                             : AnyShapeStyle(Color(.systemGray5))
                     )
                     .cornerRadius(18)
+
+                if message.role == "assistant",
+                   let onSpeechButtonTapped {
+                    Button(action: onSpeechButtonTapped) {
+                        Label(
+                            isPlaying
+                                ? "openclaw.chat.speech.stop".localized
+                                : "openclaw.chat.speech.play".localized,
+                            systemImage: isPlaying
+                                ? "stop.circle.fill"
+                                : "speaker.wave.2.circle"
+                        )
+                        .font(.caption)
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel(
+                        isPlaying
+                            ? "openclaw.chat.speech.stop".localized
+                            : "openclaw.chat.speech.play".localized
+                    )
+                }
             }
 
             if message.role == "assistant" { Spacer(minLength: 60) }

@@ -448,7 +448,5 @@
 "openclaw.chat.history.clear" = "Clear Chat History";
 "openclaw.chat.history.clear.confirm" = "Delete all saved OpenClaw chat history?";
 "openclaw.chat.image.attachment" = "Photo attached";
-"openclaw.speech.section" = "Voice Responses";
-"openclaw.speech.enabled" = "Read OpenClaw responses aloud";
-"openclaw.speech.stop" = "Stop Speaking";
-"openclaw.speech.footer" = "Only final responses are read. Audio plays through the glasses when Ray-Ban Meta is selected as the iPhone Bluetooth audio output.";
+"openclaw.chat.speech.play" = "Read response";
+"openclaw.chat.speech.stop" = "Stop reading";

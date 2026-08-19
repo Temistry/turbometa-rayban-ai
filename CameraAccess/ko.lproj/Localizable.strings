@@ -439,7 +439,5 @@
 "openclaw.chat.history.clear" = "채팅 기록 삭제";
 "openclaw.chat.history.clear.confirm" = "저장된 OpenClaw 채팅 기록을 모두 삭제할까요?";
 "openclaw.chat.image.attachment" = "사진 첨부";
-"openclaw.speech.section" = "음성 응답";
-"openclaw.speech.enabled" = "OpenClaw 응답 음성으로 읽기";
-"openclaw.speech.stop" = "음성 중지";
-"openclaw.speech.footer" = "최종 답변만 읽습니다. Ray-Ban Meta가 iPhone의 Bluetooth 오디오 출력으로 선택되어 있으면 안경에서 재생됩니다.";
+"openclaw.chat.speech.play" = "답변 읽기";
+"openclaw.chat.speech.stop" = "읽기 중지";
