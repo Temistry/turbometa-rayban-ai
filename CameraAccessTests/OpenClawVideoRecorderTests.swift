@@ -71,7 +71,7 @@ final class OpenClawVideoRecorderTests: XCTestCase {
     }
 
     func testMaximumInputRateAndSourceDimensionsArePreserved() async throws {
-        XCTAssertEqual(OpenClawVideoRecorder.maxInputFPS, 30)
+        XCTAssertEqual(OpenClawVideoRecorder.maxInputFPS, 15)
 
         let recorder = OpenClawVideoRecorder()
         try recorder.start()
@@ -94,6 +94,37 @@ final class OpenClawVideoRecorderTests: XCTestCase {
 
         XCTAssertEqual(naturalSize.width, sourceSize.width, accuracy: 1)
         XCTAssertEqual(naturalSize.height, sourceSize.height, accuracy: 1)
+    }
+
+    func testLocationMetadataIsWrittenToMP4() async throws {
+        let location = OpenClawCaptureLocationSnapshot(
+            latitude: 37.5,
+            longitude: 127,
+            altitude: 25,
+            horizontalAccuracy: 10,
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        let recorder = OpenClawVideoRecorder(location: location)
+        try recorder.start()
+        let frame = image(size: CGSize(width: 160, height: 240))
+        for index in 0..<12 {
+            recorder.appendFrame(
+                frame,
+                hostTime: 275 + Double(index) / OpenClawVideoRecorder.maxInputFPS
+            )
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        let url = try await recorder.finalize()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let asset = AVURLAsset(url: url)
+        let metadata = try await asset.load(.metadata)
+        let locationItem = try XCTUnwrap(metadata.first {
+            $0.identifier == .quickTimeMetadataLocationISO6709
+        })
+        let value = try await locationItem.load(.stringValue)
+
+        XCTAssertEqual(value, location.iso6709)
     }
 
     func testCancelRemovesPartialRecording() throws {

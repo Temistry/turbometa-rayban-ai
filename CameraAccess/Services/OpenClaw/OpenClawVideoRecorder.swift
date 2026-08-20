@@ -2,13 +2,14 @@
  * OpenClaw Video Recorder
  * UIImage frame stream을 제한된 H.264 MP4로 기록한다.
  *
- * 녹화는 최대 10초, 입력은 최대 30fps이며 writer backpressure 시 frame을
+ * 녹화는 최대 10초, 입력은 최대 15fps이며 writer backpressure 시 frame을
  * 버린다. 30MiB는 encoder/muxer flush 특성상 soft budget이고 완료 후 실제
  * 파일 크기를 다시 확인할 수 있다.
  */
 
 import Foundation
 import AVFoundation
+import CoreMedia
 import CoreVideo
 import QuartzCore
 import UIKit
@@ -99,7 +100,7 @@ final class OpenClawVideoRecorder: @unchecked Sendable {
     // MARK: - Limits
 
     static let maxDuration: TimeInterval = 10
-    static let maxInputFPS: Double = 30
+    static let maxInputFPS: Double = 15
     static let minimumDuration: TimeInterval = 0.5
     /// Soft output-size budget in bytes — see the type-level doc comment for exactly what this
     /// does and does not guarantee.
@@ -167,8 +168,11 @@ final class OpenClawVideoRecorder: @unchecked Sendable {
     private var videoHeight = 0
 
     private let minFrameInterval: CFTimeInterval = 1.0 / OpenClawVideoRecorder.maxInputFPS
+    private let location: OpenClawCaptureLocationSnapshot?
 
-    init() {}
+    init(location: OpenClawCaptureLocationSnapshot? = nil) {
+        self.location = location
+    }
 
     // MARK: - Public API
 
@@ -187,6 +191,13 @@ final class OpenClawVideoRecorder: @unchecked Sendable {
         do {
             try encodingQueue.sync {
                 let writer = try AVAssetWriter(outputURL: tempURL, fileType: .mp4)
+                if let location {
+                    let item = AVMutableMetadataItem()
+                    item.identifier = .quickTimeMetadataLocationISO6709
+                    item.value = location.iso6709 as NSString
+                    item.dataType = kCMMetadataBaseDataType_UTF8 as String
+                    writer.metadata = [item]
+                }
                 assetWriter = writer
                 outputURL = tempURL
                 videoInput = nil

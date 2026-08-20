@@ -60,6 +60,9 @@ struct OpenClawMediaItem: Identifiable, Codable, Equatable, Sendable {
     let width: Int?
     let height: Int?
     let durationSeconds: Double?
+    /// Optional, immutable iPhone GPS snapshot captured at media start. The protected index may
+    /// use it for Photos export and explicit OpenClaw retries; coordinates must never be logged.
+    let location: OpenClawCaptureLocationSnapshot?
 
     /// Frozen at capture start. This intentionally contains sensitive prompt
     /// text, so the enclosing index must retain file protection and backup
@@ -93,6 +96,7 @@ struct OpenClawMediaItem: Identifiable, Codable, Equatable, Sendable {
         width: Int? = nil,
         height: Int? = nil,
         durationSeconds: Double? = nil,
+        location: OpenClawCaptureLocationSnapshot? = nil,
         modeSnapshot: OpenClawCaptureModeExecutionSnapshot,
         requestID: UUID,
         linkedUserMessageID: UUID? = nil,
@@ -117,6 +121,7 @@ struct OpenClawMediaItem: Identifiable, Codable, Equatable, Sendable {
         self.width = width
         self.height = height
         self.durationSeconds = durationSeconds
+        self.location = location
         self.modeSnapshot = modeSnapshot
         self.requestID = requestID
         self.linkedUserMessageID = linkedUserMessageID
@@ -202,6 +207,7 @@ struct OpenClawMediaItem: Identifiable, Codable, Equatable, Sendable {
             width: width ?? self.width,
             height: height ?? self.height,
             durationSeconds: durationSeconds ?? self.durationSeconds,
+            location: location,
             modeSnapshot: modeSnapshot,
             requestID: requestID,
             linkedUserMessageID: linkedUserMessageID ?? self.linkedUserMessageID,

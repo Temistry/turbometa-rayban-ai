@@ -165,8 +165,14 @@
 "gallery.missing.media.message" = "보호 저장 파일이 손상되었거나 제거되었습니다. 항목을 삭제할 수 있습니다.";
 "gallery.detail.captured" = "촬영 시각";
 "gallery.detail.mode" = "촬영 모드";
+"gallery.detail.resolution" = "원본 해상도";
+"gallery.detail.size" = "원본 용량";
 "gallery.detail.duration" = "길이";
 "gallery.detail.seconds" = "%.1f초";
+"gallery.detail.framerate" = "실제 프레임률";
+"gallery.detail.fps" = "%.1f fps";
+"gallery.detail.bitrate" = "추정 비트레이트";
+"gallery.detail.mbps" = "%.1f Mbps";
 "gallery.detail.photos" = "iPhone 사진 앱";
 "gallery.detail.analysis" = "OpenClaw 분석";
 "gallery.status.pending" = "처리 중";
@@ -272,7 +278,10 @@
 "settings.quality.medium.desc" = "균형 모드, 권장";
 "settings.quality.high" = "높은 화질";
 "settings.quality.high.desc" = "최고 화질, 배터리 소모가 큼";
-"settings.quality.maximum" = "최대 · 720×1280 · 30fps";
+"settings.quality.maximum" = "고세부 묘사 · 720×1280 · 15fps (DAT)";
+"settings.capture.location" = "촬영 위치 포함";
+"settings.capture.location.description" = "기본적으로 꺼져 있습니다. 켜면 앱 사용 중 한 번의 iPhone GPS 위치를 사진 EXIF, 동영상 metadata, iPhone 사진 앱과 OpenClaw 분석 문맥에 포함합니다. 위치를 얻지 못해도 촬영은 계속됩니다.";
+"openclaw.capture.location.context" = "촬영 위치: 위도 %.6f, 경도 %.6f (iPhone GPS, 정확도 약 %.0fm)";
 "settings.about" = "정보";
 "settings.version" = "버전";
 "settings.sdkversion" = "SDK 버전";

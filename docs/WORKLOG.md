@@ -13,12 +13,13 @@
 
 ### 주요 변경
 
-- DAT SDK 0.5.0 스트림을 지원 최대값인 세로 720×1280·30fps로 고정하고, 기존 설치의 low/medium 설정이 화질을 낮추지 않게 했다.
-- 설정 화면의 저/중/고 선택을 읽기 전용 최대 화질 상태로 바꿔 실제 스트림 정책과 일치시켰다.
-- Quick Shot MP4 입력 상한을 30fps로 올리고 첫 입력 프레임 크기를 그대로 H.264 High Profile로 기록한다. 기존 최대 10초·30MiB soft budget과 backpressure frame drop은 유지한다.
-- DAT 사진 JPEG는 byte-for-byte 보호 저장하고, 4MiB를 넘을 때만 원본과 분리된 분석 전송용 JPEG를 최고 품질부터 축소한다. SDK가 제공하지 않는 12MP 업스케일은 하지 않는다.
-- 동영상 contact sheet는 최대 6프레임을 유지하면서 작은 입력을 확대하지 않고 자연 픽셀 크기를 보존하며, 긴 변 최대 4096px·JPEG quality 1.0부터 4MiB 안의 최고 결과를 선택한다.
-- Gallery thumbnail의 긴 변과 JPEG 품질을 높여 원본을 건드리지 않고 미리보기 선명도를 개선했다.
+- DAT SDK 0.5.0의 세로 `.high` 720×1280을 유지하고 15fps로 낮춰 Bluetooth 대역폭을 프레임 수보다 프레임당 세부 묘사에 우선하도록 했다. 소비자용 12MP/3K 카메라 경로와 DAT 개발자 스트림의 차이를 설정과 문서에 명시했다.
+- 설정 화면의 저/중/고 선택을 읽기 전용 `고세부 묘사 · 720×1280 · 15fps (DAT)` 상태로 바꿔 실제 스트림 정책과 일치시켰다.
+- Quick Shot MP4 입력 상한을 15fps로 맞추고 첫 입력 프레임 크기를 그대로 H.264 High Profile로 기록한다. 기존 최대 10초·30MiB soft budget과 backpressure frame drop은 유지한다.
+- DAT 사진 JPEG는 보호 저장하고, 4MiB를 넘을 때만 원본과 분리된 분석 전송용 JPEG를 최고 품질부터 축소한다. SDK가 제공하지 않는 12MP 업스케일은 하지 않는다. 일반 OpenClaw 채팅 카메라도 stream frame 대신 exact JPEG 정지 사진을 사용한다.
+- 동영상 contact sheet는 최대 6프레임을 유지하면서 작은 입력을 확대하지 않고 자연 픽셀 크기를 보존하며, 긴 변 최대 4096px·JPEG quality 1.0부터 4MiB 안의 최고 결과를 선택한다. Gallery 재분석도 보호 원본 MP4에서 contact sheet를 다시 생성한다.
+- Gallery thumbnail의 긴 변과 JPEG 품질을 높여 원본을 건드리지 않고 미리보기 선명도를 개선했다. 상세 동영상은 실제 세로 비율을 사용하며 원본 해상도·용량·fps·bitrate를 표시한다.
+- 기본 off인 `촬영 위치 포함`을 추가했다. 사용자가 켜고 when-in-use 권한을 허용한 경우에만 단발성 iPhone GPS snapshot을 사진 GPS EXIF, MP4 QuickTime 위치 metadata, Photos asset과 OpenClaw 분석 문맥에 적용한다. 위치 실패는 촬영을 막지 않는다.
 - 홈 Quick Shot의 모드 선택 화면에 `모드 추가 및 편집` 진입점을 추가해 촬영 흐름을 벗어나지 않고 기존 모드 관리·편집 UI를 사용할 수 있게 했다.
 - 모드 관리를 picker의 navigation 계층에 연결해 관리 후 돌아오면 동일한 manager에서 변경된 호환 모드 목록이 즉시 갱신되며, 실제 촬영은 사용자가 모드를 다시 탭할 때 기존 immutable snapshot으로 시작한다.
 - 실기기 진단에서 background/잠금 중 Keychain OSStatus `-25308`을 자격 증명 미설정으로 오인해 빈 인증 요청을 보내던 경로를 차단했다.
@@ -38,7 +39,8 @@
 
 ### 보안·데이터 정책
 
-- mode prompt, 이미지·동영상 payload, transcript, OpenClaw 답변 원문을 진단 로그에 남기지 않는다.
+- mode prompt, 이미지·동영상 payload, transcript, OpenClaw 답변 원문과 좌표를 진단 로그에 남기지 않는다.
+- 위치 기능은 기본 off이며 지속 추적·background location을 사용하지 않는다. 권한 거부·제한·timeout 시 위치 없이 촬영을 계속한다.
 - Photos에는 `.addOnly`로 복사하며 기존 보관함을 읽거나 앱 repository의 source of truth로 사용하지 않는다.
 - 앱 항목 삭제는 앱 원본·thumbnail·index만 삭제하고 Photos 복사본은 건드리지 않는다.
 - delivery가 불명확하면 자동 재전송하지 않고 사용자의 명시적 재시도만 허용한다.
@@ -46,7 +48,8 @@
 
 ### 검증 결과
 
-- 최대 화질 변경에 30fps/source-dimension MP4, contact sheet 자연 크기·4MiB budget, JPEG 원본 pass-through·초과 fallback 회귀 테스트를 추가했다.
+- 화질 변경에 15fps/source-dimension MP4, 보호 MP4 대표 프레임 재추출, contact sheet 자연 크기·4MiB budget, JPEG 원본 pass-through·초과 fallback 회귀 테스트를 추가했다.
+- location 없는 기존 media index decode, location snapshot round-trip·copy 보존, 위치 없음 JPEG byte-for-byte pass-through와 GPS EXIF pixel dimension 보존 테스트를 추가했다.
 - `git diff --check`: 오류 없음. Windows 작업 트리의 LF→CRLF 경고만 확인했다.
 - `python Scripts/audit_localization_security.py`: 치명 0, 경고 0, 기존 정보성 1.
 - `python -m unittest Scripts/OpenClaw/test_export_openclaw_conversations.py`: 2개 테스트 통과.

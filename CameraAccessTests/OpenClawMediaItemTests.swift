@@ -105,7 +105,14 @@ final class OpenClawMediaItemTests: XCTestCase {
         XCTAssertEqual(item.withRetryAttempt(-1).retryAttempt, 0)
     }
 
-    func testRoundTripJSONCodingPreservesRetryPrompt() throws {
+    func testRoundTripJSONCodingPreservesRetryPromptAndLocation() throws {
+        let location = OpenClawCaptureLocationSnapshot(
+            latitude: 37.5,
+            longitude: 127.0,
+            altitude: 42,
+            horizontalAccuracy: 12,
+            capturedAt: Date(timeIntervalSince1970: 1_700_000_000)
+        )
         let original = OpenClawMediaItem(
             kind: .video,
             originalExtension: "mp4",
@@ -113,6 +120,7 @@ final class OpenClawMediaItemTests: XCTestCase {
             width: 1920,
             height: 1080,
             durationSeconds: 8.5,
+            location: location,
             modeSnapshot: snapshot(prompt: "protected exact prompt", media: .video),
             requestID: UUID(),
             deliveryStatus: .delivered
@@ -128,5 +136,53 @@ final class OpenClawMediaItemTests: XCTestCase {
 
         XCTAssertEqual(decoded, original)
         XCTAssertEqual(decoded.modeSnapshot.prompt, "protected exact prompt")
+        XCTAssertEqual(decoded.location, location)
+    }
+
+    func testLegacyJSONWithoutLocationStillDecodes() throws {
+        let original = OpenClawMediaItem(
+            kind: .photo,
+            originalExtension: "jpg",
+            byteSize: 99,
+            modeSnapshot: snapshot(),
+            requestID: UUID()
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoder.encode(original))
+                as? [String: Any]
+        )
+        object.removeValue(forKey: "location")
+        let legacyData = try JSONSerialization.data(withJSONObject: object)
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decoded = try decoder.decode(OpenClawMediaItem.self, from: legacyData)
+
+        XCTAssertNil(decoded.location)
+        XCTAssertEqual(decoded.id, original.id)
+        XCTAssertEqual(decoded.modeSnapshot, original.modeSnapshot)
+    }
+
+    func testCopyHelpersPreserveLocationSnapshot() {
+        let location = OpenClawCaptureLocationSnapshot(
+            latitude: 1,
+            longitude: -2,
+            altitude: nil,
+            horizontalAccuracy: 25,
+            capturedAt: Date(timeIntervalSince1970: 100)
+        )
+        let original = OpenClawMediaItem(
+            kind: .photo,
+            originalExtension: "jpg",
+            byteSize: 1,
+            location: location,
+            modeSnapshot: snapshot(),
+            requestID: UUID()
+        )
+
+        XCTAssertEqual(original.withPhotosStatus(.saved).location, location)
+        XCTAssertEqual(original.withAnalysisStatus(.completed).location, location)
     }
 }

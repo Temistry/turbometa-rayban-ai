@@ -99,10 +99,16 @@ final class OpenClawGalleryViewModel: ObservableObject {
             switch item.kind {
             case .photo:
                 let data = try await repository.originalData(for: item)
-                _ = try await photoLibrarySaver.saveJPEG(data)
+                _ = try await photoLibrarySaver.saveJPEG(
+                    data,
+                    location: item.location
+                )
             case .video:
                 let url = await repository.originalURL(for: item)
-                _ = try await photoLibrarySaver.saveMP4(fileURL: url)
+                _ = try await photoLibrarySaver.saveMP4(
+                    fileURL: url,
+                    location: item.location
+                )
             }
             _ = try await repository.updatePhotosStatus(id: item.id, status: .saved)
             await load()
@@ -131,14 +137,19 @@ final class OpenClawGalleryViewModel: ObservableObject {
             switch item.kind {
             case .photo:
                 jpegData = try await repository.originalData(for: item)
-                prompt = item.modeSnapshot.prompt
+                prompt = promptWithLocation(
+                    item.modeSnapshot.prompt,
+                    location: item.location
+                )
             case .video:
-                guard let thumbnailData = try await repository.thumbnailData(for: item),
-                      !thumbnailData.isEmpty else {
-                    throw OpenClawConversationError.invalidImage
-                }
-                jpegData = thumbnailData
-                prompt = videoRetryPrompt(for: item)
+                let originalURL = await repository.originalURL(for: item)
+                jpegData = try await OpenClawVideoFrameExtractor.contactSheetJPEG(
+                    from: originalURL
+                )
+                prompt = promptWithLocation(
+                    videoRetryPrompt(for: item),
+                    location: item.location
+                )
             }
 
             _ = try await repository.updateDeliveryStatus(
@@ -201,6 +212,14 @@ final class OpenClawGalleryViewModel: ObservableObject {
         return item.modeSnapshot.prompt
             + "\n\n"
             + "gallery.video.retry.prompt".localized(duration)
+    }
+
+    private func promptWithLocation(
+        _ prompt: String,
+        location: OpenClawCaptureLocationSnapshot?
+    ) -> String {
+        guard let location else { return prompt }
+        return prompt + "\n\n" + location.openClawContext
     }
 }
 
@@ -400,6 +419,7 @@ private struct OpenClawMediaDetailView: View {
     @State private var item: OpenClawMediaItem?
     @State private var photo: UIImage?
     @State private var originalURL: URL?
+    @State private var videoQuality: OpenClawVideoQualityMetadata?
     @State private var showDeleteConfirmation = false
 
     var body: some View {
@@ -470,7 +490,7 @@ private struct OpenClawMediaDetailView: View {
         case .video:
             if let originalURL {
                 VideoPlayer(player: AVPlayer(url: originalURL))
-                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .aspectRatio(videoAspectRatio(for: item), contentMode: .fit)
                     .clipShape(RoundedRectangle(cornerRadius: AppCornerRadius.md))
             } else {
                 missingPreview
@@ -498,11 +518,36 @@ private struct OpenClawMediaDetailView: View {
                 Text(item.modeSnapshot.name)
                     .foregroundStyle(.secondary)
             }
-            if let duration = item.durationSeconds {
+            if let dimensions = dimensionsText(for: item) {
+                LabeledContent(
+                    "gallery.detail.resolution".localized,
+                    value: dimensions
+                )
+            }
+            LabeledContent(
+                "gallery.detail.size".localized,
+                value: byteSizeText(item.byteSize)
+            )
+            if let duration = videoQuality?.durationSeconds ?? item.durationSeconds,
+               item.kind == .video {
                 LabeledContent(
                     "gallery.detail.duration".localized,
                     value: "gallery.detail.seconds".localized(duration)
                 )
+            }
+            if let videoQuality {
+                LabeledContent(
+                    "gallery.detail.framerate".localized,
+                    value: "gallery.detail.fps".localized(videoQuality.nominalFrameRate)
+                )
+                if videoQuality.estimatedDataRate > 0 {
+                    LabeledContent(
+                        "gallery.detail.bitrate".localized,
+                        value: "gallery.detail.mbps".localized(
+                            videoQuality.estimatedDataRate / 1_000_000
+                        )
+                    )
+                }
             }
             HStack {
                 Text("gallery.detail.photos".localized)
@@ -583,11 +628,48 @@ private struct OpenClawMediaDetailView: View {
             item = nil
             photo = nil
             originalURL = nil
+            videoQuality = nil
             return
         }
         item = updated
-        originalURL = await viewModel.originalURL(for: updated)
+        let loadedURL = await viewModel.originalURL(for: updated)
+        originalURL = loadedURL
         photo = await viewModel.originalPhoto(for: updated)
+        if updated.kind == .video, let loadedURL {
+            videoQuality = await OpenClawVideoFrameExtractor.qualityMetadata(
+                from: loadedURL
+            )
+        } else {
+            videoQuality = nil
+        }
+    }
+
+    private func videoAspectRatio(for item: OpenClawMediaItem) -> CGFloat {
+        let width = videoQuality?.width ?? item.width ?? 9
+        let height = videoQuality?.height ?? item.height ?? 16
+        guard width > 0, height > 0 else { return CGFloat(9.0 / 16.0) }
+        return CGFloat(width) / CGFloat(height)
+    }
+
+    private func dimensionsText(for item: OpenClawMediaItem) -> String? {
+        let width: Int?
+        let height: Int?
+        if item.kind == .video {
+            width = videoQuality?.width ?? item.width
+            height = videoQuality?.height ?? item.height
+        } else {
+            width = photo.map { Int($0.size.width * $0.scale) } ?? item.width
+            height = photo.map { Int($0.size.height * $0.scale) } ?? item.height
+        }
+        guard let width, let height, width > 0, height > 0 else { return nil }
+        return "\(width)×\(height)"
+    }
+
+    private func byteSizeText(_ byteSize: Int) -> String {
+        ByteCountFormatter.string(
+            fromByteCount: Int64(max(0, byteSize)),
+            countStyle: .file
+        )
     }
 
     private func photosStatus(_ status: OpenClawMediaPhotosStatus) -> String {

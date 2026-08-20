@@ -11,6 +11,7 @@ struct OpenClawChatView: View {
     let selectedMessageID: UUID?
     @ObservedObject var openClawService = OpenClawNodeService.shared
     @ObservedObject private var ttsService = TTSService.shared
+    @ObservedObject private var locationService = OpenClawCaptureLocationService.shared
     @Environment(\.dismiss) private var dismiss
 
     @State private var inputText = ""
@@ -303,7 +304,7 @@ struct OpenClawChatView: View {
             }
         }
 
-        guard let frame = streamViewModel.currentVideoFrame else {
+        guard streamViewModel.currentVideoFrame != nil else {
             openClawService.addLocalChatNotice(
                 "openclaw.chat.noframe".localized
             )
@@ -314,7 +315,23 @@ struct OpenClawChatView: View {
         let text = inputText.isEmpty ? "openclaw.chat.photoprompt".localized : inputText
         inputText = ""
         do {
-            _ = try await openClawService.sendChatMessage(text, image: frame)
+            async let pendingLocation = locationService.captureSnapshot()
+            let captured = try await streamViewModel.capturePhotoResult(
+                owner: .openClawChat
+            )
+            let location = await pendingLocation
+            let jpegData = OpenClawMediaMetadataWriter.jpegData(
+                captured.jpegData,
+                adding: location
+            ) ?? captured.jpegData
+            let prompt = location.map {
+                text + "\n\n" + $0.openClawContext
+            } ?? text
+            _ = try await openClawService.sendChatMessage(
+                prompt,
+                imageJPEGData: jpegData,
+                previewImage: captured.image
+            )
         } catch {
             openClawService.addLocalChatNotice(error.localizedDescription)
         }

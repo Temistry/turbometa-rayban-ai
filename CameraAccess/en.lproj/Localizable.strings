@@ -165,8 +165,14 @@
 "gallery.missing.media.message" = "The protected file is damaged or was removed. You can delete this item.";
 "gallery.detail.captured" = "Captured";
 "gallery.detail.mode" = "Capture Mode";
+"gallery.detail.resolution" = "Original Resolution";
+"gallery.detail.size" = "Original Size";
 "gallery.detail.duration" = "Duration";
 "gallery.detail.seconds" = "%.1fs";
+"gallery.detail.framerate" = "Actual Frame Rate";
+"gallery.detail.fps" = "%.1f fps";
+"gallery.detail.bitrate" = "Estimated Bitrate";
+"gallery.detail.mbps" = "%.1f Mbps";
 "gallery.detail.photos" = "iPhone Photos";
 "gallery.detail.analysis" = "OpenClaw Analysis";
 "gallery.status.pending" = "In Progress";
@@ -272,7 +278,10 @@
 "settings.quality.medium.desc" = "Balanced mode (Recommended)";
 "settings.quality.high" = "High Quality";
 "settings.quality.high.desc" = "Best quality, higher battery usage";
-"settings.quality.maximum" = "Maximum · 720×1280 · 30fps";
+"settings.quality.maximum" = "Detail-first · 720×1280 · 15fps (DAT)";
+"settings.capture.location" = "Include Capture Location";
+"settings.capture.location.description" = "Off by default. When enabled, one-shot iPhone GPS is added to photo EXIF, video metadata, iPhone Photos, and the OpenClaw analysis context. Capture continues if location is unavailable.";
+"openclaw.capture.location.context" = "Capture location: latitude %.6f, longitude %.6f (iPhone GPS, approximately %.0fm accuracy)";
 "settings.about" = "About";
 "settings.version" = "Version";
 "settings.sdkversion" = "SDK Version";

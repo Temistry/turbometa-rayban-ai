@@ -511,6 +511,20 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     @discardableResult
+    func sendChatMessage(
+        _ text: String,
+        imageJPEGData: Data,
+        previewImage: UIImage
+    ) async throws -> OpenClawConversationResult {
+        try await sendConversation(
+            text,
+            image: previewImage,
+            imageJPEGData: imageJPEGData,
+            owner: .chat
+        )
+    }
+
+    @discardableResult
     func sendConversation(
         _ text: String,
         imageJPEGData: Data? = nil,

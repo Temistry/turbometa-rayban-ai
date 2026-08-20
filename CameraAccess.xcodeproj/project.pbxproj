@@ -121,6 +121,7 @@
 		OMD10004000400040004 /* OpenClawVideoContactSheetBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20004000400040004 /* OpenClawVideoContactSheetBuilder.swift */; };
 		OMD10005000500050005 /* OpenClawVideoRecorder.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20005000500050005 /* OpenClawVideoRecorder.swift */; };
 		OMD10006000600060006 /* OpenClawQuickShotCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20006000600060006 /* OpenClawQuickShotCoordinator.swift */; };
+		OMD10007000700070007 /* OpenClawVideoFrameExtractor.swift in Sources */ = {isa = PBXBuildFile; fileRef = OMD20007000700070007 /* OpenClawVideoFrameExtractor.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -260,6 +261,7 @@
 		OMD20004000400040004 /* OpenClawVideoContactSheetBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawVideoContactSheetBuilder.swift; sourceTree = "<group>"; };
 		OMD20005000500050005 /* OpenClawVideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawVideoRecorder.swift; sourceTree = "<group>"; };
 		OMD20006000600060006 /* OpenClawQuickShotCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawQuickShotCoordinator.swift; sourceTree = "<group>"; };
+		OMD20007000700070007 /* OpenClawVideoFrameExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawVideoFrameExtractor.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -534,6 +536,7 @@
 				OMD20004000400040004 /* OpenClawVideoContactSheetBuilder.swift */,
 				OMD20005000500050005 /* OpenClawVideoRecorder.swift */,
 				OMD20006000600060006 /* OpenClawQuickShotCoordinator.swift */,
+				OMD20007000700070007 /* OpenClawVideoFrameExtractor.swift */,
 			);
 			path = OpenClaw;
 			sourceTree = "<group>";
@@ -752,6 +755,7 @@
 				OMD10004000400040004 /* OpenClawVideoContactSheetBuilder.swift in Sources */,
 				OMD10005000500050005 /* OpenClawVideoRecorder.swift in Sources */,
 				OMD10006000600060006 /* OpenClawQuickShotCoordinator.swift in Sources */,
+				OMD10007000700070007 /* OpenClawVideoFrameExtractor.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

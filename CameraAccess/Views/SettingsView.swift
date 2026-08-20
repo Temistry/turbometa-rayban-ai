@@ -12,6 +12,7 @@ struct SettingsView: View {
     @ObservedObject var providerManager = APIProviderManager.shared
     @ObservedObject var quickVisionModeManager = QuickVisionModeManager.shared
     @ObservedObject var openClawService = OpenClawNodeService.shared
+    @ObservedObject private var locationService = OpenClawCaptureLocationService.shared
     #if DEBUG
     @ObservedObject var developerConsole = DeveloperConsole.shared
     #endif
@@ -208,8 +209,15 @@ struct SettingsView: View {
             ) {
                 showOpenClawSettings = true
             }
+
+            Toggle(
+                "settings.capture.location".localized,
+                isOn: $locationService.isEnabled
+            )
         } header: {
             Text("settings.integrations".localized)
+        } footer: {
+            Text("settings.capture.location.description".localized)
         }
     }
 

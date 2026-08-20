@@ -49,6 +49,7 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
     private let repository: OpenClawMediaRepository
     private let photoLibrarySaver: PhotoLibrarySaver
     private let openClawService: OpenClawNodeService
+    private let locationService: OpenClawCaptureLocationService
 
     private var operationTask: Task<Void, Never>?
     private var recordingTimerTask: Task<Void, Never>?
@@ -58,18 +59,21 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
     private var isVideoFinalizationStarted = false
     private var videoRequestID: UUID?
     private var videoUserMessageID: UUID?
+    private var captureLocation: OpenClawCaptureLocationSnapshot?
     private var streamStartedByQuickShot = false
 
     init(
         streamViewModel: StreamSessionViewModel,
         repository: OpenClawMediaRepository = .shared,
         photoLibrarySaver: PhotoLibrarySaver? = nil,
-        openClawService: OpenClawNodeService = .shared
+        openClawService: OpenClawNodeService = .shared,
+        locationService: OpenClawCaptureLocationService? = nil
     ) {
         self.streamViewModel = streamViewModel
         self.repository = repository
         self.photoLibrarySaver = photoLibrarySaver ?? .shared
         self.openClawService = openClawService
+        self.locationService = locationService ?? .shared
     }
 
     func startPhoto(snapshot: OpenClawCaptureModeExecutionSnapshot) {
@@ -114,6 +118,8 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
         isVideoFinalizationStarted = false
         videoRequestID = nil
         videoUserMessageID = nil
+        captureLocation = nil
+        recordingStartUptime = nil
         sampledFrames.removeAll(keepingCapacity: false)
         Task { await stopOwnedStreamIfNeeded() }
         state = .cancelled
@@ -133,6 +139,7 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
         let userMessageID = UUID()
         do {
             state = .preparing
+            async let pendingLocation = locationService.captureSnapshot()
             try await prepareStream()
             try Task.checkCancellation()
 
@@ -140,30 +147,38 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
             let captured = try await streamViewModel.capturePhotoResult(
                 owner: .openClawQuickShot
             )
-            print("[OpenClawQuickShot][INFO] 사진 수신 bytes=\(captured.jpegData.count)")
+            let location = await pendingLocation
+            let protectedJPEG = OpenClawMediaMetadataWriter.jpegData(
+                captured.jpegData,
+                adding: location
+            ) ?? captured.jpegData
+            captureLocation = location
+            print("[OpenClawQuickShot][INFO] 사진 수신 bytes=\(protectedJPEG.count)")
             try Task.checkCancellation()
 
             state = .saving
-            let thumbnailData = makeThumbnailJPEG(from: captured.image)
+            let protectedImage = UIImage(data: protectedJPEG) ?? captured.image
+            let thumbnailData = makeThumbnailJPEG(from: protectedImage)
             var item = try await repository.addItem(
                 kind: .photo,
-                originalData: captured.jpegData,
+                originalData: protectedJPEG,
                 originalExtension: "jpg",
                 thumbnailData: thumbnailData,
-                width: captured.image.cgImage?.width,
-                height: captured.image.cgImage?.height,
+                width: protectedImage.cgImage?.width,
+                height: protectedImage.cgImage?.height,
+                location: location,
                 modeSnapshot: snapshot,
                 requestID: requestID,
                 linkedUserMessageID: userMessageID
             )
             currentMediaItem = item
-            print("[OpenClawQuickShot][INFO] 사진 보호 저장 완료 bytes=\(captured.jpegData.count)")
+            print("[OpenClawQuickShot][INFO] 사진 보호 저장 완료 bytes=\(protectedJPEG.count)")
 
-            item = await exportPhoto(captured.jpegData, item: item)
+            item = await exportPhoto(protectedJPEG, item: item)
             try Task.checkCancellation()
             await analyze(
-                jpegData: captured.jpegData,
-                prompt: snapshot.prompt,
+                jpegData: protectedJPEG,
+                prompt: promptWithLocation(snapshot.prompt, location: location),
                 requestID: requestID,
                 userMessageID: userMessageID,
                 item: item
@@ -182,7 +197,10 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
             try await prepareStream()
             try Task.checkCancellation()
 
-            let recorder = OpenClawVideoRecorder()
+            async let pendingLocation = locationService.captureSnapshot()
+            let location = await pendingLocation
+            captureLocation = location
+            let recorder = OpenClawVideoRecorder(location: location)
             recorder.onFrameDropped = { [weak self] in
                 Task { @MainActor in self?.droppedFrameCount += 1 }
             }
@@ -280,6 +298,7 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
                 width: sampledFrames.first?.image.cgImage?.width,
                 height: sampledFrames.first?.image.cgImage?.height,
                 durationSeconds: duration,
+                location: captureLocation,
                 modeSnapshot: snapshot,
                 requestID: requestID,
                 linkedUserMessageID: userMessageID
@@ -289,7 +308,10 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
             item = await exportVideo(item: item)
             try Task.checkCancellation()
             let prompt = videoAnalysisPrompt(
-                basePrompt: snapshot.prompt,
+                basePrompt: promptWithLocation(
+                    snapshot.prompt,
+                    location: captureLocation
+                ),
                 duration: duration,
                 frameCount: orderedFrames.count
             )
@@ -347,7 +369,10 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
         state = .exportingToPhotos
         _ = try? await repository.updatePhotosStatus(id: item.id, status: .pending)
         do {
-            _ = try await photoLibrarySaver.saveJPEG(jpegData)
+            _ = try await photoLibrarySaver.saveJPEG(
+                jpegData,
+                location: item.location
+            )
             return (try? await repository.updatePhotosStatus(id: item.id, status: .saved)) ?? item
         } catch PhotoLibrarySaverError.permissionDenied,
                 PhotoLibrarySaverError.permissionRestricted {
@@ -362,7 +387,10 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
         _ = try? await repository.updatePhotosStatus(id: item.id, status: .pending)
         do {
             let url = await repository.originalURL(for: item)
-            _ = try await photoLibrarySaver.saveMP4(fileURL: url)
+            _ = try await photoLibrarySaver.saveMP4(
+                fileURL: url,
+                location: item.location
+            )
             return (try? await repository.updatePhotosStatus(id: item.id, status: .saved)) ?? item
         } catch PhotoLibrarySaverError.permissionDenied,
                 PhotoLibrarySaverError.permissionRestricted {
@@ -486,6 +514,8 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
         isVideoFinalizationStarted = false
         videoRequestID = nil
         videoUserMessageID = nil
+        captureLocation = nil
+        recordingStartUptime = nil
         streamStartedByQuickShot = false
     }
 
@@ -518,6 +548,14 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
         }.jpegData(compressionQuality: 0.88)
+    }
+
+    private func promptWithLocation(
+        _ prompt: String,
+        location: OpenClawCaptureLocationSnapshot?
+    ) -> String {
+        guard let location else { return prompt }
+        return prompt + "\n\n" + location.openClawContext
     }
 
     private func videoAnalysisPrompt(

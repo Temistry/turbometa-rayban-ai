@@ -9,6 +9,7 @@ struct UnifiedSettingsView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
     @ObservedObject private var quickVisionModeManager = QuickVisionModeManager.shared
     @ObservedObject private var openClawService = OpenClawNodeService.shared
+    @ObservedObject private var locationService = OpenClawCaptureLocationService.shared
     #if DEBUG
     @ObservedObject private var developerConsole = DeveloperConsole.shared
     #endif
@@ -215,8 +216,15 @@ struct UnifiedSettingsView: View {
             ) {
                 showOpenClawSettings = true
             }
+
+            Toggle(
+                "settings.capture.location".localized,
+                isOn: $locationService.isEnabled
+            )
         } header: {
             Text("settings.integrations".localized)
+        } footer: {
+            Text("settings.capture.location.description".localized)
         }
     }
 
