@@ -64,7 +64,7 @@ enum OpenClawVideoFrameExtractor {
 
         var images: [UIImage] = []
         for try await generated in generator.images(for: times) {
-            images.append(UIImage(cgImage: generated.image))
+            images.append(UIImage(cgImage: try generated.image))
         }
         guard !images.isEmpty else {
             throw OpenClawVideoFrameExtractorError.noFrames
