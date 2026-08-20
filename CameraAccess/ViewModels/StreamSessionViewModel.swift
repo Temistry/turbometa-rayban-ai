@@ -125,7 +125,7 @@ class StreamSessionViewModel: ObservableObject {
     let config = StreamSessionConfig(
       videoCodec: VideoCodec.raw,
       resolution: .high,
-      frameRate: Int(Self.detailFirstFrameRate))
+      frameRate: UInt(Self.detailFirstFrameRate))
     streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
     logger.info("🟢 StreamSession created")
 
