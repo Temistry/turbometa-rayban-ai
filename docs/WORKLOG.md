@@ -13,6 +13,8 @@
 
 ### 주요 변경
 
+- 홈 Quick Shot의 모드 선택 화면에 `모드 추가 및 편집` 진입점을 추가해 촬영 흐름을 벗어나지 않고 기존 모드 관리·편집 UI를 사용할 수 있게 했다.
+- 모드 관리를 picker의 navigation 계층에 연결해 관리 후 돌아오면 동일한 manager에서 변경된 호환 모드 목록이 즉시 갱신되며, 실제 촬영은 사용자가 모드를 다시 탭할 때 기존 immutable snapshot으로 시작한다.
 - 실기기 진단에서 background/잠금 중 Keychain OSStatus `-25308`을 자격 증명 미설정으로 오인해 빈 인증 요청을 보내던 경로를 차단했다.
 - Gateway token 상태를 configured/not configured/temporarily unavailable/failure로 구분하고 foreground에서만 읽어 연결 attempt당 캐시한다.
 - pending reconnect backoff를 화면 `onAppear`와 foreground 복귀가 우회하지 않게 했으며, 자동 연결은 재시도 횟수를 초기화하지 않는다.

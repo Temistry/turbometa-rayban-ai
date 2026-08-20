@@ -7,52 +7,72 @@ import SwiftUI
 
 struct OpenClawCaptureModeSettingsView: View {
     @ObservedObject var modeManager: OpenClawCaptureModeManager
+    let wrapsInNavigationView: Bool
     @Environment(\.dismiss) private var dismiss
 
     @State private var editorTarget: OpenClawCaptureModeEditorView.Mode?
     @State private var pendingDelete: OpenClawCaptureMode?
 
+    init(
+        modeManager: OpenClawCaptureModeManager,
+        wrapsInNavigationView: Bool = true
+    ) {
+        self.modeManager = modeManager
+        self.wrapsInNavigationView = wrapsInNavigationView
+    }
+
+    @ViewBuilder
     var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    ForEach(sortedModes) { mode in
-                        modeRow(mode)
+        if wrapsInNavigationView {
+            NavigationView {
+                settingsContent
+            }
+        } else {
+            settingsContent
+        }
+    }
+
+    private var settingsContent: some View {
+        List {
+            Section {
+                ForEach(sortedModes) { mode in
+                    modeRow(mode)
+                }
+                .onMove(perform: moveModes)
+            } header: {
+                Text("openclaw.capturemode.settings.modes".localized)
+            } footer: {
+                Text("openclaw.capturemode.settings.modes.footer.v2".localized)
+            }
+
+            Section {
+                Picker("openclaw.capturemode.settings.photodefault".localized, selection: photoDefaultBinding) {
+                    ForEach(modeManager.photoModes) { mode in
+                        Text(mode.name).tag(mode.id)
                     }
-                    .onMove(perform: moveModes)
-                } header: {
-                    Text("openclaw.capturemode.settings.modes".localized)
-                } footer: {
-                    Text("openclaw.capturemode.settings.modes.footer.v2".localized)
                 }
 
-                Section {
-                    Picker("openclaw.capturemode.settings.photodefault".localized, selection: photoDefaultBinding) {
-                        ForEach(modeManager.photoModes) { mode in
-                            Text(mode.name).tag(mode.id)
-                        }
+                Picker("openclaw.capturemode.settings.videodefault".localized, selection: videoDefaultBinding) {
+                    ForEach(modeManager.videoModes) { mode in
+                        Text(mode.name).tag(mode.id)
                     }
-
-                    Picker("openclaw.capturemode.settings.videodefault".localized, selection: videoDefaultBinding) {
-                        ForEach(modeManager.videoModes) { mode in
-                            Text(mode.name).tag(mode.id)
-                        }
-                    }
-                } header: {
-                    Text("openclaw.capturemode.settings.defaults".localized)
                 }
+            } header: {
+                Text("openclaw.capturemode.settings.defaults".localized)
+            }
 
-                Section {
-                    Button {
-                        editorTarget = .create
-                    } label: {
-                        Label("openclaw.capturemode.settings.new".localized, systemImage: "plus.circle")
-                    }
+            Section {
+                Button {
+                    editorTarget = .create
+                } label: {
+                    Label("openclaw.capturemode.settings.new".localized, systemImage: "plus.circle")
                 }
             }
-            .navigationTitle("openclaw.capturemode.settings.title".localized)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
+        }
+        .navigationTitle("openclaw.capturemode.settings.title".localized)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            if wrapsInNavigationView {
                 ToolbarItem(placement: .navigationBarLeading) {
                     EditButton()
                 }
@@ -61,26 +81,30 @@ struct OpenClawCaptureModeSettingsView: View {
                         dismiss()
                     }
                 }
-            }
-            .sheet(item: $editorTarget) { target in
-                OpenClawCaptureModeEditorView(modeManager: modeManager, editMode: target)
-            }
-            .alert(
-                "openclaw.capturemode.delete.title".localized,
-                isPresented: Binding(
-                    get: { pendingDelete != nil },
-                    set: { if !$0 { pendingDelete = nil } }
-                ),
-                presenting: pendingDelete
-            ) { mode in
-                Button("cancel".localized, role: .cancel) {}
-                Button("delete".localized, role: .destructive) {
-                    try? modeManager.deleteMode(id: mode.id)
-                    pendingDelete = nil
+            } else {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    EditButton()
                 }
-            } message: { mode in
-                Text("openclaw.capturemode.delete.confirm".localized(mode.name))
             }
+        }
+        .sheet(item: $editorTarget) { target in
+            OpenClawCaptureModeEditorView(modeManager: modeManager, editMode: target)
+        }
+        .alert(
+            "openclaw.capturemode.delete.title".localized,
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            presenting: pendingDelete
+        ) { mode in
+            Button("cancel".localized, role: .cancel) {}
+            Button("delete".localized, role: .destructive) {
+                try? modeManager.deleteMode(id: mode.id)
+                pendingDelete = nil
+            }
+        } message: { mode in
+            Text("openclaw.capturemode.delete.confirm".localized(mode.name))
         }
     }
 

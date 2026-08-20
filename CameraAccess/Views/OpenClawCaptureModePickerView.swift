@@ -52,6 +52,20 @@ struct OpenClawCaptureModePickerView: View {
     var body: some View {
         NavigationView {
             List {
+                Section {
+                    NavigationLink {
+                        OpenClawCaptureModeSettingsView(
+                            modeManager: modeManager,
+                            wrapsInNavigationView: false
+                        )
+                    } label: {
+                        Label(
+                            "openclaw.capturemode.picker.manage".localized,
+                            systemImage: "slider.horizontal.3"
+                        )
+                    }
+                }
+
                 if availableModes.isEmpty {
                     Text("openclaw.capturemode.picker.empty".localized)
                         .foregroundColor(.secondary)

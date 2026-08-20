@@ -543,6 +543,7 @@
 "openclaw.capturemode.discard.confirm" = "Discard Changes";
 
 "openclaw.capturemode.picker.title" = "Choose Mode";
+"openclaw.capturemode.picker.manage" = "Add or Edit Modes";
 "openclaw.capturemode.picker.empty" = "No modes available for this capture type.";
 
 "openclaw.capturemode.media.photo" = "Photo";

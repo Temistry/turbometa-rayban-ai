@@ -534,6 +534,7 @@
 "openclaw.capturemode.discard.confirm" = "변경 사항 취소";
 
 "openclaw.capturemode.picker.title" = "모드 선택";
+"openclaw.capturemode.picker.manage" = "모드 추가 및 편집";
 "openclaw.capturemode.picker.empty" = "이 촬영 유형에 사용할 수 있는 모드가 없습니다.";
 
 "openclaw.capturemode.media.photo" = "사진";
