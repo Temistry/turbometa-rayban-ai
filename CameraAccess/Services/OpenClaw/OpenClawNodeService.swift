@@ -57,6 +57,61 @@ private enum OpenClawGatewayTokenReadResult {
     case failed(OSStatus)
 }
 
+enum OpenClawImageAttachmentPreparer {
+    static let maximumJPEGBytes = 4 * 1024 * 1024
+
+    /// Preserves an already-valid JPEG byte-for-byte. Oversized device JPEGs are decoded only for
+    /// an analysis attachment and re-encoded at the highest full-resolution quality that fits;
+    /// protected originals remain untouched.
+    static func prepareJPEGData(_ originalData: Data) -> Data? {
+        guard !originalData.isEmpty else { return nil }
+        if originalData.count <= maximumJPEGBytes {
+            return originalData
+        }
+        guard let image = UIImage(data: originalData) else { return nil }
+        return encodeWithinBudget(image)
+    }
+
+    static func prepareJPEGDataOffMain(_ originalData: Data) async -> Data? {
+        await Task.detached(priority: .userInitiated) {
+            prepareJPEGData(originalData)
+        }.value
+    }
+
+    private static func encodeWithinBudget(_ image: UIImage) -> Data? {
+        let qualities: [CGFloat] = stride(
+            from: CGFloat(1.0),
+            through: CGFloat(0.3),
+            by: -0.05
+        ).map { $0 }
+        var currentImage = image
+
+        for scaleStep in 0...12 {
+            for quality in qualities {
+                if let data = currentImage.jpegData(compressionQuality: quality),
+                   data.count <= maximumJPEGBytes {
+                    return data
+                }
+            }
+
+            guard scaleStep < 12 else { break }
+            let newSize = CGSize(
+                width: floor(currentImage.size.width * 0.9),
+                height: floor(currentImage.size.height * 0.9)
+            )
+            guard newSize.width >= 200, newSize.height >= 200 else { break }
+            let format = UIGraphicsImageRendererFormat.default()
+            format.opaque = true
+            format.scale = 1
+            let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
+            currentImage = renderer.image { _ in
+                currentImage.draw(in: CGRect(origin: .zero, size: newSize))
+            }
+        }
+        return nil
+    }
+}
+
 enum OpenClawConversationError: LocalizedError, Equatable, Sendable {
     case notConfigured
     case connectionFailed
@@ -299,7 +354,6 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private static let maxReconnectAttempts = 5
     private static let stableConnectionWindow: TimeInterval = 10
     private static let maximumWebSocketMessageSize = 8 * 1024 * 1024
-    private static let maximumImageUploadSize = 4 * 1024 * 1024
 
     private static let commands = [
         "camera.snap",
@@ -513,11 +567,11 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
         let attachmentData: Data?
         if let imageJPEGData {
-            guard !imageJPEGData.isEmpty,
-                  imageJPEGData.count <= Self.maximumImageUploadSize else {
+            guard let prepared = await OpenClawImageAttachmentPreparer
+                .prepareJPEGDataOffMain(imageJPEGData) else {
                 throw OpenClawConversationError.invalidImage
             }
-            attachmentData = imageJPEGData
+            attachmentData = prepared
         } else if let image {
             guard let compressed = compressedImageData(image) else {
                 throw OpenClawConversationError.invalidImage
@@ -1567,13 +1621,10 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     // MARK: - Image size control
 
     private func compressedImageData(_ image: UIImage) -> Data? {
-        for quality in [0.70, 0.55, 0.40, 0.30] {
-            if let data = image.jpegData(compressionQuality: quality),
-               data.count <= Self.maximumImageUploadSize {
-                return data
-            }
+        guard let jpegData = image.jpegData(compressionQuality: 1.0) else {
+            return nil
         }
-        return nil
+        return OpenClawImageAttachmentPreparer.prepareJPEGData(jpegData)
     }
 }
 

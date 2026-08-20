@@ -105,7 +105,7 @@ class StreamSessionViewModel: ObservableObject {
   private var photoCaptureTimeoutTask: Task<Void, Never>?
   private var recordingFrameHandler: ((UIImage, TimeInterval) -> Void)?
   private var lastRecordingFrameUptime: TimeInterval = 0
-  private var recordingFrameInterval: TimeInterval = 1.0 / 15.0
+  private var recordingFrameInterval: TimeInterval = 1.0 / 30.0
 
   init(wearables: WearablesInterface) {
     self.wearables = wearables
@@ -113,24 +113,16 @@ class StreamSessionViewModel: ObservableObject {
     // Let the SDK auto-select from available devices
     self.deviceSelector = AutoDeviceSelector(wearables: wearables)
 
-    // Get saved video quality setting from UserDefaults (only read at init)
-    let savedQuality = UserDefaults.standard.string(forKey: "video_quality") ?? "medium"
-    let resolution: StreamingResolution
-    switch savedQuality {
-    case "low":
-      resolution = .low
-    case "high":
-      resolution = .high
-    default:
-      resolution = .medium
-    }
-    logger.info("🟢 Using video quality: \(savedQuality) -> \(String(describing: resolution))")
+    // DAT 0.5.0's maximum supported stream is 720x1280 at 30fps. Keep this fixed so
+    // legacy low/medium preferences cannot silently reduce Quick Vision or Quick Shot quality.
+    UserDefaults.standard.set("high", forKey: "video_quality")
+    logger.info("🟢 Using maximum video quality: high 720x1280 @ 30fps")
 
     // Create ONE session at init - SDK pattern requires reusing same session
     let config = StreamSessionConfig(
       videoCodec: VideoCodec.raw,
-      resolution: resolution,
-      frameRate: 24)
+      resolution: .high,
+      frameRate: 30)
     streamSession = StreamSession(streamSessionConfig: config, deviceSelector: deviceSelector)
     logger.info("🟢 StreamSession created")
 
@@ -342,7 +334,7 @@ class StreamSessionViewModel: ObservableObject {
   // The handler runs on the main actor; it must enqueue encoding work and return immediately.
   func startRecordingFrames(
     owner: StreamCaptureOwner,
-    maximumFrameRate: Double = 15,
+    maximumFrameRate: Double = 30,
     handler: @escaping (UIImage, TimeInterval) -> Void
   ) throws {
     guard captureOwner == nil, recordingFrameHandler == nil else {
@@ -350,8 +342,8 @@ class StreamSessionViewModel: ObservableObject {
     }
 
     let boundedFrameRate = maximumFrameRate.isFinite
-      ? min(max(maximumFrameRate, 1), 15)
-      : 15
+      ? min(max(maximumFrameRate, 1), 30)
+      : 30
     captureOwner = owner
     captureKind = .recording
     recordingFrameInterval = 1.0 / boundedFrameRate

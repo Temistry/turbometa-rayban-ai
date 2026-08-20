@@ -1,8 +1,64 @@
+import UIKit
 import XCTest
 
 @testable import CameraAccess
 
 final class OpenClawTransportTests: XCTestCase {
+    func testImageAttachmentPreservesJPEGWithinBudget() throws {
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let image = UIGraphicsImageRenderer(
+            size: CGSize(width: 100, height: 100),
+            format: format
+        ).image { context in
+            UIColor.magenta.setFill()
+            context.fill(CGRect(x: 0, y: 0, width: 100, height: 100))
+        }
+        let original = try XCTUnwrap(image.jpegData(compressionQuality: 1.0))
+
+        let prepared = OpenClawImageAttachmentPreparer.prepareJPEGData(original)
+
+        XCTAssertEqual(prepared, original)
+    }
+
+    func testOversizedImageAttachmentFitsGatewayBudget() throws {
+        let width = 2200
+        let height = 2200
+        let bytesPerRow = width * 4
+        var pixels = [UInt8](repeating: 0, count: bytesPerRow * height)
+        for index in pixels.indices {
+            pixels[index] = UInt8(truncatingIfNeeded: index &* 31 &+ index / 97)
+        }
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        let cgImage = try pixels.withUnsafeMutableBytes { buffer -> CGImage in
+            let context = try XCTUnwrap(CGContext(
+                data: buffer.baseAddress,
+                width: width,
+                height: height,
+                bitsPerComponent: 8,
+                bytesPerRow: bytesPerRow,
+                space: colorSpace,
+                bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue
+            ))
+            return try XCTUnwrap(context.makeImage())
+        }
+        let image = UIImage(cgImage: cgImage)
+        let oversized = try XCTUnwrap(image.jpegData(compressionQuality: 1.0))
+        guard oversized.count > OpenClawImageAttachmentPreparer.maximumJPEGBytes else {
+            throw XCTSkip("Synthetic JPEG did not exceed the gateway budget")
+        }
+
+        let prepared = try XCTUnwrap(
+            OpenClawImageAttachmentPreparer.prepareJPEGData(oversized)
+        )
+
+        XCTAssertLessThanOrEqual(
+            prepared.count,
+            OpenClawImageAttachmentPreparer.maximumJPEGBytes
+        )
+        XCTAssertNotEqual(prepared, oversized)
+    }
+
     func testGatewayProtocolNegotiationSupportsVersionFour() {
         XCTAssertEqual(OpenClawNodeService.minimumProtocolVersion, 3)
         XCTAssertEqual(OpenClawNodeService.maximumProtocolVersion, 4)

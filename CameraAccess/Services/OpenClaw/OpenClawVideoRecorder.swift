@@ -2,7 +2,7 @@
  * OpenClaw Video Recorder
  * UIImage frame stream을 제한된 H.264 MP4로 기록한다.
  *
- * 녹화는 최대 10초, 입력은 최대 15fps이며 writer backpressure 시 frame을
+ * 녹화는 최대 10초, 입력은 최대 30fps이며 writer backpressure 시 frame을
  * 버린다. 30MiB는 encoder/muxer flush 특성상 soft budget이고 완료 후 실제
  * 파일 크기를 다시 확인할 수 있다.
  */
@@ -73,7 +73,7 @@ enum OpenClawVideoRecorderLimit: Sendable {
 /// - Duration: `maxDuration` seconds (10s) — a hard cap. Elapsed time is measured from the
 ///   first accepted frame's presentation time; once `elapsedSeconds >= maxDuration`, no further
 ///   frames are appended and auto-finalization begins on the very next check.
-/// - Input rate: `maxInputFPS` fps (15) — a hard cap on what is *appended*. Frames arriving
+/// - Input rate: `maxInputFPS` fps (30) — a hard cap on what is *appended*. Frames arriving
 ///   closer together than `1/maxInputFPS` are dropped before ever reaching the encoder, never
 ///   queued or buffered.
 /// - Output size: `maxFileSizeBytes` (30 MiB) — a **soft, best-effort** budget, not a byte-exact
@@ -99,7 +99,7 @@ final class OpenClawVideoRecorder: @unchecked Sendable {
     // MARK: - Limits
 
     static let maxDuration: TimeInterval = 10
-    static let maxInputFPS: Double = 15
+    static let maxInputFPS: Double = 30
     static let minimumDuration: TimeInterval = 0.5
     /// Soft output-size budget in bytes — see the type-level doc comment for exactly what this
     /// does and does not guarantee.
@@ -367,7 +367,8 @@ final class OpenClawVideoRecorder: @unchecked Sendable {
         )
         let compressionProperties: [String: Any] = [
             AVVideoAverageBitRateKey: targetBitsPerSecond,
-            AVVideoExpectedSourceFrameRateKey: Int(Self.maxInputFPS)
+            AVVideoExpectedSourceFrameRateKey: Int(Self.maxInputFPS),
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel
         ]
         let settings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,

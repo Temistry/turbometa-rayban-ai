@@ -263,9 +263,8 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
             let orderedFrames = sampledFrames
                 .sorted { $0.time < $1.time }
                 .map(\.image)
-            let contactSheetData = try OpenClawVideoContactSheetBuilder.buildJPEGData(
-                from: orderedFrames
-            )
+            let contactSheetData = try await OpenClawVideoContactSheetBuilder
+                .buildJPEGDataOffMain(from: orderedFrames)
             guard let contactSheetImage = UIImage(data: contactSheetData) else {
                 throw OpenClawConversationError.invalidImage
             }
@@ -506,7 +505,7 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
 
     private func makeThumbnailJPEG(from image: UIImage) -> Data? {
         guard image.size.width > 0, image.size.height > 0 else { return nil }
-        let maxEdge: CGFloat = 480
+        let maxEdge: CGFloat = 1280
         let scale = min(1, maxEdge / max(image.size.width, image.size.height))
         let size = CGSize(
             width: max(1, floor(image.size.width * scale)),
@@ -518,7 +517,7 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
         let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { _ in
             image.draw(in: CGRect(origin: .zero, size: size))
-        }.jpegData(compressionQuality: 0.72)
+        }.jpegData(compressionQuality: 0.88)
     }
 
     private func videoAnalysisPrompt(

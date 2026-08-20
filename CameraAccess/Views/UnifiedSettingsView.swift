@@ -15,14 +15,12 @@ struct UnifiedSettingsView: View {
     @ObservedObject private var knowledgeLog = KnowledgeLogService.shared
 
     @State private var showGoogleAPIKeySettings = false
-    @State private var showQualitySettings = false
     @State private var showQuickVisionSettings = false
     @State private var showOpenClawSettings = false
     @State private var showKnowledgeFolderPicker = false
     @State private var showKnowledgeError = false
     @State private var knowledgeErrorMessage = ""
 
-    @State private var selectedQuality = UserDefaults.standard.string(forKey: "video_quality") ?? "medium"
     @State private var hasGoogleAPIKey = false
 
     var body: some View {
@@ -44,9 +42,6 @@ struct UnifiedSettingsView: View {
             }
             .onChange(of: showGoogleAPIKeySettings) { isShowing in
                 if !isShowing { refreshAPIKeyStatus() }
-            }
-            .sheet(isPresented: $showQualitySettings) {
-                VideoQualitySettingsView(selectedQuality: $selectedQuality)
             }
             .sheet(isPresented: $showQuickVisionSettings) {
                 QuickVisionSettingsView()
@@ -146,14 +141,10 @@ struct UnifiedSettingsView: View {
 
             UnifiedInfoRow(title: "퀵비전 모델", value: GeminiModelCatalog.quickVision)
 
-            UnifiedSettingsRow(
-                icon: "video.fill",
-                iconColor: AppColors.liveStream,
+            UnifiedInfoRow(
                 title: "settings.quality".localized,
-                value: qualityDisplayName(selectedQuality)
-            ) {
-                showQualitySettings = true
-            }
+                value: "settings.quality.maximum".localized
+            )
 
             UnifiedSettingsRow(
                 icon: "eye.circle.fill",
@@ -303,14 +294,6 @@ struct UnifiedSettingsView: View {
         case .waitingForPairing: return "openclaw.status.pairing".localized
         case .error: return "오류"
         case .disconnected: return "openclaw.status.disconnected".localized
-        }
-    }
-
-    private func qualityDisplayName(_ code: String) -> String {
-        switch code {
-        case "low": return "settings.quality.low".localized
-        case "high": return "settings.quality.high".localized
-        default: return "settings.quality.medium".localized
         }
     }
 }

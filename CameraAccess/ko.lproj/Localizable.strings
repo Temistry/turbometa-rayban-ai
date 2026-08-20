@@ -272,6 +272,7 @@
 "settings.quality.medium.desc" = "균형 모드, 권장";
 "settings.quality.high" = "높은 화질";
 "settings.quality.high.desc" = "최고 화질, 배터리 소모가 큼";
+"settings.quality.maximum" = "최대 · 720×1280 · 30fps";
 "settings.about" = "정보";
 "settings.version" = "버전";
 "settings.sdkversion" = "SDK 버전";

@@ -13,7 +13,9 @@ import UIKit
 final class OpenClawVideoContactSheetBuilderTests: XCTestCase {
 
     private func makeSolidImage(size: CGSize, color: UIColor) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: size)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
         return renderer.image { context in
             color.setFill()
             context.fill(CGRect(origin: .zero, size: size))
@@ -27,11 +29,26 @@ final class OpenClawVideoContactSheetBuilderTests: XCTestCase {
     }
 
     func testLongEdgeNeverExceedsCap() throws {
-        let frames = (0..<6).map { _ in makeSolidImage(size: CGSize(width: 400, height: 300), color: .red) }
+        let frames = (0..<6).map { _ in makeSolidImage(size: CGSize(width: 720, height: 1280), color: .red) }
 
         let image = try OpenClawVideoContactSheetBuilder.buildImage(from: frames)
 
         XCTAssertLessThanOrEqual(max(image.size.width, image.size.height), OpenClawVideoContactSheetBuilder.Options.default.maxLongEdge)
+    }
+
+    func testNaturalGridPreservesSourcePixelsWithoutUpscaling() throws {
+        let frameSize = CGSize(width: 320, height: 240)
+        let frames = (0..<6).map { _ in
+            makeSolidImage(size: frameSize, color: .cyan)
+        }
+
+        let image = try OpenClawVideoContactSheetBuilder.buildImage(from: frames)
+        let spacing = OpenClawVideoContactSheetBuilder.Options.default.spacing
+        let expectedWidth = spacing + 2 * (frameSize.width + spacing)
+        let expectedHeight = spacing + 3 * (frameSize.height + spacing)
+
+        XCTAssertEqual(image.size.width, expectedWidth, accuracy: 0.5)
+        XCTAssertEqual(image.size.height, expectedHeight, accuracy: 0.5)
     }
 
     func testFramesBeyondMaxAreIgnored() throws {

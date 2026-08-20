@@ -1,3 +1,4 @@
+import AVFoundation
 import XCTest
 import UIKit
 @testable import CameraAccess
@@ -67,6 +68,32 @@ final class OpenClawVideoRecorderTests: XCTestCase {
             byteSize,
             OpenClawVideoRecorder.maxFileSizeBytes + 2 * 1024 * 1024
         )
+    }
+
+    func testMaximumInputRateAndSourceDimensionsArePreserved() async throws {
+        XCTAssertEqual(OpenClawVideoRecorder.maxInputFPS, 30)
+
+        let recorder = OpenClawVideoRecorder()
+        try recorder.start()
+        let sourceSize = CGSize(width: 720, height: 1280)
+        let frame = image(size: sourceSize)
+        for index in 0..<20 {
+            recorder.appendFrame(
+                frame,
+                hostTime: 250 + Double(index) / OpenClawVideoRecorder.maxInputFPS
+            )
+        }
+        try await Task.sleep(nanoseconds: 500_000_000)
+
+        let url = try await recorder.finalize()
+        defer { try? FileManager.default.removeItem(at: url) }
+        let asset = AVURLAsset(url: url)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        let track = try XCTUnwrap(tracks.first)
+        let naturalSize = try await track.load(.naturalSize)
+
+        XCTAssertEqual(naturalSize.width, sourceSize.width, accuracy: 1)
+        XCTAssertEqual(naturalSize.height, sourceSize.height, accuracy: 1)
     }
 
     func testCancelRemovesPartialRecording() throws {

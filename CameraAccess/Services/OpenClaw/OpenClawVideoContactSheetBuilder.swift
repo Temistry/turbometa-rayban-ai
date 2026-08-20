@@ -2,7 +2,7 @@
  * OpenClaw Video Contact Sheet Builder
  * 녹화 중 시간축에서 선택한 UIImage를 OpenClaw 분석용 JPEG 한 장으로
  * 합성한다. 호출자는 시간 분산 sampling을 담당하며, 이 builder는 최대
- * 6프레임, 2x3 grid, 긴 변 1,600px, 4MiB 제한을 강제한다.
+ * 6프레임, 2x3 grid, 긴 변 4,096px, 4MiB 제한을 강제한다.
  */
 
 import UIKit
@@ -14,11 +14,14 @@ import UIKit
 /// from `OpenClawVideoRecorder`'s input), so this builder does no video decoding itself — it is
 /// pure `UIGraphicsImageRenderer` composition, kept off the main thread by the caller.
 enum OpenClawVideoContactSheetBuilder {
+    private struct SendableFrames: @unchecked Sendable {
+        let images: [UIImage]
+    }
 
     /// Layout parameters for the generated sheet. Defaults enforce the hard caps: at most 6
-    /// frames arranged in a 2-column x 3-row grid, long edge capped at 1600pt, and JPEG output
+    /// frames arranged in a 2-column x 3-row grid, long edge capped at 4096px, and JPEG output
     /// capped at 4 MiB via progressive quality/resolution fallback.
-    struct Options {
+    struct Options: Sendable {
         /// Hard cap on the number of frames composited. Extra frames beyond this are ignored
         /// (see `buildImage(from:options:)`, which uses the first `maxFrames` in the input
         /// order rather than sampling — callers wanting even coverage should pre-sample before
@@ -30,13 +33,13 @@ enum OpenClawVideoContactSheetBuilder {
         var spacing: CGFloat = 4
         /// Maximum length of the sheet's longer edge, in points. The grid is scaled down
         /// (preserving aspect ratio) if composing at the natural cell size would exceed this.
-        var maxLongEdge: CGFloat = 1600
+        var maxLongEdge: CGFloat = 4096
         /// Maximum size of the encoded JPEG, in bytes. `buildJPEGData` reduces quality and, if
         /// still over budget, reduces resolution further, until this is satisfied or the image
         /// can no longer be shrunk further.
         var maxJPEGBytes: Int = 4 * 1024 * 1024
         /// Starting JPEG compression quality for the fallback search.
-        var initialJPEGQuality: CGFloat = 0.7
+        var initialJPEGQuality: CGFloat = 1.0
 
         static let `default` = Options()
     }
@@ -58,37 +61,28 @@ enum OpenClawVideoContactSheetBuilder {
         let cappedFrames = Array(frames.prefix(max(1, options.maxFrames)))
         let columns = max(1, options.columns)
         let rows = Int(ceil(Double(cappedFrames.count) / Double(columns)))
-        let spacing = options.spacing
+        let spacing = max(0, options.spacing)
 
-        // Derive a natural cell width by solving for the sheet's long edge == maxLongEdge,
-        // then compute cell height from the first frame's aspect ratio.
+        // Preserve the source frame's pixel dimensions whenever the natural grid already fits
+        // under maxLongEdge. This avoids upscaling small inputs while retaining every available
+        // source pixel from the 720x1280 DAT high-resolution stream.
         let firstFrame = cappedFrames[0]
-        let aspect: CGFloat
-        if firstFrame.size.width > 0, firstFrame.size.height > 0 {
-            aspect = firstFrame.size.height / firstFrame.size.width
-        } else {
-            aspect = 1.0
-        }
-
-        // Solve sheet width/height in terms of a single cellWidth variable:
-        //   sheetWidth  = spacing + columns * (cellWidth + spacing)
-        //   sheetHeight = spacing + rows    * (cellWidth * aspect + spacing)
-        // Pick the largest cellWidth such that max(sheetWidth, sheetHeight) <= maxLongEdge.
+        let sourceWidth = CGFloat(firstFrame.cgImage?.width ?? 0)
+        let sourceHeight = CGFloat(firstFrame.cgImage?.height ?? 0)
+        let naturalCellWidth = sourceWidth > 0 ? sourceWidth : max(1, firstFrame.size.width)
+        let naturalCellHeight = sourceHeight > 0 ? sourceHeight : max(1, firstFrame.size.height)
         let widthColumns = CGFloat(columns)
         let heightRows = CGFloat(rows)
-
-        // cellWidth from width constraint: spacing + widthColumns*(cw+spacing) <= maxLongEdge
-        let cellWidthFromWidth = (options.maxLongEdge - spacing - widthColumns * spacing) / widthColumns
-        // cellWidth from height constraint: spacing + heightRows*(cw*aspect+spacing) <= maxLongEdge
-        let cellWidthFromHeight: CGFloat
-        if aspect > 0 {
-            cellWidthFromHeight = (options.maxLongEdge - spacing - heightRows * spacing) / (heightRows * aspect)
-        } else {
-            cellWidthFromHeight = cellWidthFromWidth
-        }
-
-        let cellWidth = max(1, min(cellWidthFromWidth, cellWidthFromHeight))
-        let cellHeight = cellWidth * aspect
+        let horizontalSpacing = spacing * (widthColumns + 1)
+        let verticalSpacing = spacing * (heightRows + 1)
+        let boundedLongEdge = max(1, options.maxLongEdge)
+        let availableWidth = max(1, boundedLongEdge - horizontalSpacing)
+        let availableHeight = max(1, boundedLongEdge - verticalSpacing)
+        let widthScale = availableWidth / (widthColumns * naturalCellWidth)
+        let heightScale = availableHeight / (heightRows * naturalCellHeight)
+        let scale = max(0, min(1, min(widthScale, heightScale)))
+        let cellWidth = max(1, floor(naturalCellWidth * scale))
+        let cellHeight = max(1, floor(naturalCellHeight * scale))
 
         let sheetWidth = spacing + widthColumns * (cellWidth + spacing)
         let sheetHeight = spacing + heightRows * (cellHeight + spacing)
@@ -125,6 +119,16 @@ enum OpenClawVideoContactSheetBuilder {
         return try encodeWithinBudget(image, options: options)
     }
 
+    static func buildJPEGDataOffMain(
+        from frames: [UIImage],
+        options: Options = .default
+    ) async throws -> Data {
+        let sendableFrames = SendableFrames(images: frames)
+        return try await Task.detached(priority: .userInitiated) {
+            try buildJPEGData(from: sendableFrames.images, options: options)
+        }.value
+    }
+
     // MARK: - Size-budget fallback
 
     private static func encodeWithinBudget(_ image: UIImage, options: Options) throws -> Data {
@@ -142,14 +146,14 @@ enum OpenClawVideoContactSheetBuilder {
             }
         }
 
-        // Step 2: progressively downscale (each step to 80% linear size) and retry the quality
-        // ladder at the lowest quality step, since resolution reduction has a much bigger
-        // effect on byte size than quality at this point.
+        // Step 2: progressively downscale (each step to 90% linear size) and retry the full
+        // quality ladder. Smaller steps preserve more detail, and restarting at the highest
+        // quality selects the best available quality/resolution combination under the budget.
         var currentImage = image
-        let scaleFactor: CGFloat = 0.8
+        let scaleFactor: CGFloat = 0.9
         let minDimension: CGFloat = 200 // avoid scaling into an unusably tiny/empty image
 
-        for _ in 0..<6 {
+        for _ in 0..<12 {
             guard currentImage.size.width * scaleFactor >= minDimension,
                   currentImage.size.height * scaleFactor >= minDimension else {
                 break

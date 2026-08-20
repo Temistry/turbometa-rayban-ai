@@ -21,12 +21,10 @@ struct SettingsView: View {
     @State private var showAPIKeySettings = false
     @State private var showProviderSettings = false
     @State private var showModelSettings = false
-    @State private var showQualitySettings = false
     @State private var showGoogleAPIKeySettings = false
     @State private var showQuickVisionSettings = false
     @State private var showOpenClawSettings = false
 
-    @State private var selectedQuality = UserDefaults.standard.string(forKey: "video_quality") ?? "medium"
     @State private var hasAPIKey = false
     @State private var hasGoogleAPIKey = false
 
@@ -74,9 +72,6 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showModelSettings) {
                 VisionModelSettingsView()
-            }
-            .sheet(isPresented: $showQualitySettings) {
-                VideoQualitySettingsView(selectedQuality: $selectedQuality)
             }
             .sheet(isPresented: $showGoogleAPIKeySettings) {
                 GoogleAPIKeySettingsView()
@@ -184,14 +179,10 @@ struct SettingsView: View {
                 showAPIKeySettings = true
             }
 
-            SettingsNavigationRow(
-                icon: "video.fill",
-                iconColor: AppColors.liveStream,
+            InfoRow(
                 title: "settings.quality".localized,
-                value: qualityDisplayName(selectedQuality)
-            ) {
-                showQualitySettings = true
-            }
+                value: "settings.quality.maximum".localized
+            )
 
             SettingsNavigationRow(
                 icon: "eye.circle.fill",
@@ -283,14 +274,6 @@ struct SettingsView: View {
         case .waitingForPairing: return "openclaw.status.pairing".localized
         case .error: return "오류"
         case .disconnected: return "openclaw.status.disconnected".localized
-        }
-    }
-
-    private func qualityDisplayName(_ code: String) -> String {
-        switch code {
-        case "low": return "settings.quality.low".localized
-        case "high": return "settings.quality.high".localized
-        default: return "settings.quality.medium".localized
         }
     }
 }
@@ -781,59 +764,6 @@ struct AppLanguageSettingsView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("완료") { dismiss() }
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Video quality
-
-struct VideoQualitySettingsView: View {
-    @Binding var selectedQuality: String
-    @Environment(\.dismiss) private var dismiss
-
-    private var qualities: [(String, String, String)] {
-        [
-            ("low", "settings.quality.low".localized, "settings.quality.low.desc".localized),
-            ("medium", "settings.quality.medium".localized, "settings.quality.medium.desc".localized),
-            ("high", "settings.quality.high".localized, "settings.quality.high.desc".localized)
-        ]
-    }
-
-    var body: some View {
-        NavigationView {
-            List {
-                Section {
-                    ForEach(qualities, id: \.0) { quality in
-                        Button {
-                            selectedQuality = quality.0
-                            UserDefaults.standard.set(quality.0, forKey: "video_quality")
-                        } label: {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(quality.1).foregroundColor(.primary)
-                                    Text(quality.2)
-                                        .font(AppTypography.caption)
-                                        .foregroundColor(AppColors.textSecondary)
-                                }
-                                Spacer()
-                                if selectedQuality == quality.0 {
-                                    Image(systemName: "checkmark").foregroundColor(.blue)
-                                }
-                            }
-                        }
-                    }
-                } header: {
-                    Text("settings.quality.select".localized)
-                } footer: {
-                    Text("settings.quality.description".localized)
-                }
-            }
-            .navigationTitle("settings.quality".localized)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("done".localized) { dismiss() }
                 }
             }
         }

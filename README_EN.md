@@ -93,8 +93,9 @@ OpenClaw final-response notifications contain only the same Markdown/URL/code-st
 
 The top of the Home screen provides large **Photo** and **Video** Quick Shot actions. Each capture freezes the selected mode name and prompt at capture start. Modes can be created, edited, duplicated, deleted, and reordered in the app, with separate photo/video defaults and recent selections.
 
-- Photos preserve the exact JPEG bytes returned by the DAT SDK in protected app storage, then use OpenClaw's validated JPEG attachment path for analysis.
-- Videos preserve a bounded H.264 MP4 original for up to 10 seconds. The app does **not** upload that MP4 to OpenClaw. It sends only a 2×3 JPEG contact sheet built from up to six representative frames, and labels the result as representative-frame analysis.
+- The app fixes streaming at the DAT SDK 0.5.0 maximum of portrait 720×1280 at 30fps. This higher data rate can increase glasses battery use and heat as well as iPhone encoding load.
+- Photos preserve the DAT SDK's approximately 1080×1440 JPEG byte-for-byte in protected app storage. The SDK exposes no 12MP photo-resolution option, so the app does not fake detail by upscaling. Only an original that exceeds the Gateway's 4MiB cap gets a separate analysis-only JPEG derivative.
+- Videos preserve the 720×1280 input at up to 30fps in a bounded H.264 High Profile MP4 original for up to 10 seconds. The app does **not** upload that MP4 to OpenClaw. It builds a 2×3 contact sheet from up to six representative frames at their natural pixel size and selects the highest JPEG quality that fits 4MiB, labeling the result as representative-frame analysis.
 - The app-owned repository in protected Application Support is the Gallery source of truth. Copies to iPhone Photos use add-only access; the app does not read or enumerate the existing photo library.
 - A Photos export or OpenClaw analysis failure never removes the protected original. The Gallery provides explicit retry actions.
 - Deleting a Gallery item removes only the app original, thumbnail, and index entry. A copy already saved in iPhone Photos remains untouched.

@@ -13,6 +13,12 @@
 
 ### 주요 변경
 
+- DAT SDK 0.5.0 스트림을 지원 최대값인 세로 720×1280·30fps로 고정하고, 기존 설치의 low/medium 설정이 화질을 낮추지 않게 했다.
+- 설정 화면의 저/중/고 선택을 읽기 전용 최대 화질 상태로 바꿔 실제 스트림 정책과 일치시켰다.
+- Quick Shot MP4 입력 상한을 30fps로 올리고 첫 입력 프레임 크기를 그대로 H.264 High Profile로 기록한다. 기존 최대 10초·30MiB soft budget과 backpressure frame drop은 유지한다.
+- DAT 사진 JPEG는 byte-for-byte 보호 저장하고, 4MiB를 넘을 때만 원본과 분리된 분석 전송용 JPEG를 최고 품질부터 축소한다. SDK가 제공하지 않는 12MP 업스케일은 하지 않는다.
+- 동영상 contact sheet는 최대 6프레임을 유지하면서 작은 입력을 확대하지 않고 자연 픽셀 크기를 보존하며, 긴 변 최대 4096px·JPEG quality 1.0부터 4MiB 안의 최고 결과를 선택한다.
+- Gallery thumbnail의 긴 변과 JPEG 품질을 높여 원본을 건드리지 않고 미리보기 선명도를 개선했다.
 - 홈 Quick Shot의 모드 선택 화면에 `모드 추가 및 편집` 진입점을 추가해 촬영 흐름을 벗어나지 않고 기존 모드 관리·편집 UI를 사용할 수 있게 했다.
 - 모드 관리를 picker의 navigation 계층에 연결해 관리 후 돌아오면 동일한 manager에서 변경된 호환 모드 목록이 즉시 갱신되며, 실제 촬영은 사용자가 모드를 다시 탭할 때 기존 immutable snapshot으로 시작한다.
 - 실기기 진단에서 background/잠금 중 Keychain OSStatus `-25308`을 자격 증명 미설정으로 오인해 빈 인증 요청을 보내던 경로를 차단했다.
@@ -40,6 +46,7 @@
 
 ### 검증 결과
 
+- 최대 화질 변경에 30fps/source-dimension MP4, contact sheet 자연 크기·4MiB budget, JPEG 원본 pass-through·초과 fallback 회귀 테스트를 추가했다.
 - `git diff --check`: 오류 없음. Windows 작업 트리의 LF→CRLF 경고만 확인했다.
 - `python Scripts/audit_localization_security.py`: 치명 0, 경고 0, 기존 정보성 1.
 - `python -m unittest Scripts/OpenClaw/test_export_openclaw_conversations.py`: 2개 테스트 통과.
