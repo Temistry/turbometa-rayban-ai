@@ -146,7 +146,7 @@ enum OpenClawVideoContactSheetBuilder {
         // ladder at the lowest quality step, since resolution reduction has a much bigger
         // effect on byte size than quality at this point.
         var currentImage = image
-        var scaleFactor: CGFloat = 0.8
+        let scaleFactor: CGFloat = 0.8
         let minDimension: CGFloat = 200 // avoid scaling into an unusably tiny/empty image
 
         for _ in 0..<6 {

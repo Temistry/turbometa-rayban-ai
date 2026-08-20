@@ -133,7 +133,7 @@ struct OpenClawCaptureModeSettingsView: View {
                 Label("delete".localized, systemImage: "trash")
             }
             Button {
-                try? modeManager.duplicateMode(id: mode.id)
+                _ = try? modeManager.duplicateMode(id: mode.id)
             } label: {
                 Label("openclaw.capturemode.duplicate".localized, systemImage: "plus.square.on.square")
             }

@@ -71,10 +71,21 @@ final class OpenClawCaptureModeManager: ObservableObject {
         let photoFallback = safeModes.first { $0.supportedMedia.supportsPhoto }?.id ?? fallbackId
         let videoFallback = safeModes.first { $0.supportedMedia.supportsVideo }?.id ?? fallbackId
 
-        self.photoDefaultModeId = storedPhotoDefault.flatMap { photoModeIds.contains($0) ? $0 : nil } ?? photoFallback
-        self.videoDefaultModeId = storedVideoDefault.flatMap { videoModeIds.contains($0) ? $0 : nil } ?? videoFallback
-        self.lastPhotoModeId = storedLastPhoto.flatMap { photoModeIds.contains($0) ? $0 : nil } ?? self.photoDefaultModeId
-        self.lastVideoModeId = storedLastVideo.flatMap { videoModeIds.contains($0) ? $0 : nil } ?? self.videoDefaultModeId
+        let photoDefaultModeId = storedPhotoDefault.flatMap {
+            photoModeIds.contains($0) ? $0 : nil
+        } ?? photoFallback
+        let videoDefaultModeId = storedVideoDefault.flatMap {
+            videoModeIds.contains($0) ? $0 : nil
+        } ?? videoFallback
+
+        self.photoDefaultModeId = photoDefaultModeId
+        self.videoDefaultModeId = videoDefaultModeId
+        self.lastPhotoModeId = storedLastPhoto.flatMap {
+            photoModeIds.contains($0) ? $0 : nil
+        } ?? photoDefaultModeId
+        self.lastVideoModeId = storedLastVideo.flatMap {
+            videoModeIds.contains($0) ? $0 : nil
+        } ?? videoDefaultModeId
 
         // Persist the seeded catalog on very first launch so the file exists
         // going forward, and repair the file if it failed to decode.
