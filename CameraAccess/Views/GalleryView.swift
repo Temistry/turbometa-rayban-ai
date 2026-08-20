@@ -37,11 +37,11 @@ final class OpenClawGalleryViewModel: ObservableObject {
 
     init(
         repository: OpenClawMediaRepository = .shared,
-        photoLibrarySaver: PhotoLibrarySaver = .shared,
+        photoLibrarySaver: PhotoLibrarySaver? = nil,
         openClawService: OpenClawNodeService = .shared
     ) {
         self.repository = repository
-        self.photoLibrarySaver = photoLibrarySaver
+        self.photoLibrarySaver = photoLibrarySaver ?? .shared
         self.openClawService = openClawService
     }
 
@@ -206,7 +206,7 @@ final class OpenClawGalleryViewModel: ObservableObject {
 
 struct GalleryView: View {
     @StateObject private var viewModel = OpenClawGalleryViewModel()
-    @State private var selectedItem: OpenClawMediaItem?
+    @State private var selectedItemID: UUID?
 
     private let columns = [
         GridItem(.adaptive(minimum: 104), spacing: AppSpacing.sm)
@@ -225,7 +225,7 @@ struct GalleryView: View {
                                     item: item,
                                     thumbnail: viewModel.thumbnails[item.id]
                                 )
-                                .onTapGesture { selectedItem = item }
+                                .onTapGesture { selectedItemID = item.id }
                             }
                         }
                         .padding(AppSpacing.md)
@@ -248,8 +248,8 @@ struct GalleryView: View {
                     }
                 }
             }
-            .navigationDestination(item: $selectedItem) { item in
-                OpenClawMediaDetailView(itemID: item.id, viewModel: viewModel)
+            .navigationDestination(item: $selectedItemID) { itemID in
+                OpenClawMediaDetailView(itemID: itemID, viewModel: viewModel)
             }
             .task { await viewModel.load() }
             .alert(

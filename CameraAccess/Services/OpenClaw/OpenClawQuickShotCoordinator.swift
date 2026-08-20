@@ -63,12 +63,12 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
     init(
         streamViewModel: StreamSessionViewModel,
         repository: OpenClawMediaRepository = .shared,
-        photoLibrarySaver: PhotoLibrarySaver = .shared,
+        photoLibrarySaver: PhotoLibrarySaver? = nil,
         openClawService: OpenClawNodeService = .shared
     ) {
         self.streamViewModel = streamViewModel
         self.repository = repository
-        self.photoLibrarySaver = photoLibrarySaver
+        self.photoLibrarySaver = photoLibrarySaver ?? .shared
         self.openClawService = openClawService
     }
 

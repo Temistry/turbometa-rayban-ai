@@ -93,6 +93,7 @@ private actor KnowledgeLogFileStore {
     }()
 
     init() {
+        let fileManager = FileManager.default
         let applicationSupport = (try? fileManager.url(
             for: .applicationSupportDirectory,
             in: .userDomainMask,
