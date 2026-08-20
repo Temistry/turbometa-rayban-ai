@@ -631,6 +631,19 @@ final class DeveloperConsole: ObservableObject {
     persistentBytesWritten = 0
   }
 
+  private func flushPendingLines() {
+    parsingQueue.sync {
+      pendingFlushWorkItems.values.forEach { $0.cancel() }
+      pendingFlushWorkItems.removeAll()
+      for source in Array(lineFramers.keys) {
+        guard var framer = lineFramers[source],
+              let line = framer.flushPending() else { continue }
+        lineFramers[source] = framer
+        enqueue(line)
+      }
+    }
+  }
+
   private func flushPersistentLog() {
     parsingQueue.sync {
       try? persistentHandle?.synchronize()
@@ -753,6 +766,7 @@ final class DeveloperConsole: ObservableObject {
         guard let self else { return }
         UserDefaults.standard.set(true, forKey: sessionStateKey)
         log(.info, category: "AppLifecycle", "백그라운드 진입")
+        flushPendingLines()
         flushPersistentLog()
       }
     )
@@ -766,6 +780,7 @@ final class DeveloperConsole: ObservableObject {
         guard let self else { return }
         UserDefaults.standard.set(true, forKey: sessionStateKey)
         log(.info, category: "AppLifecycle", "앱 정상 종료 알림 수신")
+        flushPendingLines()
         flushPersistentLog()
       }
     )

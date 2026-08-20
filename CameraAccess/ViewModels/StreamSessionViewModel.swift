@@ -317,6 +317,7 @@ class StreamSessionViewModel: ObservableObject {
     capturedPhoto = nil
     showPhotoPreview = false
     let boundedTimeout = timeout.isFinite ? min(max(timeout, 0.5), 60) : 4
+    logger.info("📸 Photo capture started owner=\(owner.rawValue, privacy: .public) timeout=\(boundedTimeout, privacy: .public)s")
 
     return try await withTaskCancellationHandler {
       try await withCheckedThrowingContinuation { continuation in
@@ -380,12 +381,21 @@ class StreamSessionViewModel: ObservableObject {
 
   private func finishPhotoCapture(with result: Result<StreamCapturedPhoto, Error>) {
     guard captureKind == .photo else { return }
+    let owner = captureOwner
     photoCaptureTimeoutTask?.cancel()
     photoCaptureTimeoutTask = nil
     let continuation = photoCaptureContinuation
     photoCaptureContinuation = nil
     captureKind = nil
     captureOwner = nil
+
+    switch result {
+    case .success(let photo):
+      logger.info("📸 Photo capture completed owner=\(owner?.rawValue ?? "unknown", privacy: .public) bytes=\(photo.jpegData.count, privacy: .public)")
+    case .failure(let error):
+      let nsError = error as NSError
+      logger.warning("📸 Photo capture ended owner=\(owner?.rawValue ?? "unknown", privacy: .public) domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public)")
+    }
     continuation?.resume(with: result)
   }
 

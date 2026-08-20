@@ -13,6 +13,11 @@
 
 ### 주요 변경
 
+- 실기기 진단에서 background/잠금 중 Keychain OSStatus `-25308`을 자격 증명 미설정으로 오인해 빈 인증 요청을 보내던 경로를 차단했다.
+- Gateway token 상태를 configured/not configured/temporarily unavailable/failure로 구분하고 foreground에서만 읽어 연결 attempt당 캐시한다.
+- pending reconnect backoff를 화면 `onAppear`와 foreground 복귀가 우회하지 않게 했으며, 자동 연결은 재시도 횟수를 초기화하지 않는다.
+- ExternalAccessory/DAT의 공백 구분 node/service/connection ID, firmware key와 표시 이름 숫자 suffix를 마스킹하고 lifecycle 전환 시 부분 로그 라인을 독립 flush한다.
+- Quick Shot 사진은 원문 없이 JPEG byte count와 capture/save 성공 여부만 진단 로그에 남긴다.
 - 사진·동영상별 Quick Shot 카드, 모드 picker/editor/관리 화면과 immutable 실행 snapshot을 추가했다.
 - 단일 DAT `StreamSession`에 capture owner/lease를 추가해 Quick Vision, Siri, Quick Shot 촬영 경쟁을 직렬화했다.
 - 사진은 SDK JPEG 원본을 보호 저장하고, 동영상은 최대 10초·15fps H.264 MP4를 저장한다.
@@ -36,6 +41,7 @@
 - `git diff --check`: 오류 없음. Windows 작업 트리의 LF→CRLF 경고만 확인했다.
 - `python Scripts/audit_localization_security.py`: 치명 0, 경고 0, 기존 정보성 1.
 - `python -m unittest Scripts/OpenClaw/test_export_openclaw_conversations.py`: 2개 테스트 통과.
+- reconnect/foreground 정책과 신규 runtime 식별정보 redaction 회귀 XCTest를 추가했다. Windows에는 XCTest 실행 환경이 없어 CI에서 실행해야 한다.
 - Xcode project top-level object ID 중복 없음.
 - 금지한 video attachment/Base64 MP4, broad ATS 예외, TLS 검증 비활성화 추가 없음.
 - Windows에는 Xcode/Swift toolchain이 없어 app compile, XCTest, Simulator, Photos/AVAssetWriter/DAT 실기기 검증은 수행하지 못했다.

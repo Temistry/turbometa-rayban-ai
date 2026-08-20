@@ -81,6 +81,65 @@ final class OpenClawTransportTests: XCTestCase {
         )
     }
 
+    func testAutomaticConnectionPolicyPreservesPendingBackoff() {
+        XCTAssertFalse(
+            OpenClawConnectionAttemptPolicy.canAutomaticAttempt(
+                hasPendingReconnect: true,
+                isAttemptInFlight: false,
+                isConnectedOrConnecting: false,
+                isApplicationActive: true,
+                tokenAvailability: .configured
+            )
+        )
+        XCTAssertTrue(
+            OpenClawConnectionAttemptPolicy.canAutomaticAttempt(
+                hasPendingReconnect: false,
+                isAttemptInFlight: false,
+                isConnectedOrConnecting: false,
+                isApplicationActive: true,
+                tokenAvailability: .configured
+            )
+        )
+    }
+
+    func testAutomaticConnectionPolicyRequiresForegroundAndToken() {
+        XCTAssertFalse(
+            OpenClawConnectionAttemptPolicy.canAutomaticAttempt(
+                hasPendingReconnect: false,
+                isAttemptInFlight: false,
+                isConnectedOrConnecting: false,
+                isApplicationActive: false,
+                tokenAvailability: .configured
+            )
+        )
+        XCTAssertFalse(
+            OpenClawConnectionAttemptPolicy.canAutomaticAttempt(
+                hasPendingReconnect: false,
+                isAttemptInFlight: false,
+                isConnectedOrConnecting: false,
+                isApplicationActive: true,
+                tokenAvailability: .temporarilyUnavailable
+            )
+        )
+    }
+
+    func testForegroundConnectionPolicyDoesNotBypassScheduledReconnect() {
+        XCTAssertFalse(
+            OpenClawConnectionAttemptPolicy.shouldConnectOnForeground(
+                hasPendingReconnect: true,
+                pendingForegroundReconnect: true,
+                isEnabledAndDisconnected: true
+            )
+        )
+        XCTAssertTrue(
+            OpenClawConnectionAttemptPolicy.shouldConnectOnForeground(
+                hasPendingReconnect: false,
+                pendingForegroundReconnect: true,
+                isEnabledAndDisconnected: false
+            )
+        )
+    }
+
     func testStableConnectionPolicyResetsOnlyForTheSameGenerationWhileConnected() {
         // Same generation, still connected 10s later: safe to reset the backoff counter.
         XCTAssertTrue(

@@ -70,7 +70,9 @@ final class APIKeyManager {
             ]
 
             let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-            if status != errSecSuccess && status != errSecItemNotFound {
+            if status != errSecSuccess,
+               status != errSecItemNotFound,
+               status != errSecInteractionNotAllowed {
                 print("[Keychain][WARN] 접근 정책 강화 실패 account=\(account) status=\(status)")
             }
         }
@@ -192,7 +194,7 @@ final class APIKeyManager {
         guard status == errSecSuccess,
               let data = result as? Data,
               let key = String(data: data, encoding: .utf8) else {
-            if status != errSecItemNotFound {
+            if status != errSecItemNotFound && status != errSecInteractionNotAllowed {
                 print("[Keychain][WARN] 자격 증명 읽기 실패 account=\(account) status=\(status)")
             }
             return nil

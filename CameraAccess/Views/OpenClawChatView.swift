@@ -187,8 +187,9 @@ struct OpenClawChatView: View {
         }
         .onAppear {
             OpenClawNotificationService.shared.requestAuthorizationIfNeeded()
+            openClawService.refreshGatewayTokenState()
             if openClawService.connectionState != .connected,
-               openClawService.loadGatewayToken() != nil {
+               openClawService.isGatewayTokenConfigured {
                 openClawService.ensureConnected(reason: "OpenClawChatView.onAppear")
             }
         }

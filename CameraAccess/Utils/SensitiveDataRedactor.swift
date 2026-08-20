@@ -22,7 +22,7 @@ enum SensitiveDataRedactor {
             (#"(?i)(rtmps?://[^/\s]+)(?:/[^\s]*)?"#, "$1/<송출 경로 숨김>"),
             (#"data:(?:image|audio)/[^;\s]+;base64,[A-Za-z0-9+/=]+"#, "<대용량 데이터 생략>"),
             (#"(?i)(\"(?:audio|image|data)\"\s*:\s*\")[A-Za-z0-9+/=]{80,}(\")"#, "$1<대용량 데이터 생략>$2"),
-            (#"(?i)(\b(?:ACCExternalAccessoryPPIDKey|ACCExternalAccessoryPrimaryUUID|ACCExternalAccessoryProtocolEndpointUUID|IAPAppAccessoryMacAddressKey|IAPAppAccessorySerialNumberKey|IAPAppAccessoryPreferredAppKey|IAPAppAccessoryNameKey)\s*=\s*)[^;\r\n]+"#, "$1<식별정보 숨김>"),
+            (#"(?i)(\b(?:ACCExternalAccessoryPPIDKey|ACCExternalAccessoryPrimaryUUID|ACCExternalAccessoryProtocolEndpointUUID|IAPAppAccessoryMacAddressKey|IAPAppAccessorySerialNumberKey|IAPAppAccessoryPreferredAppKey|IAPAppAccessoryNameKey|IAPAppAccessoryFirmwareRevisionKey|IAPAppConnectionIDKey)\s*=\s*)[^;\r\n]+"#, "$1<식별정보 숨김>"),
             (#"(?i)(\b(?:세션 ID|sessionID|deviceID|pairingID)\s*[:=]\s*)[^\s,;]+"#, "$1<식별정보 숨김>"),
             (#"(?i)(socketPath\s+from\s+app\s*=\s*)\S+"#, "$1<식별정보 숨김>"),
             (#"(?i)(IAPAppAccessoryCert(?:Data|SerialNumber)Key\s*=\s*)\{[^\r\n]*\}"#, "$1<대용량 데이터 생략>"),
@@ -31,9 +31,12 @@ enum SensitiveDataRedactor {
             // `Ray-Ban Meta (4F2A9C)`. The base name alone is not sensitive, but the generated
             // suffix is effectively a per-unit identifier, so only the suffix is masked.
             (#"(?i)(\b(?:accessoryDisplayName|peripheralName|localName)\s*[:=]\s*\"?[\w .'-]*?)[- ]\(?[0-9A-Fa-f]{4,}\)?(\"?)"#, "$1<식별정보 숨김>$2"),
-            (#"(?i)(\b(?:firmware|firmwareVersion|firmware[_ -]?build|buildNumber|buildVersion)\s*[:=]\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
-            (#"(?i)(\b(?:nodeId|node[_ -]?id|localNode|remoteNode|localNodeId|remoteNodeId)\s*[:=]\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
-            (#"(?i)(\b(?:serviceUUID|serviceId|characteristicUUID|channelId|channel[_ -]?id)\s*[:=]\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
+            // ExternalAccessory also logs the marketing name followed by a per-unit numeric
+            // suffix in prose, for example `For Ray-Ban Meta - 123456 (transport 2)`.
+            (#"(?i)(\bFor\s+[A-Za-z][A-Za-z0-9 |.'-]*?\s+-\s+)[0-9A-Fa-f]{4,}(\s*\(transport\s+\d+\))"#, "$1<식별정보 숨김>$2"),
+            (#"(?i)(\b(?:firmware|firmwareVersion|firmware[_ -]?build|buildNumber|buildVersion)\s*(?:[:=]|\s)\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
+            (#"(?i)(\b(?:nodeId|node[_ -]?id|localNode|remoteNode|localNodeId|remoteNodeId|connectionID)\s*(?:[:=]|\s)\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
+            (#"(?i)(\b(?:serviceUUID|serviceId|service\s+ID|characteristicUUID|characteristic\s+ID|channelId|channel[_ -]?id|channel\s+ID)\s*(?:[:=]|\s)\s*)[^\s,;\"']+"#, "$1<식별정보 숨김>"),
             (#"\b[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\b"#, "<식별정보 숨김>"),
             (#"(?i)\b(?:[0-9A-F]{2}:){5}[0-9A-F]{2}\b"#, "<식별정보 숨김>"),
             (#"(?<![A-Za-z0-9])[A-Za-z0-9+/]{256,}={0,2}(?![A-Za-z0-9])"#, "<대용량 데이터 생략>")

@@ -44,7 +44,7 @@ struct GalvisOpenClawSessionView: View {
                     .tint(.purple)
                 }
 
-                if openClawService.loadGatewayToken() == nil {
+                if !openClawService.isGatewayTokenConfigured {
                     Label("OpenClaw 설정에서 Gateway 정보를 먼저 저장하세요.", systemImage: "exclamationmark.triangle.fill")
                         .font(.callout)
                         .foregroundStyle(.orange)
@@ -81,7 +81,10 @@ struct GalvisOpenClawSessionView: View {
                 }
             }
         }
-        .onAppear { sessionManager.start() }
+        .onAppear {
+            openClawService.refreshGatewayTokenState()
+            sessionManager.start()
+        }
         .onDisappear { sessionManager.stop() }
     }
 

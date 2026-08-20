@@ -89,7 +89,8 @@ final class GalvisOpenClawSessionManager: ObservableObject {
             try audioSession.activateConversationSession()
             state = .connecting
             if openClaw.connectionState != .connected {
-                guard openClaw.loadGatewayToken() != nil else {
+                openClaw.refreshGatewayTokenState()
+                guard openClaw.isGatewayTokenConfigured else {
                     throw OpenClawConversationError.notConfigured
                 }
                 openClaw.ensureConnected(reason: "GalvisOpenClawSessionManager.runSession")

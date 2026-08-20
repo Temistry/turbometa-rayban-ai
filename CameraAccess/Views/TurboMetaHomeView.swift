@@ -145,9 +145,10 @@ struct TurboMetaHomeView: View {
         }
         .onAppear {
             quickVisionManager.setStreamViewModel(streamViewModel)
+            openClawService.refreshGatewayTokenState()
 
             if openClawService.connectionState == .disconnected,
-               openClawService.loadGatewayToken() != nil {
+               openClawService.isGatewayTokenConfigured {
                 openClawService.ensureConnected(reason: "TurboMetaHomeView.onAppear")
             }
         }
@@ -155,14 +156,14 @@ struct TurboMetaHomeView: View {
 
     private var quickShotIsReady: Bool {
         streamViewModel.hasActiveDevice
-            && openClawService.loadGatewayToken() != nil
+            && openClawService.isGatewayTokenConfigured
     }
 
     private var quickShotReadinessText: String {
         guard streamViewModel.hasActiveDevice else {
             return "스마트 안경을 연결하면 촬영할 수 있습니다."
         }
-        guard openClawService.loadGatewayToken() != nil else {
+        guard openClawService.isGatewayTokenConfigured else {
             return "OpenClaw Gateway 설정이 필요합니다."
         }
         return openClawService.connectionState == .connected

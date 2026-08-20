@@ -194,4 +194,30 @@ final class SensitiveDataRedactorTests: XCTestCase {
         XCTAssertFalse(output.contains("42"), "channel_id 숫자 값이 마스킹되지 않음")
         XCTAssertTrue(output.contains("<식별정보 숨김>"))
     }
+
+    func testRedactsWhitespaceSeparatedRuntimeIdentifiers() {
+        let input = """
+        remoteNodeId 731904
+        service ID: 48217
+        connectionID 991204
+        IAPAppConnectionIDKey = 830175;
+        IAPAppAccessoryFirmwareRevisionKey = 21.8.304-test;
+        For Ray-Ban Meta - 640291 (transport 2)
+        """
+
+        let output = SensitiveDataRedactor.redact(input)
+
+        [
+            "731904",
+            "48217",
+            "991204",
+            "830175",
+            "21.8.304-test",
+            "640291",
+        ].forEach { value in
+            XCTAssertFalse(output.contains(value), "마스킹되지 않은 런타임 식별자: \(value)")
+        }
+        XCTAssertTrue(output.contains("For Ray-Ban Meta - <식별정보 숨김> (transport 2)"))
+        XCTAssertTrue(output.contains("<식별정보 숨김>"))
+    }
 }

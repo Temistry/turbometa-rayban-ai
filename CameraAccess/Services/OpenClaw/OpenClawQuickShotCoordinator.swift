@@ -140,6 +140,7 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
             let captured = try await streamViewModel.capturePhotoResult(
                 owner: .openClawQuickShot
             )
+            print("[OpenClawQuickShot][INFO] 사진 수신 bytes=\(captured.jpegData.count)")
             try Task.checkCancellation()
 
             state = .saving
@@ -156,6 +157,7 @@ final class OpenClawQuickShotCoordinator: ObservableObject {
                 linkedUserMessageID: userMessageID
             )
             currentMediaItem = item
+            print("[OpenClawQuickShot][INFO] 사진 보호 저장 완료 bytes=\(captured.jpegData.count)")
 
             item = await exportPhoto(captured.jpegData, item: item)
             try Task.checkCancellation()

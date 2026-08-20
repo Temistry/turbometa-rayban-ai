@@ -38,6 +38,25 @@ enum OpenClawTransportMode: String, CaseIterable {
     case meshnet
 }
 
+enum OpenClawGatewayTokenAvailability: Equatable {
+    case unknown
+    case configured
+    case notConfigured
+    case temporarilyUnavailable
+    case failed
+
+    var canStartConnection: Bool {
+        self == .configured
+    }
+}
+
+private enum OpenClawGatewayTokenReadResult {
+    case available(String)
+    case notFound
+    case temporarilyUnavailable
+    case failed(OSStatus)
+}
+
 enum OpenClawConversationError: LocalizedError, Equatable, Sendable {
     case notConfigured
     case connectionFailed
@@ -145,6 +164,31 @@ enum OpenClawStableConnectionPolicy {
     }
 }
 
+enum OpenClawConnectionAttemptPolicy {
+    static func canAutomaticAttempt(
+        hasPendingReconnect: Bool,
+        isAttemptInFlight: Bool,
+        isConnectedOrConnecting: Bool,
+        isApplicationActive: Bool,
+        tokenAvailability: OpenClawGatewayTokenAvailability
+    ) -> Bool {
+        !hasPendingReconnect
+            && !isAttemptInFlight
+            && !isConnectedOrConnecting
+            && isApplicationActive
+            && tokenAvailability.canStartConnection
+    }
+
+    static func shouldConnectOnForeground(
+        hasPendingReconnect: Bool,
+        pendingForegroundReconnect: Bool,
+        isEnabledAndDisconnected: Bool
+    ) -> Bool {
+        !hasPendingReconnect
+            && (pendingForegroundReconnect || isEnabledAndDisconnected)
+    }
+}
+
 enum OpenClawSpeechResponseFormatter {
     static let maximumLength = 1_200
 
@@ -208,6 +252,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     ) ?? .standard
     @Published private(set) var chatMessages: [OpenClawChatMessage] = []
     @Published private(set) var pendingChatResponse = ""
+    @Published private(set) var gatewayTokenAvailability: OpenClawGatewayTokenAvailability = .unknown
 
     private var webSocketTransport: OpenClawWebSocketTransport?
     private var connectionGeneration = 0
@@ -219,6 +264,12 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     private var pendingNonce: String?
     private var shouldReconnect = false
     private var reconnectAttempts = 0
+    private var gatewayTokenCache: String?
+    private var pendingForegroundReconnect = false
+    private var isApplicationActive = false
+    private var applicationObserverTokens: [NSObjectProtocol] = []
+    private var lastTokenReadFailureStatus: OSStatus?
+    private var lastTokenHardeningFailureStatus: OSStatus?
     /// Synchronous re-entrancy guard for `connect()`. `connectionState` is only ever updated via
     /// `DispatchQueue.main.async`, so two calls to `connect()` made back-to-back on the same run
     /// loop turn (e.g. two SwiftUI `onAppear`s firing together) could both observe the stale
@@ -270,7 +321,20 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             storedMessages.compactMap(\.eventIdentity)
         )
         super.init()
-        hardenStoredToken()
+        installApplicationObservers()
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isApplicationActive = UIApplication.shared.applicationState == .active
+            guard self.isApplicationActive else { return }
+            self.refreshGatewayTokenAvailability()
+            self.hardenStoredToken()
+        }
+    }
+
+    deinit {
+        applicationObserverTokens.forEach {
+            NotificationCenter.default.removeObserver($0)
+        }
     }
 
     // MARK: - Public API
@@ -285,39 +349,76 @@ final class OpenClawNodeService: NSObject, ObservableObject {
     }
 
     func connect() {
-        guard !isConnectionAttemptInFlight,
-              connectionState != .connected,
-              connectionState != .connecting else {
-            print("[OpenClaw][WARN] 이미 연결 중이거나 연결됨 state=\(connectionState) inFlight=\(isConnectionAttemptInFlight)")
-            return
-        }
+        beginConnection(resetBackoff: true, reason: "user")
+    }
 
+    private func beginConnection(resetBackoff: Bool, reason: String) {
         isEnabled = true
         shouldReconnect = true
-        reconnectAttempts = 0
-        isConnectionAttemptInFlight = true
         saveSettings()
+
+        if resetBackoff {
+            reconnectAttempts = 0
+            reconnectTask?.cancel()
+            reconnectTask = nil
+        }
+
+        guard prepareConnectionAttempt(reason: reason) else { return }
         startConnection()
     }
 
-    /// Idempotent connection entry point for every screen that wants OpenClaw connected —
-    /// the root auto-connect in `MainAppView.onAppear`, plus Home/Chat/Galvis' own `onAppear`.
-    /// Calling this redundantly from several call sites in the same run-loop turn (e.g. two
-    /// views appearing together) is safe: it no-ops while already connected, connecting, or
-    /// while another attempt is in flight, so it never spins up a second transport or bumps
-    /// `connectionGeneration` twice. `reason` is logged only, to make it possible to trace which
-    /// caller triggered a given connection attempt from the device diagnostics console.
+    /// Idempotent connection entry point for automatic callers. A pending reconnect owns the
+    /// backoff window, so screens appearing during that window must not start an early transport
+    /// or reset the attempt counter.
     @discardableResult
     func ensureConnected(reason: String) -> Bool {
-        guard !isConnectionAttemptInFlight,
-              connectionState != .connected,
-              connectionState != .connecting else {
-            print("[OpenClaw][INFO] ensureConnected 무시 reason=\(reason) state=\(connectionState) inFlight=\(isConnectionAttemptInFlight)")
+        isEnabled = true
+        shouldReconnect = true
+        saveSettings()
+
+        guard reconnectTask == nil else {
+            print("[OpenClaw][INFO] ensureConnected 재연결 대기 유지 reason=\(reason) attempts=\(reconnectAttempts)")
             return false
         }
+        guard prepareConnectionAttempt(reason: reason) else { return false }
         print("[OpenClaw][INFO] ensureConnected 연결 시작 reason=\(reason)")
-        connect()
+        startConnection()
         return true
+    }
+
+    private func prepareConnectionAttempt(reason: String) -> Bool {
+        let isConnectedOrConnecting = connectionState == .connected || connectionState == .connecting
+        if isConnectionAttemptInFlight || isConnectedOrConnecting {
+            print("[OpenClaw][INFO] 연결 요청 무시 reason=\(reason) state=\(connectionState) inFlight=\(isConnectionAttemptInFlight)")
+            return false
+        }
+
+        guard isApplicationActive else {
+            pendingForegroundReconnect = shouldReconnect
+            print("[OpenClaw][INFO] 앱 비활성 상태라 연결 보류 reason=\(reason)")
+            return false
+        }
+
+        refreshGatewayTokenAvailability()
+        guard gatewayTokenAvailability.canStartConnection else {
+            if gatewayTokenAvailability == .temporarilyUnavailable {
+                pendingForegroundReconnect = shouldReconnect
+            }
+            print("[OpenClaw][WARN] Gateway 연결 준비 조건 미충족 present=false availability=\(gatewayTokenAvailability)")
+            return false
+        }
+
+        isConnectionAttemptInFlight = true
+        pendingForegroundReconnect = false
+        return true
+    }
+
+    var isGatewayTokenConfigured: Bool {
+        gatewayTokenAvailability == .configured
+    }
+
+    func refreshGatewayTokenState() {
+        refreshGatewayTokenAvailability()
     }
 
     func disconnect() {
@@ -395,12 +496,18 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         guard pendingConversation == nil else {
             throw OpenClawConversationError.requestInProgress
         }
-        guard loadGatewayToken() != nil else {
+        guard isGatewayTokenConfigured else {
             throw OpenClawConversationError.notConfigured
         }
 
         if connectionState != .connected {
-            ensureConnected(reason: "OpenClawNodeService.sendConversation.\(owner.rawValue)")
+            _ = ensureConnected(reason: "OpenClawNodeService.sendConversation.\(owner.rawValue)")
+            guard connectionState == .connected
+                    || connectionState == .connecting
+                    || isConnectionAttemptInFlight
+                    || reconnectTask != nil else {
+                throw OpenClawConversationError.connectionFailed
+            }
             try await waitUntilConnected(timeout: 20)
         }
 
@@ -635,9 +742,12 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             kSecAttrAccount as String: keychainAccount
         ]
         SecItemDelete(deleteQuery as CFDictionary)
+        gatewayTokenCache = nil
+        lastTokenReadFailureStatus = nil
 
         guard !normalizedToken.isEmpty,
               let data = normalizedToken.data(using: .utf8) else {
+            gatewayTokenAvailability = .notConfigured
             print("[OpenClaw][INFO] Gateway 토큰 삭제 완료")
             return
         }
@@ -652,13 +762,22 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
         let status = SecItemAdd(addQuery as CFDictionary, nil)
         if status == errSecSuccess {
+            gatewayTokenCache = normalizedToken
+            gatewayTokenAvailability = .configured
             print("[OpenClaw][INFO] Gateway 토큰을 기기 전용 Keychain에 저장")
         } else {
+            gatewayTokenAvailability = .failed
             print("[OpenClaw][ERROR] Gateway 토큰 저장 실패 status=\(status)")
         }
     }
 
     func loadGatewayToken() -> String? {
+        if let gatewayTokenCache { return gatewayTokenCache }
+        refreshGatewayTokenAvailability()
+        return gatewayTokenCache
+    }
+
+    private func readGatewayToken() -> OpenClawGatewayTokenReadResult {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
@@ -669,18 +788,52 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
-        guard status == errSecSuccess,
-              let data = result as? Data,
-              let token = String(data: data, encoding: .utf8) else {
-            if status != errSecItemNotFound {
-                print("[OpenClaw][WARN] Gateway 토큰 읽기 실패 status=\(status)")
-            }
-            return nil
+        if status == errSecSuccess,
+           let data = result as? Data,
+           let token = String(data: data, encoding: .utf8),
+           !token.isEmpty {
+            return .available(token)
         }
-        return token
+        if status == errSecItemNotFound { return .notFound }
+        if status == errSecInteractionNotAllowed { return .temporarilyUnavailable }
+        return .failed(status)
+    }
+
+    private func refreshGatewayTokenAvailability() {
+        guard isApplicationActive else {
+            gatewayTokenCache = nil
+            gatewayTokenAvailability = .unknown
+            return
+        }
+
+        switch readGatewayToken() {
+        case .available(let token):
+            gatewayTokenCache = token
+            gatewayTokenAvailability = .configured
+            lastTokenReadFailureStatus = nil
+        case .notFound:
+            gatewayTokenCache = nil
+            gatewayTokenAvailability = .notConfigured
+            lastTokenReadFailureStatus = nil
+        case .temporarilyUnavailable:
+            gatewayTokenCache = nil
+            gatewayTokenAvailability = .temporarilyUnavailable
+            lastTokenReadFailureStatus = errSecInteractionNotAllowed
+        case .failed(let status):
+            gatewayTokenCache = nil
+            gatewayTokenAvailability = .failed
+            logTokenReadFailureOnce(status: status)
+        }
+    }
+
+    private func logTokenReadFailureOnce(status: OSStatus) {
+        guard lastTokenReadFailureStatus != status else { return }
+        lastTokenReadFailureStatus = status
+        print("[OpenClaw][WARN] Gateway 토큰 읽기 실패 status=\(status)")
     }
 
     private func hardenStoredToken() {
+        guard isApplicationActive else { return }
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: keychainService,
@@ -690,14 +843,74 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         ]
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
-        if status != errSecSuccess && status != errSecItemNotFound {
+        if status == errSecSuccess || status == errSecItemNotFound {
+            lastTokenHardeningFailureStatus = nil
+        } else if status != errSecInteractionNotAllowed,
+                  lastTokenHardeningFailureStatus != status {
+            lastTokenHardeningFailureStatus = status
             print("[OpenClaw][WARN] 기존 Gateway 토큰 접근 정책 강화 실패 status=\(status)")
         }
+    }
+
+    private func installApplicationObservers() {
+        let center = NotificationCenter.default
+        applicationObserverTokens.append(
+            center.addObserver(
+                forName: UIApplication.didBecomeActiveNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.isApplicationActive = true
+                self.refreshGatewayTokenAvailability()
+                self.hardenStoredToken()
+                if OpenClawConnectionAttemptPolicy.shouldConnectOnForeground(
+                    hasPendingReconnect: self.reconnectTask != nil,
+                    pendingForegroundReconnect: self.pendingForegroundReconnect,
+                    isEnabledAndDisconnected: self.isEnabled && self.connectionState == .disconnected
+                ) {
+                    self.pendingForegroundReconnect = false
+                    self.beginConnection(
+                        resetBackoff: false,
+                        reason: "UIApplication.didBecomeActive"
+                    )
+                }
+            }
+        )
+        applicationObserverTokens.append(
+            center.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification,
+                object: nil,
+                queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.isApplicationActive = false
+                self.gatewayTokenCache = nil
+                self.gatewayTokenAvailability = .unknown
+                self.pendingForegroundReconnect = self.shouldReconnect
+            }
+        )
     }
 
     // MARK: - Connection
 
     private func startConnection() {
+        guard isApplicationActive else {
+            isConnectionAttemptInFlight = false
+            pendingForegroundReconnect = shouldReconnect
+            print("[OpenClaw][INFO] 앱 비활성 상태라 연결 시작을 보류")
+            return
+        }
+        guard gatewayTokenCache?.isEmpty == false else {
+            isConnectionAttemptInFlight = false
+            refreshGatewayTokenAvailability()
+            if gatewayTokenAvailability == .temporarilyUnavailable {
+                pendingForegroundReconnect = shouldReconnect
+            }
+            print("[OpenClaw][WARN] Gateway 연결 시작 조건 미충족 present=false availability=\(gatewayTokenAvailability)")
+            return
+        }
+
         // A fresh connection attempt invalidates any pending "reset reconnectAttempts after
         // 10s stable" timer left over from a previous, now-superseded generation.
         stableConnectionTask?.cancel()
@@ -735,7 +948,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         handledDisconnectGeneration = nil
 
         // 토큰은 URL 쿼리에 넣지 않는다. URL은 각종 프록시와 진단 로그에 남기 쉽기 때문이다.
-        print("[OpenClaw][INFO] Gateway 연결 시작 scheme=\(url.scheme ?? "-") port=\(url.port ?? gatewayPort) mode=\(transportMode.rawValue) transport=\(transportKind.rawValue) tokenConfigured=\(loadGatewayToken() != nil)")
+        print("[OpenClaw][INFO] Gateway 연결 시작 scheme=\(url.scheme ?? "-") port=\(url.port ?? gatewayPort) mode=\(transportMode.rawValue) transport=\(transportKind.rawValue) tokenConfigured=\(isGatewayTokenConfigured)")
 
         let transport: OpenClawWebSocketTransport
         do {
@@ -918,7 +1131,13 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         print("[OpenClaw][INFO] 연결 challenge 수신 nonceLength=\(nonce.count)")
         pendingNonce = nonce
 
-        let token = loadGatewayToken() ?? ""
+        guard let token = gatewayTokenCache, !token.isEmpty else {
+            print("[OpenClaw][WARN] challenge 처리 중 Gateway 자격 증명을 사용할 수 없어 연결 중단")
+            pendingForegroundReconnect = shouldReconnect
+            webSocketTransport?.cancel(closeCode: URLSessionWebSocketTask.CloseCode.goingAway.rawValue)
+            scheduleDisconnectHandling(generation: connectionGeneration)
+            return
+        }
         let role = "operator"
         let scopes = ["operator.read", "operator.write"]
         let clientID = "openclaw-ios"
@@ -932,16 +1151,13 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             role: role,
             scopes: scopes,
             signedAtMs: signedAtMilliseconds,
-            token: token.isEmpty ? nil : token,
+            token: token,
             nonce: nonce,
             platform: platform,
             deviceFamily: nil
         )
 
-        var auth: [String: Any] = [:]
-        if !token.isEmpty {
-            auth["token"] = token
-        }
+        let auth: [String: Any] = ["token": token]
 
         let connectParams: [String: Any] = [
             "minProtocol": Self.minimumProtocolVersion,
@@ -974,7 +1190,7 @@ final class OpenClawNodeService: NSObject, ObservableObject {
             "method": "connect",
             "params": connectParams
         ])
-        print("[OpenClaw][INFO] 서명된 연결 요청 전송 tokenConfigured=\(!token.isEmpty)")
+        print("[OpenClaw][INFO] 서명된 연결 요청 전송 tokenConfigured=true")
     }
 
     private func handleHelloOK(json: [String: Any]) {
@@ -1301,11 +1517,19 @@ final class OpenClawNodeService: NSObject, ObservableObject {
         webSocketTransport = nil
         reconnectTask?.cancel()
         reconnectTask = nil
+        isConnectionAttemptInFlight = false
         stableConnectionTask?.cancel()
         stableConnectionTask = nil
 
         guard shouldReconnect else {
             connectionState = .disconnected
+            return
+        }
+
+        guard isApplicationActive else {
+            pendingForegroundReconnect = true
+            connectionState = .disconnected
+            print("[OpenClaw][INFO] 앱 비활성 상태라 재연결 카운터 증가 없이 보류")
             return
         }
 
@@ -1333,6 +1557,8 @@ final class OpenClawNodeService: NSObject, ObservableObject {
 
             await MainActor.run {
                 guard let self, self.shouldReconnect else { return }
+                self.reconnectTask = nil
+                guard self.prepareConnectionAttempt(reason: "scheduledReconnect") else { return }
                 self.startConnection()
             }
         }
