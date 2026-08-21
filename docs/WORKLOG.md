@@ -25,7 +25,7 @@
 
 - 순수 recovery/loop policy XCTest에 성공 턴 이후 budget reset, 빈 transcript·일시 오류 재청취, reconnect 후 새 발화 대기, timeout no-replay, ambiguous delivery·cancellation 종료, 최대 retry와 bounded backoff를 추가했다.
 - `git diff --check`는 오류 없이 통과했다. `python Scripts/audit_localization_security.py`는 치명 0·경고 0·기존 정보성 1을 확인했고, OpenClaw export Python 테스트 2개가 통과했다.
-- Windows에는 Xcode/Swift toolchain이 없어 Swift compile/XCTest는 macOS GitHub Actions에서 확인한다.
+- Windows에는 Xcode/Swift toolchain이 없지만 commit `139f2d0`의 GitHub Actions iPhone Simulator 빌드가 [실행 1](https://github.com/Temistry/turbometa-rayban-ai/actions/runs/32463823910)과 [실행 2](https://github.com/Temistry/turbometa-rayban-ai/actions/runs/32463821611)에서 모두 통과해 Swift compile과 test target 통합을 확인했다.
 - 실기기에서는 질문 1 → TTS → 질문 2, 무음 복구, TTS 실패 후 재청취, Gateway 단절·재연결, background·종료 문구 종료를 확인해야 한다.
 
 ---
