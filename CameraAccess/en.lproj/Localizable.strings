@@ -504,8 +504,8 @@
 "openclaw.gateway.help" = "Enter the address and port of the device running OpenClaw Gateway. Default is 127.0.0.1:18789";
 "openclaw.capabilities" = "Device Capabilities";
 "openclaw.capabilities.desc" = "When connected, OpenClaw AI can capture photos through the glasses, check device status, etc.";
-"home.openclaw.subtitle" = "OpenClaw";
-"home.openclaw.connected" = "Connected";
+"home.openclaw.subtitle" = "Galvis voice conversation";
+"home.openclaw.connected" = "Connected · Voice conversation";
 "openclaw.chat.placeholder" = "Type a message...";
 "openclaw.chat.photoprompt" = "Please look at this photo from my glasses";
 "openclaw.chat.snap" = "Snap & Send";

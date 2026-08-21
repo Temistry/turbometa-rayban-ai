@@ -495,8 +495,8 @@
 "openclaw.gateway.help" = "OpenClaw Gateway가 실행 중인 기기의 주소와 포트를 입력하세요. 로컬 기본값은 127.0.0.1:18789입니다";
 "openclaw.capabilities" = "기기 기능";
 "openclaw.capabilities.desc" = "연결 후 OpenClaw AI가 안경으로 사진을 찍거나 기기 상태를 확인할 수 있습니다";
-"home.openclaw.subtitle" = "OpenClaw";
-"home.openclaw.connected" = "연결됨";
+"home.openclaw.subtitle" = "갈비스 음성 대화";
+"home.openclaw.connected" = "연결됨 · 음성 대화";
 "openclaw.chat.placeholder" = "메시지 입력...";
 "openclaw.chat.photoprompt" = "안경으로 촬영한 이 사진을 확인해 주세요";
 "openclaw.chat.snap" = "촬영 후 전송";

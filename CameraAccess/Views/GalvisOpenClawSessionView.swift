@@ -82,6 +82,7 @@ struct GalvisOpenClawSessionView: View {
             }
         }
         .onAppear {
+            print("[Galvis][ROUTE] 음성 대화 화면 진입")
             openClawService.refreshGatewayTokenState()
             sessionManager.start()
         }

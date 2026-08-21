@@ -4,6 +4,29 @@
 
 ---
 
+## 2026-08-21 · 홈 OpenClaw 음성 대화 진입 수정
+
+### 목적
+
+- 실기기에서 홈 OpenClaw 카드가 일반 채팅만 열어 Galvis STT가 전혀 시작되지 않던 진입 경로 불일치를 수정한다.
+- 홈과 Siri가 같은 연속 음성 세션을 열고, 텍스트 채팅은 음성 화면 안의 기존 **채팅** 버튼으로 유지한다.
+
+### 주요 변경
+
+- 홈 OpenClaw 카드가 `requestOpenClawChat()` 대신 `requestOpenClawSession()`을 호출하도록 변경하고 카드 문구와 아이콘을 음성 대화에 맞췄다.
+- launch coordinator가 voice/chat modal을 동시에 활성화하지 않으며, 겹친 요청은 현재 화면 종료 후 순서대로 표시한다.
+- request, 앱 준비, 화면 표시·종료, 음성 화면 진입과 manager 시작 경계에 비식별 route marker를 추가했다.
+- marker는 route와 Bool 상태만 기록하며 사용자 발화·답변, message UUID, token, 주소와 기기 식별정보를 기록하지 않는다.
+- coordinator의 ready 전 요청, chat message 선택, 겹친 요청의 순차 표시와 voice 재진입 회귀 테스트를 추가했다.
+
+### 검증 범위
+
+- `git diff --check`, 보안·현지화 audit와 OpenClaw exporter Python 테스트를 실행한다.
+- Windows에는 Xcode가 없어 Swift compile/XCTest는 push 후 GitHub Actions iPhone Simulator에서 확인한다.
+- 실기기에서는 홈 OpenClaw → 음성 화면 → STT 시작 → `owner=galvis` → 자동 TTS → AudioSession 복구 → 두 번째 STT를 확인해야 한다.
+
+---
+
 ## 2026-08-21 · 갈비스 OpenClaw 연속 대화 복구
 
 ### 목적

@@ -165,6 +165,7 @@ final class GalvisOpenClawSessionManager: ObservableObject {
 
     func start() {
         guard !isActive else { return }
+        print("[Galvis][ROUTE] 음성 대화 manager 시작")
         isActive = true
         sessionGeneration += 1
         sessionTask = Task { [weak self] in

@@ -99,10 +99,10 @@ struct TurboMetaHomeView: View {
                                 FeatureCard(
                                     title: "OpenClaw",
                                     subtitle: openClawService.connectionState == .connected ? "home.openclaw.connected".localized : "home.openclaw.subtitle".localized,
-                                    icon: "link.circle.fill",
+                                    icon: "waveform.circle.fill",
                                     gradient: [Color.purple, Color.indigo]
                                 ) {
-                                    galvisLaunchCoordinator.requestOpenClawChat()
+                                    galvisLaunchCoordinator.requestOpenClawSession()
                                 }
                             }
 

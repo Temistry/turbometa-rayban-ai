@@ -91,6 +91,8 @@ OpenClaw final-response notifications contain only the same Markdown/URL/code-st
 
 ## Galvis continuous voice conversation
 
+Both the Home **OpenClaw** card and the Galvis OpenClaw Siri invocation open the dedicated Galvis voice conversation screen. Its **Chat** button keeps protected response history and text questions accessible.
+
 While the app remains in the foreground and the user explicitly keeps the Galvis conversation screen open, it maintains a wake-word-free **STT → OpenClaw → TTS → STT** loop after the first question. Silence and transient speech or audio failures trigger bounded microphone recovery; a recoverable Gateway disconnect reconnects and then waits for a new utterance. A question that timed out or lost its connection is never replayed automatically, and an ambiguous delivery stops with an error so the user can check for duplication. Entering the background or using a stop phrase or control cancels pending STT, OpenClaw, TTS, and audio-session work.
 
 ## OpenClaw Quick Shot and protected Gallery
