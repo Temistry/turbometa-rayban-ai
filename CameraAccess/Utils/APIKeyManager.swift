@@ -1,120 +1,151 @@
 /*
  * API Key Manager
- * Secure storage and retrieval of API keys using Keychain
- * Supports multiple API providers (Alibaba Dashscope, OpenRouter, Google)
+ *
+ * 실제 인증값은 iOS Keychain의 현재 기기 전용 항목에만 저장한다.
+ * 인증값의 내용, 일부 문자열, 접두사, 접미사 또는 해시는 콘솔과 파일에 기록하지 않는다.
+ *
+ * 일반 실행 경로는 Google Gemini Key 하나를 사용한다. 기존 Alibaba/OpenRouter 항목은
+ * 이전 설치 데이터와 개발자 호환성을 위해 보존하지만 자동으로 읽거나 삭제하지 않는다.
  */
 
 import Foundation
 import Security
 
-class APIKeyManager {
+final class APIKeyManager {
     static let shared = APIKeyManager()
 
     private let service = "com.smartview.glassai.apikey"
 
-    // Account names for different providers
     private let alibabaBeijingAccount = "alibaba-beijing-api-key"
     private let alibabaSingaporeAccount = "alibaba-singapore-api-key"
     private let openrouterAccount = "openrouter-api-key"
     private let googleAccount = "google-api-key"
-    private let legacyAccount = "qwen-api-key" // For backward compatibility (migrates to Beijing)
-    private let legacyAlibabaAccount = "alibaba-api-key" // Old format (migrates to Beijing)
+    private let legacyAccount = "qwen-api-key"
+    private let legacyAlibabaAccount = "alibaba-api-key"
 
-    private init() {
-        // Migrate legacy key to new format if needed
-        migrateLegacyKey()
+    private var allAccounts: [String] {
+        [
+            alibabaBeijingAccount,
+            alibabaSingaporeAccount,
+            openrouterAccount,
+            googleAccount,
+            legacyAccount,
+            legacyAlibabaAccount
+        ]
     }
 
-    // MARK: - Migration
+    private init() {
+        migrateLegacyKey()
+        hardenExistingItems()
+    }
+
+    // MARK: - Migration and hardening
 
     private func migrateLegacyKey() {
-        // Migrate very old qwen key format
         if let legacyKey = getKey(for: legacyAccount),
            getKey(for: alibabaBeijingAccount) == nil {
             _ = saveKey(legacyKey, for: alibabaBeijingAccount)
             _ = deleteKey(for: legacyAccount)
-            print("✅ Migrated legacy qwen API key to Alibaba Beijing")
+            print("[Keychain][INFO] 이전 Qwen 자격 증명 항목 이전 완료")
         }
 
-        // Migrate old alibaba key format (without endpoint)
-        if let oldAlibabaKey = getKey(for: legacyAlibabaAccount),
+        if let legacyKey = getKey(for: legacyAlibabaAccount),
            getKey(for: alibabaBeijingAccount) == nil {
-            _ = saveKey(oldAlibabaKey, for: alibabaBeijingAccount)
+            _ = saveKey(legacyKey, for: alibabaBeijingAccount)
             _ = deleteKey(for: legacyAlibabaAccount)
-            print("✅ Migrated old Alibaba API key to Beijing endpoint")
+            print("[Keychain][INFO] 이전 Alibaba 자격 증명 항목 이전 완료")
         }
     }
 
-    // MARK: - Provider-specific API Key Management
+    private func hardenExistingItems() {
+        for account in allAccounts {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account
+            ]
+
+            let attributes: [String: Any] = [
+                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            ]
+
+            let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+            if status != errSecSuccess,
+               status != errSecItemNotFound,
+               status != errSecInteractionNotAllowed {
+                print("[Keychain][WARN] 접근 정책 강화 실패 account=\(account) status=\(status)")
+            }
+        }
+    }
+
+    // MARK: - Provider-specific compatibility
 
     func saveAPIKey(_ key: String, for provider: APIProvider, endpoint: AlibabaEndpoint? = nil) -> Bool {
-        let account = accountName(for: provider, endpoint: endpoint)
-        return saveKey(key, for: account)
+        saveKey(key, for: accountName(for: provider, endpoint: endpoint))
     }
 
     func getAPIKey(for provider: APIProvider, endpoint: AlibabaEndpoint? = nil) -> String? {
-        let account = accountName(for: provider, endpoint: endpoint)
-        return getKey(for: account)
+        getKey(for: accountName(for: provider, endpoint: endpoint))
     }
 
     func deleteAPIKey(for provider: APIProvider, endpoint: AlibabaEndpoint? = nil) -> Bool {
-        let account = accountName(for: provider, endpoint: endpoint)
-        return deleteKey(for: account)
+        deleteKey(for: accountName(for: provider, endpoint: endpoint))
     }
 
     func hasAPIKey(for provider: APIProvider, endpoint: AlibabaEndpoint? = nil) -> Bool {
-        return getAPIKey(for: provider, endpoint: endpoint) != nil
+        guard let key = getAPIKey(for: provider, endpoint: endpoint) else { return false }
+        return !key.isEmpty
     }
 
-    // MARK: - Google API Key (for Live AI)
+    // MARK: - Google Gemini credential
 
     func saveGoogleAPIKey(_ key: String) -> Bool {
-        return saveKey(key, for: googleAccount)
+        saveKey(key, for: googleAccount)
     }
 
     func getGoogleAPIKey() -> String? {
-        return getKey(for: googleAccount)
+        getKey(for: googleAccount)
     }
 
     func deleteGoogleAPIKey() -> Bool {
-        return deleteKey(for: googleAccount)
+        deleteKey(for: googleAccount)
     }
 
     func hasGoogleAPIKey() -> Bool {
-        return getGoogleAPIKey() != nil
+        guard let key = getGoogleAPIKey() else { return false }
+        return !key.isEmpty
     }
 
-    // MARK: - Backward Compatible Methods (defaults to current provider)
+    // MARK: - Current-provider compatibility
 
     func saveAPIKey(_ key: String) -> Bool {
-        return saveAPIKey(key, for: APIProviderManager.staticCurrentProvider)
+        saveGoogleAPIKey(key)
     }
 
     func getAPIKey() -> String? {
-        return getAPIKey(for: APIProviderManager.staticCurrentProvider)
+        getGoogleAPIKey()
     }
 
     @discardableResult
     func deleteAPIKey() -> Bool {
-        return deleteAPIKey(for: APIProviderManager.staticCurrentProvider)
+        deleteGoogleAPIKey()
     }
 
     func hasAPIKey() -> Bool {
-        return hasAPIKey(for: APIProviderManager.staticCurrentProvider)
+        hasGoogleAPIKey()
     }
 
-    // MARK: - Private Helpers
+    // MARK: - Private helpers
 
     private func accountName(for provider: APIProvider, endpoint: AlibabaEndpoint? = nil) -> String {
         switch provider {
+        case .google:
+            return googleAccount
         case .alibaba:
-            // Use current endpoint from settings if not specified
             let effectiveEndpoint = endpoint ?? APIProviderManager.staticAlibabaEndpoint
             switch effectiveEndpoint {
-            case .beijing:
-                return alibabaBeijingAccount
-            case .singapore:
-                return alibabaSingaporeAccount
+            case .beijing: return alibabaBeijingAccount
+            case .singapore: return alibabaSingaporeAccount
             }
         case .openrouter:
             return openrouterAccount
@@ -122,22 +153,29 @@ class APIKeyManager {
     }
 
     private func saveKey(_ key: String, for account: String) -> Bool {
-        guard !key.isEmpty else { return false }
+        let normalizedKey = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedKey.isEmpty,
+              let data = normalizedKey.data(using: .utf8) else {
+            print("[Keychain][WARN] 빈 자격 증명 저장 요청 거부 account=\(account)")
+            return false
+        }
 
-        let data = key.data(using: .utf8)!
-
-        // Delete existing key first
         _ = deleteKey(for: account)
 
-        // Add new key
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             kSecValueData as String: data
         ]
 
         let status = SecItemAdd(query as CFDictionary, nil)
+        if status != errSecSuccess {
+            print("[Keychain][ERROR] 자격 증명 저장 실패 account=\(account) status=\(status)")
+        } else {
+            print("[Keychain][INFO] 자격 증명 저장 완료 account=\(account)")
+        }
         return status == errSecSuccess
     }
 
@@ -156,6 +194,9 @@ class APIKeyManager {
         guard status == errSecSuccess,
               let data = result as? Data,
               let key = String(data: data, encoding: .utf8) else {
+            if status != errSecItemNotFound && status != errSecInteractionNotAllowed {
+                print("[Keychain][WARN] 자격 증명 읽기 실패 account=\(account) status=\(status)")
+            }
             return nil
         }
 
@@ -170,6 +211,10 @@ class APIKeyManager {
         ]
 
         let status = SecItemDelete(query as CFDictionary)
-        return status == errSecSuccess || status == errSecItemNotFound
+        let succeeded = status == errSecSuccess || status == errSecItemNotFound
+        if !succeeded {
+            print("[Keychain][ERROR] 자격 증명 삭제 실패 account=\(account) status=\(status)")
+        }
+        return succeeded
     }
 }

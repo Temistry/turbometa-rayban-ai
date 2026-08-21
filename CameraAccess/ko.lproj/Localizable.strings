@@ -1,0 +1,607 @@
+/*
+ * 한국어 전용 로컬라이제이션
+ * 한국어 리소스 번들입니다.
+ */
+
+// MARK: - App General
+"app.name" = "TurboMeta";
+"app.subtitle" = "Ray-Ban Meta 도우미";
+"ok" = "확인";
+"cancel" = "취소";
+"close" = "닫기";
+"done" = "완료";
+"error" = "오류";
+"loading" = "불러오는 중...";
+"save" = "저장";
+"delete" = "삭제";
+"retry" = "다시 시도";
+"back" = "뒤로";
+
+// MARK: - OpenClaw Diagnostic
+"openclaw.diagnostic.button" = "OpenClaw로 TTS 진단";
+"openclaw.diagnostic.title" = "TTS 문제 진단";
+"openclaw.diagnostic.message.title" = "사용자 설명 (필수)";
+"openclaw.diagnostic.message.hint" = "어떤 동작을 했는지, 실제로 무엇이 일어났는지, 무엇을 기대했는지 입력하세요. 입력 내용도 전송 전에 자동 마스킹됩니다.";
+"openclaw.diagnostic.scope.title" = "전송 범위";
+"openclaw.diagnostic.scope.lines" = "선별된 TTS·오디오 로그 %d줄";
+"openclaw.diagnostic.scope.detail" = "전체 진단 파일, 사용자 발화, AI 답변, 토큰, IP와 기기 이름은 보내지 않습니다. 전송 내용과 분석 답변은 보호된 OpenClaw 채팅 및 설정된 비공개 대화 보관소에 남을 수 있습니다.";
+"openclaw.diagnostic.review" = "검토";
+"openclaw.diagnostic.confirm.title" = "OpenClaw에 진단 요청을 보낼까요?";
+"openclaw.diagnostic.confirm.send" = "마스킹 후 전송";
+"openclaw.diagnostic.confirm.message" = "필수 사용자 설명과 선별된 TTS·오디오 상태만 전송합니다. OpenClaw는 원인과 수정 방향을 진단하지만 코드나 앱을 자동으로 수정하지 않습니다.";
+"openclaw.diagnostic.error.title" = "진단 요청 실패";
+"openclaw.diagnostic.error.message_required" = "증상과 기대 동작을 먼저 입력해 주세요.";
+"openclaw.diagnostic.error.no_logs" = "전송할 TTS 또는 오디오 진단 로그가 없습니다. 문제를 다시 재현한 뒤 시도해 주세요.";
+
+// MARK: - Home Screen
+"home.title" = "홈";
+"home.liveai.title" = "Live AI";
+"home.liveai.subtitle" = "실시간 대화";
+"home.quickvision.title" = "퀵비전";
+"home.quickvision.subtitle" = "Siri 음성 실행";
+"home.translate.title" = "실시간 번역";
+"home.translate.subtitle" = "18개 언어 상호 번역";
+"home.leaneat.title" = "LeanEat";
+"home.leaneat.subtitle" = "칼로리 인식";
+"home.wordlearn.title" = "WordLearn";
+"home.wordlearn.subtitle" = "단어 학습";
+"home.livestream.title" = "라이브";
+"home.livestream.subtitle" = "Douyin · Kuaishou · Xiaohongshu";
+"home.rtmp.title" = "RTMP 송출";
+"home.rtmp.subtitle" = "YouTube · Twitch · Bilibili";
+"home.experimental" = "실험 기능";
+"home.comingsoon" = "준비 중";
+
+// MARK: - Live AI
+"liveai.title" = "Live AI";
+"liveai.connected" = "연결됨";
+"liveai.connecting" = "연결 중...";
+"liveai.disconnected" = "연결 안 됨";
+"liveai.speaking" = "AI가 말하는 중";
+"liveai.listening" = "듣는 중...";
+"liveai.thinking" = "생각 중...";
+"liveai.stop" = "중지";
+"liveai.start" = "시작";
+"liveai.device.notconnected.title" = "Ray-Ban Meta 안경이 연결되지 않았습니다";
+"liveai.device.notconnected.message" = "먼저 홈에서 스마트 안경을 연결한 뒤\nLive AI 기능을 사용하세요";
+"liveai.device.backtohome" = "홈으로 돌아가기";
+
+// MARK: - Quick Vision
+"quickvision.title" = "퀵비전";
+"quickvision.recognizing" = "인식 중";
+"quickvision.result" = "인식 결과";
+"quickvision.start" = "인식 시작";
+"quickvision.processing" = "인식 중...";
+"quickvision.glasses.notconnected" = "안경 연결 안 됨";
+"quickvision.siri.tip.title" = "Siri 단축어";
+"quickvision.siri.tip.description" = "다음 방법으로 퀵비전을 실행할 수 있습니다:";
+"quickvision.siri.tip.voice" = "Siri야, 터보메타 이거 뭐야";
+"quickvision.siri.tip.action" = "단축어 앱의 잠금 화면 위젯에 추가";
+"quickvision.siri.support" = "Siri 및 단축어 지원";
+"quickvision.stop.speaking" = "음성 중지";
+"quickvision.replay" = "다시 읽기";
+"quickvision.error.nodevice" = "안경이 연결되지 않았습니다. Meta View에서 먼저 안경을 페어링하세요";
+"quickvision.error.streamfailed" = "영상 스트림을 시작하지 못했습니다. 안경 연결 상태를 확인하세요";
+"quickvision.error.timeout" = "영상 프레임 대기 시간이 초과되었습니다. 다시 시도하세요";
+"quickvision.error.noimage" = "이미지를 처리할 수 없습니다";
+"quickvision.error.apikey" = "설정에서 API Key를 먼저 등록하세요";
+
+// MARK: - Stream View
+"stream.title" = "촬영";
+"stream.stop" = "라이브 중지";
+"stream.photo" = "사진 촬영";
+"stream.timer" = "타이머";
+"stream.ending" = "라이브가 %@ 후 종료됩니다";
+"stream.device.notconnected.title" = "Ray-Ban Meta 안경이 연결되지 않았습니다";
+"stream.device.notconnected.message" = "먼저 홈에서 스마트 안경을 연결한 뒤\n라이브 기능을 사용하세요";
+"stream.device.backtohome" = "홈으로 돌아가기";
+"stream.connecting" = "안경에 연결 중...";
+"stream.waiting" = "영상 스트림 대기 중...";
+
+// MARK: - Photo Preview
+"photo.share" = "공유";
+"photo.ai" = "AI 인식";
+"photo.nutrition" = "영양 분석";
+"photo.save" = "사진 앱에 저장";
+"photo.saved" = "저장됨";
+
+// MARK: - LeanEat
+"leaneat.title" = "영양 분석";
+"leaneat.analyzing" = "분석 중...";
+"leaneat.healthscore" = "건강 점수";
+"leaneat.totalnutrition" = "총 영양 정보";
+"leaneat.calories" = "칼로리";
+"leaneat.protein" = "단백질";
+"leaneat.fat" = "지방";
+"leaneat.carbs" = "탄수화물";
+"leaneat.fiber" = "식이섬유";
+"leaneat.sugar" = "당류";
+"leaneat.foods" = "음식 상세";
+"leaneat.suggestions" = "영양 조언";
+"leaneat.portion" = "분량";
+"leaneat.rating.excellent" = "매우 좋음";
+"leaneat.rating.good" = "좋음";
+"leaneat.rating.fair" = "보통";
+"leaneat.rating.poor" = "주의";
+"leaneat.healthscore.excellent" = "매우 건강함";
+"leaneat.healthscore.good" = "건강한 편";
+"leaneat.healthscore.fair" = "무난함";
+"leaneat.healthscore.poor" = "개선 필요";
+"leaneat.error.title" = "분석 실패";
+"leaneat.retry" = "다시 시도";
+
+// MARK: - Vision Recognition
+"vision.title" = "AI 이미지 인식";
+"vision.analyzing" = "AI 분석 중...";
+"vision.result" = "인식 결과";
+
+// MARK: - Records
+"records.title" = "기록";
+"records.empty" = "기록이 없습니다";
+"records.conversation" = "대화 기록";
+"records.date" = "날짜";
+
+// MARK: - Gallery
+"gallery.title" = "갤러리";
+"gallery.empty" = "저장된 미디어가 없습니다";
+"gallery.empty.hint" = "OpenClaw Quick Shot으로 촬영한 사진과 동영상이 여기에 보호 저장됩니다.";
+"gallery.filter.title" = "필터";
+"gallery.filter.all" = "전체";
+"gallery.filter.photo" = "사진";
+"gallery.filter.video" = "동영상";
+"gallery.kind.photo" = "사진";
+"gallery.kind.video" = "동영상";
+"gallery.item.accessibility" = "%@, %@ 모드";
+"gallery.share" = "미디어 공유";
+"gallery.error.title" = "갤러리 작업 실패";
+"gallery.result.title" = "갤러리 작업 결과";
+"gallery.error.photos.permission" = "사진 보관함 추가 권한이 필요합니다. iOS 설정에서 권한을 확인하세요.";
+"gallery.error.analysis.ambiguous" = "OpenClaw가 요청을 받았는지 확인할 수 없습니다. 중복 가능성을 확인한 뒤에만 다시 시도하세요.";
+"gallery.delete.title" = "앱 갤러리에서 삭제할까요?";
+"gallery.delete.message" = "보호된 앱 원본과 썸네일만 삭제합니다. iPhone 사진 앱에 복사된 항목은 삭제되지 않습니다.";
+"gallery.missing.title" = "항목을 찾을 수 없습니다";
+"gallery.missing.message" = "갤러리를 새로 고친 뒤 다시 시도하세요.";
+"gallery.missing.media" = "미디어 파일이 없습니다";
+"gallery.missing.media.message" = "보호 저장 파일이 손상되었거나 제거되었습니다. 항목을 삭제할 수 있습니다.";
+"gallery.detail.captured" = "촬영 시각";
+"gallery.detail.mode" = "촬영 모드";
+"gallery.detail.resolution" = "원본 해상도";
+"gallery.detail.size" = "원본 용량";
+"gallery.detail.duration" = "길이";
+"gallery.detail.seconds" = "%.1f초";
+"gallery.detail.framerate" = "실제 프레임률";
+"gallery.detail.fps" = "%.1f fps";
+"gallery.detail.bitrate" = "추정 비트레이트";
+"gallery.detail.mbps" = "%.1f Mbps";
+"gallery.detail.photos" = "iPhone 사진 앱";
+"gallery.detail.analysis" = "OpenClaw 분석";
+"gallery.status.pending" = "처리 중";
+"gallery.status.failed" = "실패";
+"gallery.status.photos.notrequested" = "복사하지 않음";
+"gallery.status.photos.saved" = "복사됨";
+"gallery.status.photos.permission" = "권한 필요";
+"gallery.status.analysis.notrequested" = "요청하지 않음";
+"gallery.status.analysis.completed" = "완료";
+"gallery.status.analysis.ambiguous" = "전달 여부 확인 필요";
+"gallery.action.photos.retry" = "iPhone 사진 앱에 다시 저장";
+"gallery.action.analysis.retry" = "OpenClaw 분석 다시 시도";
+"gallery.action.analysis.retry.ambiguous" = "중복 가능성을 확인하고 다시 시도";
+"gallery.action.answer" = "OpenClaw 답변 보기";
+"gallery.action.delete" = "앱 원본 삭제";
+"gallery.analysis.completed.title" = "분석 완료";
+"gallery.analysis.completed.message" = "OpenClaw 분석 결과가 보호된 채팅 기록에 저장되었습니다.";
+"gallery.video.retry.prompt" = "중요: 첨부 이미지는 전체 동영상 파일이 아니라 이전 촬영에서 추출한 대표 프레임 contact sheet입니다. 대표 프레임 기반 분석임을 답변에 명시하고, 약 %@초 구간에서 관찰 가능한 내용만 설명하세요. 프레임 사이의 동작이나 소리는 추정하지 마세요.";
+
+// MARK: - Settings
+"settings.title" = "내 정보";
+"settings.device" = "기기 관리";
+"settings.device.status" = "기기 상태";
+"settings.device.online" = "온라인";
+"settings.device.offline" = "오프라인";
+"settings.device.connected" = "연결됨";
+"settings.device.notconnected" = "연결 안 됨";
+"settings.device.stream" = "영상 스트림";
+"settings.device.stream.active" = "활성";
+"settings.device.stream.inactive" = "시작 안 됨";
+"settings.ai" = "AI 설정";
+
+// API Provider
+"settings.provider" = "API 제공자";
+"settings.provider.select" = "API 제공자 선택";
+"settings.provider.description" = "AI 이미지 인식에 사용할 API 서비스를 선택합니다";
+"settings.provider.alibaba.desc" = "Alibaba Cloud Qwen 비전 모델";
+"settings.provider.openrouter.desc" = "500개 이상의 AI 모델을 하나의 API로 사용";
+"settings.provider.getapikey" = "API Key 발급";
+
+// Model Settings
+"settings.model" = "모델 설정";
+"settings.model.select" = "모델 선택";
+"settings.model.current" = "현재 사용";
+"settings.model.alibaba" = "Alibaba Cloud 모델";
+"settings.model.openrouter" = "OpenRouter 모델";
+"settings.model.qwen3vlplus.desc" = "고성능 비전 이해 모델";
+"settings.model.qwen3vlmax.desc" = "최상급 비전 이해 모델";
+"settings.model.search" = "모델 검색...";
+"settings.model.visiononly" = "비전 지원 모델만 표시";
+"settings.model.loading" = "모델 목록 불러오는 중...";
+"settings.model.retry" = "다시 시도";
+"settings.model.notfound" = "조건에 맞는 모델이 없습니다";
+
+// Endpoint Settings
+"settings.endpoint" = "서비스 지역";
+"settings.endpoint.beijing.desc" = "중국 본토 사용자용";
+"settings.endpoint.singapore.desc" = "해외 사용자용";
+"settings.endpoint.description" = "지역마다 API Key가 다르며 서로 호환되지 않습니다";
+
+// Live AI Settings
+"settings.liveai" = "Live AI";
+"settings.liveai.provider" = "Live AI 제공자";
+"settings.liveai.provider.select" = "Live AI 제공자 선택";
+"settings.liveai.provider.description" = "실시간 음성 대화에 사용할 AI 제공자를 선택합니다";
+"settings.liveai.alibaba.desc" = "Qwen Omni 실시간 오디오 모델";
+"settings.liveai.google.desc" = "Gemini Live 실시간 오디오 모델";
+
+"settings.language" = "출력 언어";
+"settings.language.select" = "출력 언어 선택";
+"settings.language.description" = "AI가 이 언어로 음성과 텍스트를 출력합니다";
+"settings.applanguage" = "앱 언어";
+"settings.applanguage.select" = "앱 언어 선택";
+"settings.applanguage.description" = "앱 화면의 표시 언어를 변경합니다";
+"settings.applanguage.restart.title" = "앱 재시작 필요";
+"settings.applanguage.restart.message" = "언어 변경을 적용하려면 앱을 다시 시작해야 합니다";
+"settings.applanguage.restart.confirm" = "지금 재시작";
+
+// API Key
+"settings.apikey" = "API Key 관리";
+"settings.apikey.manage" = "API Key 관리";
+"settings.apikey.status" = "API Key 상태";
+"settings.apikey.configured" = "설정됨";
+"settings.apikey.notconfigured" = "설정 안 됨";
+"settings.apikey.placeholder" = "API Key를 입력하세요";
+"settings.apikey.alibaba.help" = "Alibaba Cloud 콘솔에서 API Key를 발급받으세요";
+"settings.apikey.openrouter.help" = "OpenRouter 웹사이트에서 API Key를 발급받으세요";
+"settings.apikey.google.help" = "Google AI Studio에서 API Key를 발급받으세요";
+"settings.apikey.get" = "API Key 발급";
+"settings.apikey.delete" = "API Key 삭제";
+"settings.apikey.saved" = "저장 완료";
+"settings.apikey.saved.message" = "API Key를 안전하게 저장했습니다";
+"settings.apikey.empty" = "API Key는 비워둘 수 없습니다";
+"settings.apikey.savefailed" = "저장에 실패했습니다. 다시 시도하세요";
+"settings.apikey.deletefailed" = "삭제에 실패했습니다. 다시 시도하세요";
+
+"settings.quality" = "영상 화질";
+"settings.quality.select" = "영상 화질 선택";
+"settings.quality.description" = "화질이 높을수록 배터리 사용량이 증가합니다";
+"settings.quality.low" = "낮은 화질";
+"settings.quality.low.desc" = "절전 모드, 장시간 사용에 적합";
+"settings.quality.medium" = "중간 화질";
+"settings.quality.medium.desc" = "균형 모드, 권장";
+"settings.quality.high" = "높은 화질";
+"settings.quality.high.desc" = "최고 화질, 배터리 소모가 큼";
+"settings.quality.maximum" = "고세부 묘사 · 720×1280 · 15fps (DAT)";
+"settings.capture.location" = "촬영 위치 포함";
+"settings.capture.location.description" = "기본적으로 꺼져 있습니다. 켜면 앱 사용 중 한 번의 iPhone GPS 위치를 사진 EXIF, 동영상 metadata, iPhone 사진 앱과 OpenClaw 분석 문맥에 포함합니다. 위치를 얻지 못해도 촬영은 계속됩니다.";
+"openclaw.capture.location.context" = "촬영 위치: 위도 %.6f, 경도 %.6f (iPhone GPS, 정확도 약 %.0fm)";
+"settings.about" = "정보";
+"settings.version" = "버전";
+"settings.sdkversion" = "SDK 버전";
+
+// MARK: - Tabs
+"tab.home" = "홈";
+"tab.records" = "기록";
+"tab.gallery" = "갤러리";
+"tab.settings" = "내 정보";
+
+// MARK: - Errors
+"error.network" = "네트워크 오류입니다. 인터넷 연결을 확인하세요";
+"error.api" = "API 오류";
+"error.api.code" = "API 오류: %d";
+"error.permission.denied" = "권한이 거부되었습니다. iOS 설정에서 허용하세요";
+"error.device.notfound" = "기기를 찾을 수 없습니다";
+"error.device.notconnected" = "기기가 연결되지 않았습니다";
+"error.timeout" = "작업 시간이 초과되었습니다. 다시 시도하세요";
+"error.unknown" = "알 수 없는 오류";
+"error.invalidresponse" = "잘못된 응답입니다";
+"error.noaudiodata" = "오디오 데이터를 받지 못했습니다";
+"error.playbackfailed" = "오디오 재생에 실패했습니다";
+
+// MARK: - TTS
+"tts.speaking" = "읽는 중...";
+"tts.stopped" = "중지됨";
+
+// MARK: - Units
+"unit.kcal" = "kcal";
+"unit.gram" = "그램";
+"unit.g" = "g";
+
+// MARK: - AI Prompts
+"prompt.quickvision" = "당신은 스마트 안경 AI 도우미입니다. 반드시 한국어로 짧고 자연스럽게 답하세요. 화면에 손가락이나 손이 분명하게 가리키는 대상·영역·글자가 있으면 그 대상을 가장 먼저 설명하세요. 가리키는 손이 없거나 대상이 불확실하면 손가락을 추측하지 말고 현재 장면의 중요한 내용을 설명하세요. 보이는 한국어 이외의 글자는 빠짐없이 원문을 읽고 자연스러운 한국어 번역을 덧붙이세요. 응답은 '대상 또는 장면: ...'으로 시작하고, 외국어가 있을 때만 '보이는 외국어와 번역: 원문 — 번역'을 이어서 말하세요. 음성으로 듣기 좋게 2~3문장으로 간결히 답하고 '이미지에서' 같은 표현은 쓰지 마세요.";
+"prompt.liveai" = "당신은 Ray-Ban Meta 스마트 안경 AI 도우미입니다. 사용자가 어떤 언어로 말하더라도 항상 한국어로 답하세요. 답변은 짧고 자연스러운 구어체로 하며, 사용자가 보고 있는 화면을 바탕으로 필요한 정보를 바로 알려주세요.";
+
+// MARK: - Quick Vision Modes
+"prompt.quickvision.health" = "이 음식이나 음료의 건강성을 한국어로 분석하세요. 영양 균형, 첨가물, 당·나트륨·지방, 잠재적 영향, 건강 조언을 포함하되 음성으로 듣기 좋게 100자 안팎으로 간결하게 답하세요.";
+"prompt.quickvision.blind" = "시각장애 사용자를 위해 현재 환경을 한국어로 설명하세요. 주변 물체와 사람, 대략적인 거리와 방향, 장애물이나 위험, 실내·실외와 밝기, 주의할 점을 포함하고 앞·왼쪽·오른쪽 같은 방향 표현을 사용해 80자 안팎으로 답하세요.";
+"prompt.quickvision.reading" = "이미지 속 글자를 정확히 인식해 한국어로 읽어 주세요. 읽는 순서대로 구성하고 메뉴나 표지판이면 종류를 알려 주세요. 글자가 흐리면 그 사실을 말하고, 별도의 불필요한 설명 없이 내용 자체를 읽어 주세요.";
+"prompt.quickvision.translate" = "이미지 속 글자를 인식해 {LANGUAGE}로 번역하세요. 모든 보이는 글자를 정확히 읽고 자연스럽게 번역하며, 여러 문단은 나누어 번역하세요. 원문 설명 없이 번역 결과만 음성으로 듣기 좋게 100자 안팎으로 답하세요.";
+"prompt.quickvision.encyclopedia" = "이미지 속 물체, 건축물, 예술품 또는 생물을 식별하고 한국어로 간단한 백과 정보를 알려 주세요. 이름과 분류, 배경이나 유래, 흥미로운 사실, 문화적 의미를 포함해 박물관 해설처럼 100자 안팎으로 답하세요.";
+
+"quickvision.mode.standard" = "기본 모드";
+"quickvision.mode.health" = "건강 분석";
+"quickvision.mode.blind" = "시각 보조";
+"quickvision.mode.reading" = "읽기 모드";
+"quickvision.mode.translate" = "번역 모드";
+"quickvision.mode.encyclopedia" = "백과 모드";
+"quickvision.mode.custom" = "사용자 지정 프롬프트";
+
+"quickvision.mode.standard.desc" = "일반 이미지 설명";
+"quickvision.mode.health.desc" = "식품의 건강성 분석";
+"quickvision.mode.blind.desc" = "시각장애 사용자를 위한 환경 설명";
+"quickvision.mode.reading.desc" = "글자를 인식해 읽기";
+"quickvision.mode.translate.desc" = "글자를 인식해 번역";
+"quickvision.mode.encyclopedia.desc" = "대상에 대한 백과 정보";
+"quickvision.mode.custom.desc" = "직접 만든 프롬프트 사용";
+
+"quickvision.settings" = "퀵비전 설정";
+"quickvision.settings.mode" = "인식 모드";
+"quickvision.settings.customprompt" = "사용자 지정 프롬프트";
+"quickvision.settings.targetlanguage" = "번역 대상 언어";
+"quickvision.settings.history" = "퀵비전 기록";
+"quickvision.history" = "퀵비전 기록";
+"quickvision.history.empty" = "인식 기록이 없습니다";
+"quickvision.history.clear" = "기록 삭제";
+"quickvision.history.clear.confirm" = "모든 퀵비전 기록을 삭제할까요?";
+"quickvision.today" = "오늘";
+"quickvision.yesterday" = "어제";
+"quickvision.custom.default" = "이미지의 내용을 음성으로 듣기 좋게 간결한 한국어로 설명해 주세요.";
+"quickvision.tab" = "퀵비전";
+"quickvision.records.empty" = "인식 기록이 없습니다";
+"quickvision.records.empty.hint" = "퀵비전을 사용하면 기록이 여기에 표시됩니다";
+
+// MARK: - Live AI Modes
+"liveai.mode.standard" = "기본 모드";
+"liveai.mode.museum" = "박물관 모드";
+"liveai.mode.blind" = "시각 보조";
+"liveai.mode.reading" = "읽기 모드";
+"liveai.mode.translate" = "번역 모드";
+"liveai.mode.custom" = "사용자 지정 프롬프트";
+
+"liveai.mode.standard.desc" = "자유 대화, 음성 감지 시 화면 확인";
+"liveai.mode.museum.desc" = "전시품을 설명하는 박물관 해설";
+"liveai.mode.blind.desc" = "주변 환경을 자세히 설명";
+"liveai.mode.reading.desc" = "보이는 글자를 인식해 읽기";
+"liveai.mode.translate.desc" = "보이는 글자를 실시간 번역";
+"liveai.mode.custom.desc" = "사용자 지정 시스템 프롬프트 사용";
+
+"liveai.settings" = "대화 모드";
+"liveai.settings.mode" = "대화 모드";
+"liveai.settings.mode.footer" = "모드에 따라 AI 동작이 달라집니다. 다시 연결한 뒤 적용됩니다.";
+"liveai.settings.customprompt" = "사용자 지정 시스템 프롬프트";
+"liveai.settings.customprompt.footer" = "AI의 역할과 동작을 직접 지정합니다. 다음 연결부터 적용됩니다.";
+"liveai.settings.targetlanguage" = "번역 대상 언어";
+"liveai.custom.default" = "당신은 사용자의 작업을 돕는 AI 도우미입니다. 질문에 간결한 한국어로 답하세요.";
+
+// Live AI Mode Prompts
+"prompt.liveai.standard" = "당신은 Ray-Ban Meta 스마트 안경 AI 도우미입니다. 사용자가 어떤 언어로 말하더라도 항상 한국어로 답하세요. 답변은 짧고 자연스럽게 하며 사용자가 보고 있는 장면을 바탕으로 바로 도움이 되는 정보를 주세요.";
+"prompt.liveai.museum" = "당신은 전문 박물관 해설 AI입니다. 항상 한국어로 답하세요. 사용자가 전시품을 바라보면 이름과 기본 정보, 역사적 배경과 문화적 의미, 흥미로운 이야기, 다른 전시품과의 연관성을 이해하기 쉽게 설명하세요.";
+"prompt.liveai.blind" = "당신은 시각장애 사용자를 돕는 스마트 안경 AI입니다. 항상 한국어로 답하세요. 주변 물체와 사람, 방향, 장애물과 위험, 표지판이나 메뉴의 글자, 안전한 이동에 필요한 정보를 중요한 순서대로 명확하게 알려 주세요.";
+"prompt.liveai.reading" = "당신은 읽기 보조 AI입니다. 항상 한국어로 답하세요. 보이는 모든 글자를 정확히 읽고 올바른 순서로 구성하며, 문서 구조를 설명하고 외국어는 원문을 읽은 뒤 한국어로 번역하세요.";
+"prompt.liveai.translate" = "당신은 실시간 번역 AI입니다. 번역 결과는 반드시 {LANGUAGE}로 출력하세요. 화면 속 글자를 인식해 자연스럽게 번역하고 메뉴나 표지판의 용도와 필요한 전문 용어 설명을 간단히 덧붙이세요.";
+
+// MARK: - RTMP
+"rtmp.title" = "RTMP 송출";
+"rtmp.status.disconnected" = "연결 안 됨";
+"rtmp.status.connecting" = "연결 중...";
+"rtmp.status.connected" = "연결됨";
+"rtmp.status.streaming" = "송출 중";
+"rtmp.connecting.video" = "영상 스트림 연결 중...";
+"rtmp.frames" = "프레임";
+"rtmp.time" = "시간";
+"rtmp.data" = "데이터";
+"rtmp.start" = "송출 시작";
+"rtmp.stop" = "송출 중지";
+"rtmp.url.placeholder" = "RTMP 서버 주소";
+"rtmp.key.placeholder" = "스트림 키";
+"rtmp.settings" = "송출 설정";
+"rtmp.settings.bitrate" = "비트레이트";
+"rtmp.settings.bitrate.description" = "비트레이트가 높을수록 화질이 좋아지지만 더 많은 대역폭이 필요합니다";
+"rtmp.settings.platform" = "플랫폼 프리셋";
+"rtmp.settings.note" = "안내";
+"rtmp.settings.experimental" = "실험 기능";
+"rtmp.settings.experimental.description" = "RTMP 송출은 실험 기능이며 일부 플랫폼에서는 추가 설정이 필요할 수 있습니다.";
+"rtmp.recommended" = "권장";
+"rtmp.platform.custom" = "직접 설정";
+"rtmp.error.invalidurl" = "올바른 RTMP 주소를 입력하세요";
+
+// MARK: - Live Translate
+"livetranslate.title" = "실시간 번역";
+"livetranslate.connected" = "연결됨";
+"livetranslate.connecting" = "연결 중...";
+"livetranslate.recording" = "녹음 중";
+"livetranslate.placeholder" = "녹음 버튼을 누른 채 말하세요";
+"livetranslate.source" = "원본 언어";
+"livetranslate.target" = "대상 언어";
+"livetranslate.clear" = "지우기";
+
+"livetranslate.settings.title" = "번역 설정";
+"livetranslate.settings.sourceLanguage" = "원본 언어";
+"livetranslate.settings.targetLanguage" = "대상 언어";
+"livetranslate.settings.targetLanguage.footer" = "대상 언어는 음성 출력도 지원합니다";
+"livetranslate.settings.voice" = "음성";
+"livetranslate.settings.voice.footer" = "음성마다 지원하는 언어가 다릅니다";
+"livetranslate.settings.output" = "출력 설정";
+"livetranslate.settings.audioOutput" = "음성 출력";
+"livetranslate.settings.imageEnhance" = "화면 정보 활용";
+"livetranslate.settings.imageEnhance.footer" = "화면 정보를 함께 사용하면 동음이의어 번역 정확도를 높일 수 있습니다";
+"livetranslate.settings.history" = "번역 기록";
+"livetranslate.settings.clearHistory" = "기록 삭제";
+"livetranslate.settings.historyCount" = "번역 기록 %d개";
+"common.done" = "완료";
+"common.ok" = "확인";
+
+"livetranslate.lang.en" = "영어";
+"livetranslate.lang.zh" = "중국어";
+"livetranslate.lang.ja" = "일본어";
+"livetranslate.lang.ko" = "한국어";
+"livetranslate.lang.fr" = "프랑스어";
+"livetranslate.lang.de" = "독일어";
+"livetranslate.lang.ru" = "러시아어";
+"livetranslate.lang.es" = "스페인어";
+"livetranslate.lang.pt" = "포르투갈어";
+"livetranslate.lang.it" = "이탈리아어";
+"livetranslate.lang.yue" = "광둥어";
+"livetranslate.lang.id" = "인도네시아어";
+"livetranslate.lang.vi" = "베트남어";
+"livetranslate.lang.th" = "태국어";
+"livetranslate.lang.ar" = "아랍어";
+"livetranslate.lang.hi" = "힌디어";
+"livetranslate.lang.el" = "그리스어";
+"livetranslate.lang.tr" = "튀르키예어";
+
+"livetranslate.voice.cherry" = "Cherry";
+"livetranslate.voice.nofish" = "Nofish";
+"livetranslate.voice.jada" = "Jada";
+"livetranslate.voice.dylan" = "Dylan";
+"livetranslate.voice.sunny" = "Sunny";
+"livetranslate.voice.peter" = "Peter";
+"livetranslate.voice.kiki" = "Kiki";
+"livetranslate.voice.eric" = "Eric";
+
+"livetranslate.voice.cherry.desc" = "따뜻한 여성 음성, 다국어 지원";
+"livetranslate.voice.nofish.desc" = "자연스러운 여성 음성, 다국어 지원";
+"livetranslate.voice.jada.desc" = "경쾌한 여성 음성, 중국어 전용";
+"livetranslate.voice.dylan.desc" = "중저음 남성 음성, 중국어 전용";
+"livetranslate.voice.sunny.desc" = "밝은 여성 음성, 중국어 전용";
+"livetranslate.voice.peter.desc" = "차분한 남성 음성, 중국어 전용";
+"livetranslate.voice.kiki.desc" = "광둥어 여성 음성, 광둥어 전용";
+"livetranslate.voice.eric.desc" = "성숙한 남성 음성, 중국어 전용";
+
+"livetranslate.error.title" = "번역 오류";
+"livetranslate.error.noApiKey" = "설정에서 API Key를 먼저 등록하세요";
+"livetranslate.error.cannotSwap" = "현재 언어 조합은 서로 바꿀 수 없습니다";
+
+"livetranslate.settings.microphone" = "마이크";
+"livetranslate.settings.usePhoneMic" = "iPhone 마이크 사용";
+"livetranslate.settings.microphone.footer" = "켜면 iPhone 마이크로 상대방의 말을 녹음하고, 끄면 안경 마이크로 자신의 말을 녹음합니다";
+
+// OpenClaw Integration
+"settings.integrations" = "연동";
+"openclaw.status.connected" = "연결됨";
+"openclaw.status.connecting" = "연결 중...";
+"openclaw.status.pairing" = "페어링 대기";
+"openclaw.status.disconnected" = "연결 안 됨";
+"openclaw.connect" = "Gateway 연결";
+"openclaw.disconnect" = "연결 해제";
+"openclaw.pairing.hint" = "OpenClaw 터미널에서 openclaw devices approve 명령을 실행해 페어링을 완료하세요";
+"openclaw.gateway.help" = "OpenClaw Gateway가 실행 중인 기기의 주소와 포트를 입력하세요. 로컬 기본값은 127.0.0.1:18789입니다";
+"openclaw.capabilities" = "기기 기능";
+"openclaw.capabilities.desc" = "연결 후 OpenClaw AI가 안경으로 사진을 찍거나 기기 상태를 확인할 수 있습니다";
+"home.openclaw.subtitle" = "갈비스 음성 대화";
+"home.openclaw.connected" = "연결됨 · 음성 대화";
+"openclaw.chat.placeholder" = "메시지 입력...";
+"openclaw.chat.photoprompt" = "안경으로 촬영한 이 사진을 확인해 주세요";
+"openclaw.chat.snap" = "촬영 후 전송";
+"openclaw.chat.sending" = "전송 중...";
+"openclaw.chat.noframe" = "안경 화면을 가져올 수 없습니다. 안경 연결 상태를 확인하세요";
+"openclaw.chat.text" = "키보드";
+"openclaw.chat.history.clear" = "채팅 기록 삭제";
+"openclaw.chat.history.clear.confirm" = "저장된 OpenClaw 채팅 기록을 모두 삭제할까요?";
+"openclaw.chat.image.attachment" = "사진 첨부";
+"openclaw.chat.speech.play" = "답변 읽기";
+"openclaw.chat.speech.stop" = "읽기 중지";
+"openclaw.notification.title" = "OpenClaw 답변";
+
+// OpenClaw Capture Modes
+"openclaw.capturemode.settings.entry" = "촬영 모드";
+"openclaw.capturemode.settings.section" = "촬영 모드";
+"openclaw.capturemode.settings.section.footer" = "사진이나 영상을 촬영할 때 사용할 프롬프트 프리셋을 관리합니다 (통용, 코딩, 체스, 스쿼트 자세, 그리고 직접 추가한 사용자 지정 모드).";
+"openclaw.capturemode.settings.title" = "촬영 모드";
+"openclaw.capturemode.settings.modes" = "모드";
+"openclaw.capturemode.settings.modes.footer.v2" = "드래그하여 순서를 바꾸고, 스와이프하여 복제하거나 삭제하세요. \"내장\" 표시는 앱에 기본 포함되어 있다는 뜻일 뿐이며, 다른 모드와 동일하게 편집하거나 삭제할 수 있습니다.";
+"openclaw.capturemode.settings.defaults" = "기본값";
+"openclaw.capturemode.settings.photodefault" = "사진 기본 모드";
+"openclaw.capturemode.settings.videodefault" = "영상 기본 모드";
+"openclaw.capturemode.settings.new" = "새 모드";
+"openclaw.capturemode.duplicate" = "복제";
+"openclaw.capturemode.duplicate.suffix" = "사본";
+"openclaw.capturemode.builtin.badge" = "내장";
+"openclaw.capturemode.delete.title" = "모드 삭제";
+"openclaw.capturemode.delete.confirm" = "\"%@\"을(를) 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.";
+
+"openclaw.capturemode.editor.new" = "새 모드";
+"openclaw.capturemode.editor.edit" = "모드 편집";
+"openclaw.capturemode.section.details" = "기본 정보";
+"openclaw.capturemode.section.media" = "적용 매체";
+"openclaw.capturemode.field.name" = "이름";
+"openclaw.capturemode.field.summary" = "요약";
+"openclaw.capturemode.field.symbol" = "아이콘 심볼";
+"openclaw.capturemode.field.symbol.help" = "SF Symbol 이름을 입력하세요. 예: \"eye.circle\" 또는 \"camera.circle\".";
+"openclaw.capturemode.field.media" = "지원하는 매체";
+"openclaw.capturemode.field.media.help" = "사진 또는 영상 중 하나는 반드시 켜져 있어야 합니다.";
+"openclaw.capturemode.field.prompt" = "프롬프트";
+"openclaw.capturemode.field.prompt.help" = "촬영한 사진이나 영상과 함께 AI에 전달됩니다. 보호된 로컬 저장소에만 저장되며 로그에 남지 않습니다.";
+"openclaw.capturemode.discard.title" = "변경 사항을 취소할까요?";
+"openclaw.capturemode.discard.message" = "저장하지 않은 변경 사항이 있습니다. 정말 취소하시겠습니까?";
+"openclaw.capturemode.discard.confirm" = "변경 사항 취소";
+
+"openclaw.capturemode.picker.title" = "모드 선택";
+"openclaw.capturemode.picker.manage" = "모드 추가 및 편집";
+"openclaw.capturemode.picker.empty" = "이 촬영 유형에 사용할 수 있는 모드가 없습니다.";
+
+"openclaw.capturemode.media.photo" = "사진";
+"openclaw.capturemode.media.video" = "영상";
+"openclaw.capturemode.media.both" = "사진 및 영상";
+"openclaw.capturemode.media.none" = "없음";
+
+"openclaw.capturemode.error.namerequired" = "이름을 입력해 주세요.";
+"openclaw.capturemode.error.nametoolong" = "이름은 %@자 이하여야 합니다.";
+"openclaw.capturemode.error.duplicatename" = "이미 같은 이름의 모드가 존재합니다.";
+"openclaw.capturemode.error.summarytoolong" = "요약은 %@자 이하여야 합니다.";
+"openclaw.capturemode.error.promptrequired" = "프롬프트를 입력해 주세요.";
+"openclaw.capturemode.error.prompttoolong" = "프롬프트는 %@자 이하여야 합니다.";
+"openclaw.capturemode.error.symbolrequired" = "아이콘 심볼 이름을 입력해 주세요.";
+"openclaw.capturemode.error.mediarequired" = "사진 또는 영상 중 하나는 켜 주세요.";
+"openclaw.capturemode.error.notfound" = "해당 모드를 찾을 수 없습니다.";
+
+// OpenClaw Capture Modes — Seeded Built-in Modes
+"openclaw.capturemode.seed.general.name" = "통용";
+"openclaw.capturemode.seed.general.summary" = "안경에 보이는 것을 설명";
+"openclaw.capturemode.seed.general.prompt" = "당신은 착용자의 스마트 안경 카메라를 통해 보고 있습니다. 보이는 내용을 명확하고 간결하게 설명하고, 착용자가 주변 상황에서 알고 싶어할 만한 부분을 짚어 주세요.";
+"openclaw.capturemode.seed.coding.name" = "코딩";
+"openclaw.capturemode.seed.coding.summary" = "화면의 코드나 오류를 읽어줌";
+"openclaw.capturemode.seed.coding.prompt" = "당신은 착용자의 스마트 안경 카메라를 통해 화면, 코드 편집기 또는 터미널을 보고 있습니다. 보이는 코드, 오류 메시지, 출력 내용을 옮겨 적고 설명하며, 문제가 있다면 해결 방법이나 다음 단계를 제안해 주세요.";
+"openclaw.capturemode.seed.chess.name" = "체스";
+"openclaw.capturemode.seed.chess.summary" = "체스 포지션 분석";
+"openclaw.capturemode.seed.chess.prompt" = "당신은 착용자의 스마트 안경 카메라를 통해 체스판을 보고 있습니다. 기물의 위치를 파악하고 누구 차례일지 판단한 후, 강력한 다음 수를 간단한 설명과 함께 제안해 주세요.";
+"openclaw.capturemode.seed.squat.name" = "스쿼트 자세";
+"openclaw.capturemode.seed.squat.summary" = "영상으로 스쿼트 자세 점검";
+"openclaw.capturemode.seed.squat.prompt" = "당신은 착용자의 스마트 안경 카메라를 통해 누군가 스쿼트를 하는 모습을 보고 있습니다. 자세(깊이, 무릎 방향, 등 각도, 균형)를 평가하고 간결하고 실행 가능한 코칭 피드백을 제공해 주세요.";
+
+// OpenClaw Quick Shot
+"openclaw.quickshot.photo.title" = "사진 Quick Shot";
+"openclaw.quickshot.video.title" = "동영상 Quick Shot";
+"openclaw.quickshot.state.idle" = "촬영을 준비합니다.";
+"openclaw.quickshot.state.preparing" = "안경 카메라를 준비하는 중…";
+"openclaw.quickshot.state.capturing" = "사진을 촬영하는 중…";
+"openclaw.quickshot.state.recording" = "녹화 중";
+"openclaw.quickshot.recording.elapsed" = "%.1f / %.0f초";
+"openclaw.quickshot.recording.limit" = "최대 10초 후 자동으로 저장합니다.";
+"openclaw.quickshot.recording.stop" = "녹화 종료";
+"openclaw.quickshot.state.saving" = "보호된 앱 갤러리에 저장하는 중…";
+"openclaw.quickshot.state.exporting" = "iPhone 사진 앱에 복사하는 중…";
+"openclaw.quickshot.state.sending" = "OpenClaw에 분석 요청을 보내는 중…";
+"openclaw.quickshot.state.awaiting" = "OpenClaw 답변을 기다리는 중…";
+"openclaw.quickshot.completed" = "분석이 완료되었습니다";
+"openclaw.quickshot.video.samplednotice" = "전체 동영상이 아닌 대표 프레임 기반 분석입니다.";
+"openclaw.quickshot.failed.title" = "Quick Shot 실패";
+"openclaw.quickshot.failed.ambiguous.title" = "전달 여부 확인 필요";
+"openclaw.quickshot.failed.ambiguous.message" = "중복 요청을 막기 위해 자동 재전송하지 않았습니다. 앱 갤러리에서 상태를 확인한 뒤 명시적으로 다시 시도하세요.";
+"openclaw.quickshot.cancelled" = "촬영을 취소했습니다";
+
+// OpenClaw Video Recorder Errors
+"video.recorder.error.alreadyrecording" = "이미 동영상을 녹화하고 있습니다.";
+"video.recorder.error.notrecording" = "진행 중인 동영상 녹화를 찾을 수 없습니다.";
+"video.recorder.error.cancelled" = "동영상 녹화를 취소했습니다.";
+"video.recorder.error.setup" = "동영상 녹화를 준비하지 못했습니다.";
+"video.recorder.error.writer" = "동영상 파일을 완성하지 못했습니다.";
+"video.recorder.error.noframes" = "저장할 동영상 프레임을 받지 못했습니다.";
+"video.recorder.error.tooshort" = "동영상이 너무 짧습니다. 0.5초 이상 녹화해 주세요.";

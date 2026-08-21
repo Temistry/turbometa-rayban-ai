@@ -6,15 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-//
-// CameraAccessApp.swift
-//
-// Main entry point for the CameraAccess sample app demonstrating the Meta Wearables DAT SDK.
-// This app shows how to connect to wearable devices (like Ray-Ban Meta smart glasses),
-// stream live video from their cameras, and capture photos. It provides a complete example
-// of DAT SDK integration including device registration, permissions, and media streaming.
-//
-
+import AppIntents
 import Foundation
 import MWDATCore
 import SwiftUI
@@ -26,49 +18,107 @@ import MWDATMockDevice
 @main
 struct TurboMetaApp: App {
   #if DEBUG
-  // Debug menu for simulating device connections during development
-  @StateObject private var debugMenuViewModel = DebugMenuViewModel(mockDeviceKit: MockDeviceKit.shared)
+  @StateObject private var debugMenuViewModel = DebugMenuViewModel(
+    mockDeviceKit: MockDeviceKit.shared
+  )
   #endif
+
+  #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
+  @StateObject private var developerConsole = DeveloperConsole.shared
+  #endif
+
   private let wearables: WearablesInterface
   @StateObject private var wearablesViewModel: WearablesViewModel
 
   init() {
+    #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
+    // 내부 TestFlight 빌드는 사용자가 직접 공유할 수 있는 보호된 기기 로그를 남긴다.
+    DeveloperConsole.shared.startCapturing()
+    #endif
+
+    OpenClawNotificationCoordinator.shared.install()
+
+    if #available(iOS 16.0, *) {
+      TurboMetaShortcuts.updateAppShortcutParameters()
+      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
+      DeveloperConsole.shared.log(
+        .info,
+        category: "Siri",
+        "한국어 App Shortcut 등록 정보 갱신 요청 완료"
+      )
+      #endif
+    }
+
     do {
       try Wearables.configure()
-      print("✅ [TurboMeta] Wearables SDK configured successfully")
+      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
+      DeveloperConsole.shared.log(
+        .info,
+        category: "TurboMeta",
+        "Wearables SDK 설정 성공"
+      )
+      #endif
     } catch {
-      print("❌ [TurboMeta] Wearables.configure() failed: \(error) | \(error.localizedDescription)")
+      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
+      DeveloperConsole.shared.record(
+        error: error,
+        category: "TurboMeta",
+        operation: "Wearables.configure"
+      )
+      #endif
     }
+
     let wearables = Wearables.shared
     self.wearables = wearables
-    self._wearablesViewModel = StateObject(wrappedValue: WearablesViewModel(wearables: wearables))
+    self._wearablesViewModel = StateObject(
+      wrappedValue: WearablesViewModel(wearables: wearables)
+    )
   }
 
   var body: some Scene {
     WindowGroup {
-      // Main app view with access to the shared Wearables SDK instance
-      // The Wearables.shared singleton provides the core DAT API
-      MainAppView(wearables: Wearables.shared, viewModel: wearablesViewModel)
-        // Show error alerts for view model failures
-        .alert("Error", isPresented: $wearablesViewModel.showError) {
-          Button("OK") {
-            wearablesViewModel.dismissError()
+      ZStack(alignment: .bottomTrailing) {
+        MainAppView(wearables: wearables, viewModel: wearablesViewModel)
+          .alert("오류", isPresented: $wearablesViewModel.showError) {
+            Button("확인") {
+              wearablesViewModel.dismissError()
+            }
+          } message: {
+            Text(wearablesViewModel.errorMessage)
           }
-        } message: {
-          Text(wearablesViewModel.errorMessage)
-        }
-        #if DEBUG
-      // Bug 图标已隐藏
-      // .sheet(isPresented: $debugMenuViewModel.showDebugMenu) {
-      //   MockDeviceKitView(viewModel: debugMenuViewModel.mockDeviceKitViewModel)
-      // }
-      // .overlay {
-      //   DebugMenuView(debugMenuViewModel: debugMenuViewModel)
-      // }
+
+        RegistrationView(viewModel: wearablesViewModel)
+
+        #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
+        DeveloperConsoleButton(console: developerConsole)
+          .padding(.trailing, 12)
+          .padding(.bottom, 90)
+          .accessibilityIdentifier("developer_console_button")
         #endif
 
-      // Registration view handles the flow for connecting to the glasses via Meta AI
-      RegistrationView(viewModel: wearablesViewModel)
+        #if DEBUG
+        DebugMenuView(debugMenuViewModel: debugMenuViewModel)
+          .sheet(isPresented: $debugMenuViewModel.showDebugMenu) {
+            MockDeviceKitView(
+              viewModel: debugMenuViewModel.mockDeviceKitViewModel
+            )
+          }
+        #endif
+      }
+      .environment(\.locale, Locale(identifier: "ko-KR"))
+      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
+      .onChange(of: wearablesViewModel.showError) { isPresented in
+        guard isPresented else { return }
+        developerConsole.log(
+          .error,
+          category: "WearablesUI",
+          wearablesViewModel.errorMessage
+        )
+      }
+      .fullScreenCover(isPresented: $developerConsole.isPresented) {
+        DeveloperLogView(console: developerConsole)
+      }
+      #endif
     }
   }
 }

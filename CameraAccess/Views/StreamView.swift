@@ -1,18 +1,6 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- * All rights reserved.
- *
- * This source code is licensed under the license found in the
- * LICENSE file in the root directory of this source tree.
+ * Meta 안경 영상 스트림 및 촬영 화면
  */
-
-//
-// StreamView.swift
-//
-// Main UI for video streaming from Meta wearable devices using the DAT SDK.
-// This view demonstrates the complete streaming API: video streaming with real-time display, photo capture,
-// and error handling.
-//
 
 import MWDATCore
 import SwiftUI
@@ -24,67 +12,82 @@ struct StreamView: View {
 
   var body: some View {
     ZStack {
-      // Black background for letterboxing/pillarboxing
-      Color.black
-        .edgesIgnoringSafeArea(.all)
+      Color.black.edgesIgnoringSafeArea(.all)
 
-      // 未连接设备提醒
       if !viewModel.hasActiveDevice {
         deviceNotConnectedView
       } else {
-        // Video backdrop
         if let videoFrame = viewModel.currentVideoFrame, viewModel.hasReceivedFirstFrame {
-        GeometryReader { geometry in
-          Image(uiImage: videoFrame)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(width: geometry.size.width, height: geometry.size.height)
-            .clipped()
+          GeometryReader { geometry in
+            Image(uiImage: videoFrame)
+              .resizable()
+              .aspectRatio(contentMode: .fill)
+              .frame(width: geometry.size.width, height: geometry.size.height)
+              .clipped()
+          }
+          .edgesIgnoringSafeArea(.all)
+        } else {
+          VStack(spacing: 12) {
+            ProgressView()
+              .scaleEffect(1.5)
+              .tint(.white)
+            Text("stream.waiting".localized)
+              .foregroundColor(.white.opacity(0.8))
+          }
         }
-        .edgesIgnoringSafeArea(.all)
-      } else {
-        ProgressView()
-          .scaleEffect(1.5)
-          .foregroundColor(.white)
+
+        VStack {
+          Spacer()
+          ControlsView(viewModel: viewModel)
+        }
+        .padding(24)
+
+        VStack {
+          Spacer()
+          if viewModel.activeTimeLimit.isTimeLimited && viewModel.remainingTime > 0 {
+            Text("stream.ending".localized(viewModel.remainingTime.formattedCountdown))
+              .font(.system(size: 15))
+              .foregroundColor(.white)
+              .padding(.bottom, 96)
+          }
+        }
       }
 
-      // Bottom controls layer
-
       VStack {
-        Spacer()
-        ControlsView(viewModel: viewModel)
-      }
-      .padding(.all, 24)
-      // Timer display area with fixed height
-      VStack {
-        Spacer()
-        if viewModel.activeTimeLimit.isTimeLimited && viewModel.remainingTime > 0 {
-          Text("Streaming ending in \(viewModel.remainingTime.formattedCountdown)")
-            .font(.system(size: 15))
-            .foregroundColor(.white)
+        HStack {
+          Button { dismiss() } label: {
+            Label("닫기", systemImage: "xmark.circle.fill")
+              .font(AppTypography.headline)
+              .foregroundColor(.white)
+              .padding(.horizontal, AppSpacing.md)
+              .padding(.vertical, AppSpacing.sm)
+              .background(Color.black.opacity(0.55))
+              .clipShape(Capsule())
+          }
+          .accessibilityLabel("음식 분석 카메라 닫기")
+          Spacer()
         }
-      }
+        .padding(AppSpacing.md)
+        Spacer()
       }
     }
     .onAppear {
-      // 只有设备连接时才启动视频流
       guard viewModel.hasActiveDevice else {
-        print("⚠️ StreamView: 未连接RayBan Meta眼镜，跳过启动")
+        print("[StreamView][WARN] 활성 안경이 없어 스트림 시작 생략")
         return
       }
 
-      // 自动启动视频流
       Task {
-        print("🎥 StreamView: 启动视频流")
+        print("[StreamView][INFO] 영상 스트림 자동 시작 요청")
         await viewModel.handleStartStreaming()
       }
     }
     .onDisappear {
       Task {
+        print("[StreamView][INFO] 화면 종료 정리 시작 status=\(viewModel.streamingStatus)")
         await viewModel.cleanup()
       }
     }
-    // Show captured photos from DAT SDK in a preview sheet
     .sheet(isPresented: $viewModel.showPhotoPreview) {
       if let photo = viewModel.capturedPhoto {
         PhotoPreviewView(
@@ -107,34 +110,17 @@ struct StreamView: View {
         )
       }
     }
-    // Show AI Vision Recognition view
     .sheet(isPresented: $viewModel.showVisionRecognition) {
       if let photo = viewModel.capturedPhoto {
-        VisionRecognitionView(
-          photo: photo,
-          apiKey: VisionAPIConfig.apiKey
-        )
+        VisionRecognitionView(photo: photo, apiKey: VisionAPIConfig.apiKey)
       }
     }
-    // Show LeanEat nutrition analysis view
     .sheet(isPresented: $viewModel.showLeanEat) {
       if let photo = viewModel.capturedPhoto {
-        LeanEatView(
-          photo: photo,
-          apiKey: VisionAPIConfig.apiKey
-        )
+        LeanEatView(photo: photo, apiKey: VisionAPIConfig.apiKey)
       }
     }
-    // Show Omni Realtime Chat view
-    .fullScreenCover(isPresented: $viewModel.showOmniRealtime) {
-      OmniRealtimeView(
-        streamViewModel: viewModel,
-        apiKey: VisionAPIConfig.apiKey
-      )
-    }
   }
-
-  // MARK: - Device Not Connected View
 
   private var deviceNotConnectedView: some View {
     VStack(spacing: AppSpacing.xl) {
@@ -145,11 +131,11 @@ struct StreamView: View {
           .font(.system(size: 80))
           .foregroundColor(.white.opacity(0.6))
 
-        Text("未连接RayBan Meta眼镜")
+        Text("stream.device.notconnected.title".localized)
           .font(AppTypography.title2)
           .foregroundColor(.white)
 
-        Text("请先在首页连接你的智能眼镜，\n然后再使用直播功能")
+        Text("stream.device.notconnected.message".localized)
           .font(AppTypography.body)
           .foregroundColor(.white.opacity(0.8))
           .multilineTextAlignment(.center)
@@ -158,20 +144,16 @@ struct StreamView: View {
 
       Spacer()
 
-      // 返回按钮
       Button {
         dismiss()
       } label: {
-        HStack(spacing: AppSpacing.sm) {
-          Image(systemName: "chevron.left")
-          Text("返回首页")
-            .font(AppTypography.headline)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, AppSpacing.md)
-        .background(.white)
-        .foregroundColor(.black)
-        .cornerRadius(AppCornerRadius.lg)
+        Label("stream.device.backtohome".localized, systemImage: "chevron.left")
+          .font(AppTypography.headline)
+          .frame(maxWidth: .infinity)
+          .padding(.vertical, AppSpacing.md)
+          .background(.white)
+          .foregroundColor(.black)
+          .cornerRadius(AppCornerRadius.lg)
       }
       .padding(.horizontal, AppSpacing.xl)
       .padding(.bottom, AppSpacing.xl)
@@ -179,39 +161,36 @@ struct StreamView: View {
   }
 }
 
-// Extracted controls for clarity
 struct ControlsView: View {
   @ObservedObject var viewModel: StreamSessionViewModel
+
   var body: some View {
-    // Controls row
     HStack(spacing: 8) {
       CustomButton(
-        title: "Stop streaming",
+        title: "stream.stop".localized,
         style: .destructive,
         isDisabled: false
       ) {
         Task {
+          print("[StreamView][INFO] 사용자가 스트림 중지 요청")
           await viewModel.stopSession()
         }
       }
 
-      // Timer button
       CircleButton(
         icon: "timer",
         text: viewModel.activeTimeLimit != .noLimit ? viewModel.activeTimeLimit.displayText : nil
       ) {
         let nextTimeLimit = viewModel.activeTimeLimit.next
+        print("[StreamView][INFO] 시간 제한 변경 next=\(nextTimeLimit)")
         viewModel.setTimeLimit(nextTimeLimit)
       }
 
-      // Photo button
       CircleButton(icon: "camera.fill", text: nil) {
-        viewModel.capturePhoto()
-      }
-
-      // AI Realtime Chat button
-      CircleButton(icon: "brain.head.profile", text: nil) {
-        viewModel.showOmniRealtime = true
+        print("[StreamView][INFO] 사진 촬영 요청")
+        Task {
+          await viewModel.capturePhoto()
+        }
       }
     }
   }

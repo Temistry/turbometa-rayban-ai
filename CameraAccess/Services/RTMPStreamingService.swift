@@ -1,22 +1,18 @@
 /*
- * RTMP Streaming Service
- * Streams video from Ray-Ban Meta glasses to any RTMP server
- * Supports all major live streaming platforms: YouTube, Twitch, Bilibili, Douyin, TikTok, etc.
- *
- * Uses HaishinKit for RTMP streaming with H.264 encoding
+ * Ray-Ban Meta 영상 RTMP 송출 서비스
+ * HaishinKit을 사용해 H.264 스트림을 전송한다.
+ * 스트림 키와 전체 송출 URL은 로그에 기록하지 않는다.
  */
 
-import Foundation
-import UIKit
 import AVFoundation
-import VideoToolbox
+import Foundation
 import HaishinKit
 import RTMPHaishinKit
+import UIKit
+import VideoToolbox
 import os.log
 
 private let logger = Logger(subsystem: "com.smartview.glassai", category: "RTMPStreaming")
-
-// MARK: - Streaming State
 
 enum RTMPStreamingState: Sendable {
     case idle
@@ -26,8 +22,6 @@ enum RTMPStreamingState: Sendable {
     case error(String)
 }
 
-// MARK: - Streaming Stats
-
 struct RTMPStreamingStats: Sendable {
     var framesSent: Int64 = 0
     var bytesSent: Int64 = 0
@@ -35,99 +29,80 @@ struct RTMPStreamingStats: Sendable {
     var connectionTime: TimeInterval = 0
 }
 
-// MARK: - RTMP Streaming Service
-
-class RTMPStreamingService: NSObject, @unchecked Sendable {
-
-    // MARK: - Constants
-
-    private static let defaultBitrate: Int = 2_000_000 // 2 Mbps
-    private static let defaultFPS: Int = 24
-
-    // MARK: - Properties
+final class RTMPStreamingService: NSObject, @unchecked Sendable {
+    private static let defaultBitrate = 2_000_000
+    private static let defaultFPS = 24
 
     private let lock = NSLock()
-
     private var rtmpConnection: RTMPConnection?
     private var rtmpStream: RTMPStream?
 
-    private var rtmpUrl: String = ""
-    private var streamKey: String = ""
-    private var videoWidth: Int = 0
-    private var videoHeight: Int = 0
-    private var bitrate: Int = RTMPStreamingService.defaultBitrate
+    private var rtmpURL = ""
+    private var streamKey = ""
+    private var videoWidth = 0
+    private var videoHeight = 0
+    private var bitrate = defaultBitrate
 
-    // State
     private(set) var isStreaming = false
     private var startTime: Date?
-
-    // Frame tracking
     private var totalFrames: Int64 = 0
     private var frameIndex: Int64 = 0
     private var baseTimestamp: Int64 = 0
-    private let targetFrameDuration: Int64 = 1_000_000 / Int64(RTMPStreamingService.defaultFPS)
 
-    // Callbacks
     var onStateChanged: ((RTMPStreamingState) -> Void)?
     var onStatsUpdated: ((RTMPStreamingStats) -> Void)?
     var onError: ((String) -> Void)?
 
-    // Status monitoring task
     private var statusTask: Task<Void, Never>?
     private var streamStatusTask: Task<Void, Never>?
     private var connectTask: Task<Void, Never>?
     private var shutdownTask: Task<Void, Never>?
 
-    // MARK: - Initialization
-
     override init() {
         super.init()
-        logger.info("RTMPStreamingService initialized with HaishinKit")
+        logger.info("RTMP 송출 서비스 초기화")
     }
 
     deinit {
         stopStreaming()
     }
 
-    // MARK: - Public Methods
-
-    /// Start RTMP streaming
-    func startStreaming(url: String, width: Int, height: Int, bitrate: Int = defaultBitrate) {
+    func startStreaming(
+        url: String,
+        width: Int,
+        height: Int,
+        bitrate: Int = defaultBitrate
+    ) {
         guard !isStreaming else {
-            logger.warning("Already streaming")
+            logger.warning("이미 송출 중이므로 시작 요청 무시")
             return
         }
 
-        logger.info("Starting RTMP streaming to: \(url)")
-        logger.info("Video: \(width)x\(height) @ \(bitrate) bps")
+        guard let destination = parseRTMPURL(url) else {
+            let message = "RTMP 주소 형식이 올바르지 않습니다"
+            onStateChanged?(.error(message))
+            onError?(message)
+            logger.error("RTMP 주소 파싱 실패")
+            return
+        }
 
-        self.videoWidth = width
-        self.videoHeight = height
+        videoWidth = width
+        videoHeight = height
         self.bitrate = bitrate
+        rtmpURL = destination.serverURL
+        streamKey = destination.streamKey
 
-        // Parse URL to get server URL and stream key
-        guard let urlComponents = parseRTMPUrl(url) else {
-            onStateChanged?(.error("Invalid RTMP URL"))
-            onError?("Invalid RTMP URL format")
-            return
-        }
-
-        self.rtmpUrl = urlComponents.serverUrl
-        self.streamKey = urlComponents.streamKey
-
+        logger.info("RTMP 송출 준비 scheme=\(destination.scheme, privacy: .public) host=\(destination.host, privacy: .public) video=\(width, privacy: .public)x\(height, privacy: .public) bitrate=\(bitrate, privacy: .public) keyLength=\(destination.streamKey.count, privacy: .public)")
         onStateChanged?(.connecting)
 
-        // Create connection and stream
         connectTask?.cancel()
         connectTask = Task { [weak self] in
             await self?.setupAndConnect()
         }
     }
 
-    /// Stop streaming
     func stopStreaming() {
-        logger.info("Stopping RTMP streaming")
-
+        logger.info("RTMP 송출 중지")
         isStreaming = false
 
         connectTask?.cancel()
@@ -147,7 +122,7 @@ class RTMPStreamingService: NSObject, @unchecked Sendable {
         rtmpConnection = nil
 
         shutdownTask?.cancel()
-        shutdownTask = Task.detached { [statusTaskToStop, streamStatusTaskToStop, streamToClose, connectionToClose] in
+        shutdownTask = Task.detached {
             _ = await statusTaskToStop?.value
             _ = await streamStatusTaskToStop?.value
             if let streamToClose {
@@ -158,81 +133,67 @@ class RTMPStreamingService: NSObject, @unchecked Sendable {
             }
         }
 
-        // Reset state
         totalFrames = 0
         frameIndex = 0
         baseTimestamp = 0
         startTime = nil
+        streamKey = ""
 
         onStateChanged?(.idle)
-        logger.info("RTMP streaming stopped")
+        logger.info("RTMP 송출 정리 완료")
     }
 
-    /// Feed a video frame for streaming
     func feedFrame(_ image: UIImage, timestamp: Int64) {
         lock.lock()
         let streaming = isStreaming
         let stream = rtmpStream
-        if streaming {
-            totalFrames += 1
-        }
+        if streaming { totalFrames += 1 }
         lock.unlock()
 
         guard streaming, let stream else { return }
-
-        // Convert UIImage to CMSampleBuffer
         guard let sampleBuffer = image.toCMSampleBuffer(timestamp: timestamp) else {
-            logger.warning("Failed to create CMSampleBuffer from UIImage")
+            logger.warning("UIImage를 CMSampleBuffer로 변환하지 못함")
             return
         }
 
-        // Append to stream
         Task {
             await stream.append(sampleBuffer)
         }
-
-        // Update stats
         updateStats()
     }
 
-    // MARK: - Private Methods
-
     private func setupAndConnect() async {
-        // Create RTMP connection
         let connection = RTMPConnection()
-        self.rtmpConnection = connection
+        rtmpConnection = connection
 
-        // Monitor connection status
         statusTask = Task { [weak self] in
             for await status in await connection.status {
                 await self?.handleConnectionStatus(status)
             }
         }
 
-        // Connect to server
-        let url = self.rtmpUrl
+        let serverURL = rtmpURL
+        let sanitized = sanitizedEndpoint(serverURL)
         do {
-            logger.info("RTMP: Connecting to \(url)")
-            _ = try await connection.connect(url)
-            logger.info("RTMP: Connected successfully")
-
-            // Create stream and publish
+            logger.info("RTMP 서버 연결 시작 endpoint=\(sanitized, privacy: .public)")
+            _ = try await connection.connect(serverURL)
+            logger.info("RTMP 서버 연결 성공 endpoint=\(sanitized, privacy: .public)")
             await createStreamAndPublish(connection: connection)
         } catch {
-            logger.error("RTMP: Connection failed: \(error.localizedDescription)")
+            let nsError = error as NSError
+            logger.error("RTMP 연결 실패 domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)")
             await MainActor.run {
-                onStateChanged?(.error(error.localizedDescription))
-                onError?(error.localizedDescription)
+                let message = "RTMP 서버 연결 실패: \(nsError.localizedDescription)"
+                onStateChanged?(.error(message))
+                onError?(message)
             }
         }
     }
 
     private func createStreamAndPublish(connection: RTMPConnection) async {
-        // Create RTMP stream
         let stream = RTMPStream(connection: connection)
-        self.rtmpStream = stream
+        rtmpStream = stream
 
-        // Configure video settings
         var videoSettings = VideoCodecSettings()
         videoSettings.videoSize = CGSize(width: videoWidth, height: videoHeight)
         videoSettings.bitRate = bitrate
@@ -240,19 +201,17 @@ class RTMPStreamingService: NSObject, @unchecked Sendable {
         videoSettings.profileLevel = kVTProfileLevel_H264_Main_AutoLevel as String
         try? await stream.setVideoSettings(videoSettings)
 
-        // Monitor stream status
         streamStatusTask = Task { [weak self] in
             for await status in await stream.status {
                 await self?.handleStreamStatus(status)
             }
         }
 
-        // Publish
-        let key = self.streamKey
+        let key = streamKey
         do {
-            logger.info("RTMP: Publishing stream with key: \(key)")
+            logger.info("RTMP publish 시작 keyLength=\(key.count, privacy: .public)")
             _ = try await stream.publish(key, type: .live)
-            logger.info("RTMP: Publish started")
+            logger.info("RTMP publish 요청 성공")
 
             await MainActor.run { [weak self] in
                 self?.isStreaming = true
@@ -260,35 +219,39 @@ class RTMPStreamingService: NSObject, @unchecked Sendable {
                 self?.onStateChanged?(.streaming)
             }
         } catch {
-            logger.error("RTMP: Publish failed: \(error.localizedDescription)")
+            let nsError = error as NSError
+            logger.error("RTMP publish 실패 domain=\(nsError.domain, privacy: .public) code=\(nsError.code, privacy: .public) description=\(nsError.localizedDescription, privacy: .public)")
             await MainActor.run {
-                onStateChanged?(.error(error.localizedDescription))
-                onError?(error.localizedDescription)
+                let message = "RTMP 송출 시작 실패: \(nsError.localizedDescription)"
+                onStateChanged?(.error(message))
+                onError?(message)
             }
         }
     }
 
     @MainActor
     private func handleConnectionStatus(_ status: RTMPStatus) {
-        logger.info("RTMP: Connection status: \(status.code)")
+        logger.info("RTMP 연결 상태 code=\(status.code, privacy: .public)")
 
         if status.code == RTMPConnection.Code.connectFailed.rawValue {
             isStreaming = false
-            onStateChanged?(.error("Connection failed: \(status.description)"))
-            onError?("Failed to connect to RTMP server")
+            let message = "RTMP 서버 연결에 실패했습니다: \(status.description)"
+            onStateChanged?(.error(message))
+            onError?(message)
         } else if status.code == RTMPConnection.Code.connectClosed.rawValue {
             isStreaming = false
             onStateChanged?(.disconnected)
         } else if status.code == RTMPConnection.Code.connectRejected.rawValue {
             isStreaming = false
-            onStateChanged?(.error("Connection rejected: \(status.description)"))
-            onError?("Connection rejected by server")
+            let message = "RTMP 서버가 연결을 거부했습니다: \(status.description)"
+            onStateChanged?(.error(message))
+            onError?(message)
         }
     }
 
     @MainActor
     private func handleStreamStatus(_ status: RTMPStatus) {
-        logger.info("RTMP: Stream status: \(status.code)")
+        logger.info("RTMP 스트림 상태 code=\(status.code, privacy: .public)")
 
         if status.code == RTMPStream.Code.publishStart.rawValue {
             isStreaming = true
@@ -296,67 +259,77 @@ class RTMPStreamingService: NSObject, @unchecked Sendable {
             onStateChanged?(.streaming)
         } else if status.code == RTMPStream.Code.publishBadName.rawValue {
             isStreaming = false
-            onStateChanged?(.error("Invalid stream name"))
-            onError?("Invalid stream name")
-        } else if status.code == RTMPStream.Code.connectClosed.rawValue ||
-                  status.code == RTMPStream.Code.connectFailed.rawValue {
+            let message = "스트림 키 또는 스트림 이름이 올바르지 않습니다"
+            onStateChanged?(.error(message))
+            onError?(message)
+        } else if status.code == RTMPStream.Code.connectClosed.rawValue
+                    || status.code == RTMPStream.Code.connectFailed.rawValue {
             isStreaming = false
             onStateChanged?(.disconnected)
         }
     }
 
-    private func parseRTMPUrl(_ url: String) -> (serverUrl: String, streamKey: String)? {
-        // URL format: rtmp://server.com/app/streamkey
-        // We need to split into: rtmp://server.com/app and streamkey
-
-        guard let urlObj = URL(string: url) else { return nil }
-
-        let pathComponents = urlObj.path.split(separator: "/")
-        guard pathComponents.count >= 2 else {
-            // If only one path component, use it as stream key with default app
-            let streamKey = pathComponents.first.map(String.init) ?? "stream"
-            let serverUrl = "\(urlObj.scheme ?? "rtmp")://\(urlObj.host ?? "localhost"):\(urlObj.port ?? 1935)/live"
-            return (serverUrl, streamKey)
+    private func parseRTMPURL(_ value: String) -> (
+        serverURL: String,
+        streamKey: String,
+        scheme: String,
+        host: String
+    )? {
+        guard let url = URL(string: value),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "rtmp" || scheme == "rtmps",
+              let host = url.host,
+              url.user == nil,
+              url.password == nil else {
+            return nil
         }
 
-        // Last component is stream key
-        let streamKey = String(pathComponents.last!)
+        let pathComponents = url.path.split(separator: "/")
+        guard !pathComponents.isEmpty else { return nil }
 
-        // Everything before is the server URL with app
-        let appPath = pathComponents.dropLast().map(String.init).joined(separator: "/")
-        let serverUrl = "\(urlObj.scheme ?? "rtmp")://\(urlObj.host ?? "localhost"):\(urlObj.port ?? 1935)/\(appPath)"
+        let key = String(pathComponents.last!)
+        guard !key.isEmpty else { return nil }
 
-        return (serverUrl, streamKey)
+        let appComponents = pathComponents.dropLast()
+        let appPath = appComponents.isEmpty ? "live" : appComponents.map(String.init).joined(separator: "/")
+        let defaultPort = scheme == "rtmps" ? 443 : 1935
+        let serverURL = "\(scheme)://\(host):\(url.port ?? defaultPort)/\(appPath)"
+        return (serverURL, key, scheme, host)
+    }
+
+    private func sanitizedEndpoint(_ value: String) -> String {
+        guard let components = URLComponents(string: value),
+              let scheme = components.scheme,
+              let host = components.host else {
+            return "invalid"
+        }
+        return "\(scheme)://\(host):\(components.port ?? (scheme == "rtmps" ? 443 : 1935))"
     }
 
     private func updateStats() {
-        guard let start = startTime else { return }
-
-        let elapsed = Date().timeIntervalSince(start)
+        guard let startTime else { return }
+        let elapsed = Date().timeIntervalSince(startTime)
         let fps = elapsed > 0 ? Double(totalFrames) / elapsed : 0
 
-        let stats = RTMPStreamingStats(
-            framesSent: totalFrames,
-            bytesSent: 0, // HaishinKit doesn't expose this directly
-            fps: fps,
-            connectionTime: elapsed
+        onStatsUpdated?(
+            RTMPStreamingStats(
+                framesSent: totalFrames,
+                bytesSent: 0,
+                fps: fps,
+                connectionTime: elapsed
+            )
         )
-
-        onStatsUpdated?(stats)
     }
 }
 
-// MARK: - UIImage Extension
-
 extension UIImage {
     func toCMSampleBuffer(timestamp: Int64) -> CMSampleBuffer? {
-        guard let cgImage = cgImage else { return nil }
+        guard let cgImage else { return nil }
 
         let width = Int(size.width)
         let height = Int(size.height)
-
         var pixelBuffer: CVPixelBuffer?
-        let attrs: [String: Any] = [
+        let attributes: [String: Any] = [
             kCVPixelBufferCGImageCompatibilityKey as String: true,
             kCVPixelBufferCGBitmapContextCompatibilityKey as String: true,
             kCVPixelBufferWidthKey as String: width,
@@ -368,10 +341,9 @@ extension UIImage {
             width,
             height,
             kCVPixelFormatType_32BGRA,
-            attrs as CFDictionary,
+            attributes as CFDictionary,
             &pixelBuffer
         )
-
         guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
 
         CVPixelBufferLockBaseAddress(buffer, [])
@@ -389,24 +361,20 @@ extension UIImage {
 
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
 
-        // Create format description
         var formatDescription: CMFormatDescription?
         CMVideoFormatDescriptionCreateForImageBuffer(
             allocator: kCFAllocatorDefault,
             imageBuffer: buffer,
             formatDescriptionOut: &formatDescription
         )
+        guard let formatDescription else { return nil }
 
-        guard let format = formatDescription else { return nil }
-
-        // Create timing info
         var timingInfo = CMSampleTimingInfo(
             duration: CMTime(value: 1, timescale: 24),
             presentationTimeStamp: CMTime(value: timestamp, timescale: 1_000_000),
             decodeTimeStamp: .invalid
         )
 
-        // Create sample buffer
         var sampleBuffer: CMSampleBuffer?
         CMSampleBufferCreateForImageBuffer(
             allocator: kCFAllocatorDefault,
@@ -414,20 +382,18 @@ extension UIImage {
             dataReady: true,
             makeDataReadyCallback: nil,
             refcon: nil,
-            formatDescription: format,
+            formatDescription: formatDescription,
             sampleTiming: &timingInfo,
             sampleBufferOut: &sampleBuffer
         )
-
         return sampleBuffer
     }
 
     func toPixelBuffer() -> CVPixelBuffer? {
         let width = Int(size.width)
         let height = Int(size.height)
-
         var pixelBuffer: CVPixelBuffer?
-        let attrs: [String: Any] = [
+        let attributes: [String: Any] = [
             kCVPixelBufferCGImageCompatibilityKey as String: true,
             kCVPixelBufferCGBitmapContextCompatibilityKey as String: true
         ]
@@ -437,10 +403,9 @@ extension UIImage {
             width,
             height,
             kCVPixelFormatType_32BGRA,
-            attrs as CFDictionary,
+            attributes as CFDictionary,
             &pixelBuffer
         )
-
         guard status == kCVReturnSuccess, let buffer = pixelBuffer else { return nil }
 
         CVPixelBufferLockBaseAddress(buffer, [])
@@ -454,11 +419,9 @@ extension UIImage {
             bytesPerRow: CVPixelBufferGetBytesPerRow(buffer),
             space: CGColorSpaceCreateDeviceRGB(),
             bitmapInfo: CGImageAlphaInfo.noneSkipFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue
-        ) else { return nil }
+        ), let cgImage else { return nil }
 
-        guard let cgImage = cgImage else { return nil }
         context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
         return buffer
     }
 }

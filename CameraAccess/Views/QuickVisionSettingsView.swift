@@ -223,6 +223,29 @@ struct QuickVisionHistoryView: View {
     }
 }
 
+// MARK: - Record status
+
+struct QuickVisionRecordStatusLabel: View {
+    let status: QuickVisionRecordStatus
+
+    var body: some View {
+        Label(status.displayName, systemImage: status.systemImageName)
+            .font(.caption)
+            .foregroundColor(statusColor)
+    }
+
+    private var statusColor: Color {
+        switch status {
+        case .pending:
+            return .orange
+        case .succeeded:
+            return .green
+        case .failed, .rejected:
+            return .red
+        }
+    }
+}
+
 // MARK: - Record Row
 
 struct QuickVisionRecordRow: View {
@@ -260,6 +283,8 @@ struct QuickVisionRecordRow: View {
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
+
+                QuickVisionRecordStatusLabel(status: record.status)
 
                 Text(record.summary)
                     .font(.subheadline)
@@ -310,14 +335,28 @@ struct QuickVisionRecordDetailView: View {
 
                     Divider()
 
-                    // 识图结果
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("quickvision.result".localized)
+                        Text("상태")
                             .font(.headline)
 
-                        Text(record.result)
+                        QuickVisionRecordStatusLabel(status: record.status)
+
+                        if let errorCode = record.errorCode {
+                            Text("오류 코드: \(errorCode)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                    .padding(.horizontal)
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(record.status == .succeeded ? "quickvision.result".localized : "안내")
+                            .font(.headline)
+
+                        Text(record.displayContent)
                             .font(.body)
                             .foregroundColor(.primary)
+                            .textSelection(.enabled)
                     }
                     .padding(.horizontal)
 

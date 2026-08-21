@@ -1,15 +1,6 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- * All rights reserved.
- *
- * This source code is licensed under the license found in the
- * LICENSE file in the root directory of this source tree.
+ * Meta 안경 스트림 세션 화면
  */
-
-//
-// StreamSessionView.swift
-//
-//
 
 import MWDATCore
 import SwiftUI
@@ -28,15 +19,13 @@ struct StreamSessionView: View {
   var body: some View {
     ZStack {
       if viewModel.isStreaming {
-        // Full-screen video view with streaming controls
         StreamView(viewModel: viewModel, wearablesVM: wearablesViewModel)
       } else {
-        // Pre-streaming setup view with permissions and start button
         NonStreamView(viewModel: viewModel, wearablesVM: wearablesViewModel)
       }
     }
-    .alert("Error", isPresented: $viewModel.showError) {
-      Button("OK") {
+    .alert("오류", isPresented: $viewModel.showError) {
+      Button("확인") {
         viewModel.dismissError()
       }
     } message: {

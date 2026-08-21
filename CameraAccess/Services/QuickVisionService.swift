@@ -1,27 +1,24 @@
 /*
- * Quick Vision Service
- * 快速识图服务 - 支持多提供商 (阿里云/OpenRouter)
- * 返回简洁的描述，适合 TTS 播报
+ * Google Gemini 기반 Quick Vision 이미지 분석 서비스
+ *
+ * JPEG 이미지와 한국어 프롬프트를 Gemini generateContent API에 전송한다.
+ * 인증값, 프롬프트 원문, 이미지 Base64와 응답 본문은 진단 로그에 기록하지 않는다.
  */
 
 import Foundation
 import UIKit
 
-class QuickVisionService {
+final class QuickVisionService {
     private let apiKey: String
     private let baseURL: String
     private let model: String
-    private let provider: APIProvider
 
-    /// Initialize with explicit configuration
     init(apiKey: String, baseURL: String? = nil, model: String? = nil) {
         self.apiKey = apiKey
-        self.provider = VisionAPIConfig.provider
         self.baseURL = baseURL ?? VisionAPIConfig.baseURL
         self.model = model ?? VisionAPIConfig.model
     }
 
-    /// Initialize with current provider configuration
     convenience init() {
         self.init(
             apiKey: VisionAPIConfig.apiKey,
@@ -30,208 +27,331 @@ class QuickVisionService {
         )
     }
 
-    // MARK: - API Request/Response Models
+    // MARK: - Gemini request/response models
 
-    struct ChatCompletionRequest: Codable {
-        let model: String
-        let messages: [Message]
+    private struct GenerateContentRequest: Encodable {
+        let contents: [Content]
+        let generationConfig: GenerationConfig
 
-        struct Message: Codable {
+        struct Content: Encodable {
             let role: String
-            let content: [Content]
+            let parts: [Part]
+        }
 
-            struct Content: Codable {
-                let type: String
-                let text: String?
-                let imageUrl: ImageURL?
+        struct Part: Encodable {
+            let text: String?
+            let inlineData: InlineData?
 
-                enum CodingKeys: String, CodingKey {
-                    case type
-                    case text
-                    case imageUrl = "image_url"
-                }
+            enum CodingKeys: String, CodingKey {
+                case text
+                case inlineData = "inline_data"
+            }
+        }
 
-                struct ImageURL: Codable {
-                    let url: String
-                }
+        struct InlineData: Encodable {
+            let mimeType: String
+            let data: String
+
+            enum CodingKeys: String, CodingKey {
+                case mimeType = "mime_type"
+                case data
+            }
+        }
+
+        struct GenerationConfig: Encodable {
+            let temperature: Double
+            let maxOutputTokens: Int
+
+            enum CodingKeys: String, CodingKey {
+                case temperature
+                case maxOutputTokens = "maxOutputTokens"
             }
         }
     }
 
-    struct ChatCompletionResponse: Codable {
-        let choices: [Choice]?
-        let error: APIError?
+    private struct GenerateContentResponse: Decodable {
+        let candidates: [Candidate]?
+        let promptFeedback: PromptFeedback?
 
-        struct Choice: Codable {
-            let message: Message?
-            let delta: Delta?
+        struct Candidate: Decodable {
+            let content: Content?
+            let finishReason: String?
 
-            struct Message: Codable {
-                let content: String?
-            }
+            struct Content: Decodable {
+                let parts: [Part]?
 
-            struct Delta: Codable {
-                let content: String?
+                struct Part: Decodable {
+                    let text: String?
+                }
             }
         }
 
-        struct APIError: Codable {
-            let message: String?
+        struct PromptFeedback: Decodable {
+            let blockReason: String?
+        }
+    }
+
+    private struct GeminiErrorEnvelope: Decodable {
+        let error: GeminiErrorBody?
+
+        struct GeminiErrorBody: Decodable {
             let code: Int?
+            let message: String?
+            let status: String?
         }
     }
 
-    // MARK: - Quick Vision Analysis
+    // MARK: - Public API
 
-    /// 快速识图 - 返回简洁的语音描述
-    /// - Parameters:
-    ///   - image: 要识别的图片
-    ///   - customPrompt: 自定义提示词（可选，如果为 nil 则使用当前模式的提示词）
-    /// - Returns: 简洁的描述文本，适合 TTS 播报
     func analyzeImage(_ image: UIImage, customPrompt: String? = nil) async throws -> String {
-        // Convert image to base64
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+        let startedAt = Date()
+
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            print("[QuickVisionAPI][ERROR] Google Gemini 자격 증명이 설정되지 않음")
+            throw QuickVisionError.apiKeyMissing
+        }
+
+        guard let imageData = image.jpegData(compressionQuality: 0.72) else {
+            print("[QuickVisionAPI][ERROR] JPEG 변환 실패 size=\(image.size.width)x\(image.size.height)")
             throw QuickVisionError.invalidImage
         }
 
-        let base64String = imageData.base64EncodedString()
-        let dataURL = "data:image/jpeg;base64,\(base64String)"
+        let prompt = (customPrompt ?? QuickVisionModeManager.staticPrompt)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else {
+            print("[QuickVisionAPI][ERROR] 빈 프롬프트로 분석 요청 거부")
+            throw QuickVisionError.invalidResponse
+        }
 
-        // 使用自定义提示词、模式管理器的提示词、或默认提示词
-        let prompt = customPrompt ?? QuickVisionModeManager.staticPrompt
-
-        // Create API request
-        let request = ChatCompletionRequest(
-            model: model,
-            messages: [
-                ChatCompletionRequest.Message(
+        let requestBody = GenerateContentRequest(
+            contents: [
+                .init(
                     role: "user",
-                    content: [
-                        ChatCompletionRequest.Message.Content(
-                            type: "image_url",
+                    parts: [
+                        .init(text: prompt, inlineData: nil),
+                        .init(
                             text: nil,
-                            imageUrl: ChatCompletionRequest.Message.Content.ImageURL(url: dataURL)
-                        ),
-                        ChatCompletionRequest.Message.Content(
-                            type: "text",
-                            text: prompt,
-                            imageUrl: nil
+                            inlineData: .init(
+                                mimeType: "image/jpeg",
+                                data: imageData.base64EncodedString()
+                            )
                         )
                     ]
                 )
-            ]
+            ],
+            generationConfig: .init(
+                temperature: 0.2,
+                maxOutputTokens: 768
+            )
         )
 
-        // Make API call
-        return try await makeRequest(request)
+        print(
+            "[QuickVisionAPI][INFO] Gemini 분석 준비 model=\(model) "
+            + "imageBytes=\(imageData.count) promptLength=\(prompt.count)"
+        )
+
+        let result = try await makeRequest(requestBody)
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        print("[QuickVisionAPI][INFO] Gemini 분석 완료 elapsedMs=\(elapsedMs) resultLength=\(result.count)")
+        return result
     }
 
-    // MARK: - Private Methods
+    // MARK: - Request
 
-    private func makeRequest(_ request: ChatCompletionRequest) async throws -> String {
-        guard let url = URL(string: "\(baseURL)/chat/completions") else {
+    private func makeRequest(_ requestBody: GenerateContentRequest) async throws -> String {
+        guard let url = URL(string: "\(baseURL)/models/\(model):generateContent") else {
+            print("[QuickVisionAPI][ERROR] Gemini URL 생성 실패 model=\(model)")
             throw QuickVisionError.invalidResponse
         }
 
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-
-        // Set headers based on provider
-        let headers = VisionAPIConfig.headers(with: apiKey)
-        for (key, value) in headers {
-            urlRequest.setValue(value, forHTTPHeaderField: key)
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 60
+        for (header, value) in VisionAPIConfig.headers(with: apiKey) {
+            request.setValue(value, forHTTPHeaderField: header)
         }
-
-        urlRequest.timeoutInterval = 60 // 60秒超时（OpenRouter 可能需要更长时间）
-
-        let encoder = JSONEncoder()
-        urlRequest.httpBody = try encoder.encode(request)
-
-        print("📡 [QuickVision] Sending request to \(model) via \(provider.displayName)...")
-        print("📡 [QuickVision] URL: \(url.absoluteString)")
-
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw QuickVisionError.invalidResponse
-        }
-
-        // Log raw response for debugging
-        let rawResponse = String(data: data, encoding: .utf8) ?? "Unable to decode"
-        print("📡 [QuickVision] HTTP Status: \(httpResponse.statusCode)")
-        print("📡 [QuickVision] Raw response: \(rawResponse.prefix(500))")
-
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ [QuickVision] API error: \(httpResponse.statusCode) - \(errorMessage)")
-            throw QuickVisionError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-        }
-
-        let decoder = JSONDecoder()
-        let apiResponse: ChatCompletionResponse
 
         do {
-            apiResponse = try decoder.decode(ChatCompletionResponse.self, from: data)
+            request.httpBody = try JSONEncoder().encode(requestBody)
         } catch {
-            print("❌ [QuickVision] JSON decode error: \(error)")
+            let nsError = error as NSError
+            print(
+                "[QuickVisionAPI][ERROR] Gemini 요청 인코딩 실패 "
+                + "domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)"
+            )
+            throw error
+        }
+
+        print(
+            "[QuickVisionAPI][HTTP] POST host=\(url.host ?? "-") model=\(model) "
+            + "requestBytes=\(request.httpBody?.count ?? 0) timeout=\(Int(request.timeoutInterval))s"
+        )
+
+        let startedAt = Date()
+        let data: Data
+        let response: URLResponse
+
+        do {
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.urlCache = nil
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            let session = URLSession(configuration: configuration)
+            defer { session.finishTasksAndInvalidate() }
+            (data, response) = try await session.data(for: request)
+        } catch {
+            let nsError = error as NSError
+            print(
+                "[QuickVisionAPI][ERROR] Gemini 네트워크 요청 실패 "
+                + "domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)"
+            )
+            throw QuickVisionError.network(
+                domain: nsError.domain,
+                code: nsError.code,
+                message: nsError.localizedDescription
+            )
+        }
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            print("[QuickVisionAPI][ERROR] Gemini HTTP 응답 형식 아님 bytes=\(data.count)")
             throw QuickVisionError.invalidResponse
         }
 
-        // Check for API error in response body
-        if let apiError = apiResponse.error {
-            let errorMsg = apiError.message ?? "Unknown API error"
-            print("❌ [QuickVision] API returned error: \(errorMsg)")
-            throw QuickVisionError.apiError(statusCode: apiError.code ?? -1, message: errorMsg)
+        let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+        let requestID = httpResponse.value(forHTTPHeaderField: "x-request-id")
+            ?? httpResponse.value(forHTTPHeaderField: "x-goog-request-id")
+            ?? httpResponse.value(forHTTPHeaderField: "request-id")
+            ?? "-"
+        let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "-"
+
+        print(
+            "[QuickVisionAPI][HTTP] Gemini 응답 status=\(httpResponse.statusCode) "
+            + "elapsedMs=\(elapsedMs) bytes=\(data.count) contentType=\(contentType) requestID=\(requestID)"
+        )
+
+        guard (200..<300).contains(httpResponse.statusCode) else {
+            let message = extractServerError(from: data)
+            print(
+                "[QuickVisionAPI][ERROR] Gemini API 오류 status=\(httpResponse.statusCode) "
+                + "requestID=\(requestID) message=\(message)"
+            )
+            throw QuickVisionError.apiError(
+                statusCode: httpResponse.statusCode,
+                requestID: requestID,
+                message: message
+            )
         }
 
-        // Get content from choices
-        guard let choices = apiResponse.choices, let firstChoice = choices.first else {
-            print("❌ [QuickVision] No choices in response")
+        let responseBody: GenerateContentResponse
+        do {
+            responseBody = try JSONDecoder().decode(GenerateContentResponse.self, from: data)
+        } catch {
+            let nsError = error as NSError
+            print(
+                "[QuickVisionAPI][ERROR] Gemini 응답 디코딩 실패 "
+                + "domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) "
+                + "responseBytes=\(data.count)"
+            )
+            throw QuickVisionError.invalidResponse
+        }
+
+        if let blockReason = responseBody.promptFeedback?.blockReason, !blockReason.isEmpty {
+            print("[QuickVisionAPI][WARN] Gemini 요청 차단 reason=\(sanitize(blockReason))")
+            throw QuickVisionError.blocked(reason: sanitize(blockReason))
+        }
+
+        guard let candidate = responseBody.candidates?.first else {
+            print("[QuickVisionAPI][ERROR] Gemini candidates 비어 있음 responseBytes=\(data.count)")
             throw QuickVisionError.emptyResponse
         }
 
-        // Try message.content first, then delta.content
-        let content = firstChoice.message?.content ?? firstChoice.delta?.content
+        let result = candidate.content?.parts?
+            .compactMap(\.text)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
 
-        guard let result = content, !result.isEmpty else {
-            print("❌ [QuickVision] Empty content in response")
+        guard !result.isEmpty else {
+            print(
+                "[QuickVisionAPI][ERROR] Gemini 텍스트 응답 비어 있음 "
+                + "finishReason=\(candidate.finishReason ?? "-")"
+            )
             throw QuickVisionError.emptyResponse
         }
 
-        let trimmedResult = result.trimmingCharacters(in: .whitespacesAndNewlines)
-        print("✅ [QuickVision] Result: \(trimmedResult)")
+        return result
+    }
 
-        return trimmedResult
+    private func extractServerError(from data: Data) -> String {
+        if let envelope = try? JSONDecoder().decode(GeminiErrorEnvelope.self, from: data),
+           let error = envelope.error {
+            let code = error.code.map(String.init) ?? "-"
+            let status = sanitize(error.status ?? "-")
+            let message = sanitize(error.message ?? "Google Gemini 요청에 실패했습니다")
+            return "code=\(code), status=\(status), message=\(message)"
+        }
+        return "Google Gemini 요청에 실패했습니다"
+    }
+
+    private func sanitize(_ text: String) -> String {
+        var output = String(text.prefix(1_000))
+        let patterns: [(String, String)] = [
+            (#"(?i)(Bearer\s+)[A-Za-z0-9._~+\-/=]+"#, "$1<숨김>"),
+            (#"(?i)([?&](?:token|key|api_key|apikey)=)[^&\s]+"#, "$1<숨김>"),
+            (#"\bAIza[0-9A-Za-z_-]{20,}\b"#, "<숨김>"),
+            (#"data:(?:image|audio)/[^;\s]+;base64,[A-Za-z0-9+/=]+"#, "<대용량 데이터 생략>"),
+            (#"(?<![A-Za-z0-9])[A-Za-z0-9+/]{256,}={0,2}(?![A-Za-z0-9])"#, "<대용량 데이터 생략>")
+        ]
+
+        for (pattern, replacement) in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            let range = NSRange(output.startIndex..<output.endIndex, in: output)
+            output = regex.stringByReplacingMatches(
+                in: output,
+                options: [],
+                range: range,
+                withTemplate: replacement
+            )
+        }
+        return output
     }
 }
 
-// MARK: - Error Types
+// MARK: - Errors
 
 enum QuickVisionError: LocalizedError {
     case noDevice
     case streamNotReady
     case frameTimeout
     case invalidImage
+    case apiKeyMissing
     case emptyResponse
     case invalidResponse
-    case apiError(statusCode: Int, message: String)
+    case blocked(reason: String)
+    case network(domain: String, code: Int, message: String)
+    case apiError(statusCode: Int, requestID: String, message: String)
 
     var errorDescription: String? {
         switch self {
         case .noDevice:
-            return "眼镜未连接，请先在 Meta View 中配对眼镜"
+            return "안경이 연결되지 않았습니다. Meta View에서 먼저 안경을 연결하세요"
         case .streamNotReady:
-            return "视频流启动失败，请检查眼镜连接状态"
+            return "영상 스트림을 시작하지 못했습니다. 안경 연결 상태를 확인하세요"
         case .frameTimeout:
-            return "等待视频帧超时，请重试"
+            return "영상 프레임을 받지 못했습니다. 다시 시도하세요"
         case .invalidImage:
-            return "无法处理图片"
+            return "이미지를 처리할 수 없습니다"
+        case .apiKeyMissing:
+            return "설정에서 Google Gemini API Key를 먼저 등록하세요"
         case .emptyResponse:
-            return "AI返回空响应，请重试"
+            return "Google Gemini가 빈 응답을 반환했습니다"
         case .invalidResponse:
-            return "无效的响应格式"
-        case .apiError(let statusCode, let message):
-            return "API错误(\(statusCode)): \(message)"
+            return "Google Gemini 응답 형식이 올바르지 않습니다"
+        case .blocked(let reason):
+            return "안전 정책으로 요청을 처리하지 못했습니다. \(reason)"
+        case .network(let domain, let code, let message):
+            return "네트워크 오류: \(message) (\(domain) \(code))"
+        case .apiError(let statusCode, let requestID, let message):
+            let requestSuffix = requestID == "-" ? "" : " 요청 ID: \(requestID)"
+            return "Google Gemini API 오류 \(statusCode): \(message)\(requestSuffix)"
         }
     }
 }

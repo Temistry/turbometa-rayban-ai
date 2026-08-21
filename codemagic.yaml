@@ -1,0 +1,251 @@
+workflows:
+  ios-swiftpm-lockfile-refresh:
+    name: SwiftPM 잠금 파일 생성
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+
+    environment:
+      vars:
+        XCODE_PROJECT: "CameraAccess.xcodeproj"
+        XCODE_SCHEME: "TurboMeta"
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+
+    scripts:
+      - name: 프로젝트와 잠금 파일 경로 확인
+        script: |
+          set -euo pipefail
+          test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+
+      - name: SwiftPM 잠금 파일 생성
+        script: |
+          set -euo pipefail
+          lockfile="$CM_BUILD_DIR/$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+          xcodebuild -version
+          xcodebuild -resolvePackageDependencies \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME"
+          python3 -m json.tool "$lockfile" >/dev/null
+          mkdir -p "$CM_BUILD_DIR/build/swiftpm"
+          cp "$lockfile" "$CM_BUILD_DIR/build/swiftpm/Package.resolved"
+          shasum -a 256 "$CM_BUILD_DIR/build/swiftpm/Package.resolved"
+
+    artifacts:
+      - build/swiftpm/Package.resolved
+
+  ios-compile-check:
+    name: iOS 컴파일 점검
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "feature/*"
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    environment:
+      groups:
+        - turbometa_secrets
+      vars:
+        XCODE_PROJECT: "CameraAccess.xcodeproj"
+        XCODE_SCHEME: "TurboMeta"
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+
+    scripts:
+      - name: 프로젝트와 필수 변수 확인
+        script: |
+          set -euo pipefail
+          test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+          : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
+          : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
+
+      - name: 한국어 및 보안 정적 점검
+        script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
+
+      - name: 고정된 Swift 패키지 의존성 확인
+        script: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -onlyUsePackageVersionsFromResolvedFile
+
+      - name: Apple 서명 없이 Release 컴파일
+        script: |
+          set -euo pipefail
+          mkdir -p "$CM_BUILD_DIR/build"
+          xcodebuild \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -configuration Release \
+            -destination "generic/platform=iOS" \
+            -derivedDataPath "$CM_BUILD_DIR/build/DerivedData" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            DEVELOPMENT_TEAM="" \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS="INTERNAL_BUILD" \
+            META_APP_ID="$META_APP_ID" \
+            CLIENT_TOKEN="$CLIENT_TOKEN" \
+            build | tee "$CM_BUILD_DIR/build/compile-check.log"
+
+    artifacts:
+      - audit-report.txt
+      - build/compile-check.log
+      - build/DerivedData/Build/Products/Release-iphoneos/*.app
+
+  ios-feature-build:
+    name: iOS 기능 브랜치 IPA
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+
+    integrations:
+      app_store_connect: codemagic
+
+    environment:
+      groups:
+        - turbometa_secrets
+      vars:
+        XCODE_PROJECT: "CameraAccess.xcodeproj"
+        XCODE_SCHEME: "TurboMeta"
+        BUNDLE_ID: "io.github.temistry.turbometa"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: io.github.temistry.turbometa
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+
+    scripts:
+      - name: 프로젝트와 필수 변수 확인
+        script: |
+          set -euo pipefail
+          test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+          : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
+          : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
+
+      - name: 한국어 및 보안 정적 점검
+        script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
+
+      - name: 고정된 Swift 패키지 의존성 확인
+        script: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -onlyUsePackageVersionsFromResolvedFile
+
+      - name: App Store 서명 프로필 적용
+        script: xcode-project use-profiles
+
+      - name: 내부 테스트 IPA 빌드
+        script: |
+          set -euo pipefail
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive-xcargs "-onlyUsePackageVersionsFromResolvedFile CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=INTERNAL_BUILD"
+
+    artifacts:
+      - audit-report.txt
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+  ios-testflight:
+    name: iOS TestFlight
+    instance_type: mac_mini_m2
+    max_build_duration: 120
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: "feature/testflight-signing-config"
+          include: true
+          source: true
+      cancel_previous_builds: true
+
+    integrations:
+      app_store_connect: codemagic
+
+    environment:
+      groups:
+        - turbometa_secrets
+      vars:
+        XCODE_PROJECT: "CameraAccess.xcodeproj"
+        XCODE_SCHEME: "TurboMeta"
+        BUNDLE_ID: "io.github.temistry.turbometa"
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: io.github.temistry.turbometa
+      xcode: latest
+
+    cache:
+      cache_paths:
+        - $HOME/Library/Caches/org.swift.swiftpm
+
+    scripts:
+      - name: 프로젝트와 필수 변수 확인
+        script: |
+          set -euo pipefail
+          test -d "$CM_BUILD_DIR/$XCODE_PROJECT"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/xcshareddata/xcschemes/$XCODE_SCHEME.xcscheme"
+          test -f "$CM_BUILD_DIR/$XCODE_PROJECT/project.xcworkspace/xcshareddata/swiftpm/Package.resolved"
+          : "${META_APP_ID:?turbometa_secrets 그룹에 META_APP_ID를 설정하세요}"
+          : "${CLIENT_TOKEN:?turbometa_secrets 그룹에 CLIENT_TOKEN을 설정하세요}"
+
+      - name: 한국어 및 보안 정적 점검
+        script: python3 "$CM_BUILD_DIR/Scripts/audit_localization_security.py"
+
+      - name: 고정된 Swift 패키지 의존성 확인
+        script: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies \
+            -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            -scheme "$XCODE_SCHEME" \
+            -onlyUsePackageVersionsFromResolvedFile
+
+      - name: App Store 서명 프로필 적용
+        script: xcode-project use-profiles
+
+      - name: TestFlight IPA 빌드
+        script: |
+          set -euo pipefail
+          xcode-project build-ipa \
+            --project "$CM_BUILD_DIR/$XCODE_PROJECT" \
+            --scheme "$XCODE_SCHEME" \
+            --archive-xcargs "-onlyUsePackageVersionsFromResolvedFile CURRENT_PROJECT_VERSION=$BUILD_NUMBER META_APP_ID=$META_APP_ID CLIENT_TOKEN=$CLIENT_TOKEN SWIFT_ACTIVE_COMPILATION_CONDITIONS=TESTFLIGHT_TTS_DIAGNOSTICS"
+
+    artifacts:
+      - audit-report.txt
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.app
+      - $HOME/Library/Developer/Xcode/DerivedData/**/Build/**/*.dSYM
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
+        submit_to_app_store: false

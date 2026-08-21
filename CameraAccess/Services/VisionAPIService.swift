@@ -1,28 +1,22 @@
 /*
- * Vision API Service
- * Provides image recognition using configurable providers
- * Supports Alibaba Cloud Dashscope and OpenRouter
+ * 일반 AI 이미지 인식 서비스
+ * QuickVisionService의 검증된 요청/오류/로그 경로를 재사용한다.
  */
 
 import Foundation
 import UIKit
 
 struct VisionAPIService {
-    // API Configuration
-    private let apiKey: String
-    private let baseURL: String
-    private let model: String
-    private let provider: APIProvider
+    private let quickVisionService: QuickVisionService
 
-    /// Initialize with explicit configuration
     init(apiKey: String, baseURL: String? = nil, model: String? = nil) {
-        self.apiKey = apiKey
-        self.provider = VisionAPIConfig.provider
-        self.baseURL = baseURL ?? VisionAPIConfig.baseURL
-        self.model = model ?? VisionAPIConfig.model
+        self.quickVisionService = QuickVisionService(
+            apiKey: apiKey,
+            baseURL: baseURL ?? VisionAPIConfig.baseURL,
+            model: model ?? VisionAPIConfig.model
+        )
     }
 
-    /// Initialize with current provider configuration
     init() {
         self.init(
             apiKey: VisionAPIConfig.apiKey,
@@ -31,126 +25,22 @@ struct VisionAPIService {
         )
     }
 
-    // MARK: - API Request/Response Models
-
-    struct ChatCompletionRequest: Codable {
-        let model: String
-        let messages: [Message]
-
-        struct Message: Codable {
-            let role: String
-            let content: [Content]
-
-            struct Content: Codable {
-                let type: String
-                let text: String?
-                let imageUrl: ImageURL?
-
-                enum CodingKeys: String, CodingKey {
-                    case type
-                    case text
-                    case imageUrl = "image_url"
-                }
-
-                struct ImageURL: Codable {
-                    let url: String
-                }
-            }
+    func analyzeImage(
+        _ image: UIImage,
+        prompt: String = "사진의 핵심 내용을 자연스러운 한국어로 자세히 설명해 주세요."
+    ) async throws -> String {
+        print("[Vision][INFO] 일반 이미지 인식 시작 promptLength=\(prompt.count)")
+        do {
+            let result = try await quickVisionService.analyzeImage(image, customPrompt: prompt)
+            print("[Vision][INFO] 일반 이미지 인식 완료 resultLength=\(result.count)")
+            return result
+        } catch {
+            let nsError = error as NSError
+            print("[Vision][ERROR] 일반 이미지 인식 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+            throw error
         }
-    }
-
-    struct ChatCompletionResponse: Codable {
-        let choices: [Choice]
-
-        struct Choice: Codable {
-            let message: Message
-
-            struct Message: Codable {
-                let content: String
-            }
-        }
-    }
-
-    // MARK: - Public Methods
-
-    /// Analyze image and get description
-    func analyzeImage(_ image: UIImage, prompt: String = "图中描绘的是什么景象?") async throws -> String {
-        // Convert image to base64
-        guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-            throw VisionAPIError.invalidImage
-        }
-
-        let base64String = imageData.base64EncodedString()
-        let dataURL = "data:image/jpeg;base64,\(base64String)"
-
-        // Create request
-        let request = ChatCompletionRequest(
-            model: model,
-            messages: [
-                ChatCompletionRequest.Message(
-                    role: "user",
-                    content: [
-                        ChatCompletionRequest.Message.Content(
-                            type: "image_url",
-                            text: nil,
-                            imageUrl: ChatCompletionRequest.Message.Content.ImageURL(url: dataURL)
-                        ),
-                        ChatCompletionRequest.Message.Content(
-                            type: "text",
-                            text: prompt,
-                            imageUrl: nil
-                        )
-                    ]
-                )
-            ]
-        )
-
-        // Make API call
-        let response = try await makeRequest(request)
-
-        guard let firstChoice = response.choices.first else {
-            throw VisionAPIError.emptyResponse
-        }
-
-        return firstChoice.message.content
-    }
-
-    // MARK: - Private Methods
-
-    private func makeRequest(_ request: ChatCompletionRequest) async throws -> ChatCompletionResponse {
-        guard let url = URL(string: "\(baseURL)/chat/completions") else {
-            throw VisionAPIError.invalidImage
-        }
-
-        var urlRequest = URLRequest(url: url)
-        urlRequest.httpMethod = "POST"
-
-        // Set headers based on provider
-        let headers = VisionAPIConfig.headers(with: apiKey)
-        for (key, value) in headers {
-            urlRequest.setValue(value, forHTTPHeaderField: key)
-        }
-
-        let encoder = JSONEncoder()
-        urlRequest.httpBody = try encoder.encode(request)
-
-        let (data, response) = try await URLSession.shared.data(for: urlRequest)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw VisionAPIError.invalidResponse
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            throw VisionAPIError.apiError(statusCode: httpResponse.statusCode, message: errorMessage)
-        }
-
-        let decoder = JSONDecoder()
-        return try decoder.decode(ChatCompletionResponse.self, from: data)
     }
 }
-
-// MARK: - Error Types
 
 enum VisionAPIError: LocalizedError {
     case invalidImage
@@ -161,13 +51,13 @@ enum VisionAPIError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .invalidImage:
-            return "无法处理图片"
+            return "이미지를 처리할 수 없습니다"
         case .emptyResponse:
-            return "API 返回空响应"
+            return "AI가 빈 응답을 반환했습니다"
         case .invalidResponse:
-            return "无效的响应格式"
+            return "AI 응답 형식이 올바르지 않습니다"
         case .apiError(let statusCode, let message):
-            return "API 错误 (\(statusCode)): \(message)"
+            return "API 오류 \(statusCode): \(message)"
         }
     }
 }

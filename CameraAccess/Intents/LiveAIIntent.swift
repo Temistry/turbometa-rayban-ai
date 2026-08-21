@@ -1,51 +1,31 @@
 /*
  * Live AI Intent
- * App Intent - 支持 Siri 和快捷指令触发 Live AI（后台运行，无需解锁）
+ * Siri와 단축어에서 Live AI를 실행한다.
  */
 
 import AppIntents
 import UIKit
 
-// MARK: - Live AI Intent (Background Mode)
-
 @available(iOS 16.0, *)
 struct LiveAIIntent: AppIntent {
-    static var title: LocalizedStringResource = "实时对话"
-    static var description = IntentDescription("启动实时多模态对话")
-    // 必须打开 App，因为 iOS 后台录音有系统限制
+    static var title: LocalizedStringResource = "실시간 대화"
+    static var description = IntentDescription("실시간 멀티모달 AI 대화를 시작합니다")
     static var openAppWhenRun: Bool = true
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        // 发送通知让 App 自动打开 Live AI 界面
-        NotificationCenter.default.post(name: .liveAITriggered, object: nil)
-        return .result(dialog: "正在启动实时对话...")
+        .result(dialog: "실시간 대화 기능은 현재 제공하지 않습니다")
     }
 }
 
-// MARK: - Stop Live AI Intent
-
 @available(iOS 16.0, *)
 struct StopLiveAIIntent: AppIntent {
-    static var title: LocalizedStringResource = "停止实时对话"
-    static var description = IntentDescription("停止正在运行的实时对话")
+    static var title: LocalizedStringResource = "실시간 대화 중지"
+    static var description = IntentDescription("실행 중인 실시간 AI 대화를 중지합니다")
     static var openAppWhenRun: Bool = false
 
     @MainActor
     func perform() async throws -> some IntentResult & ProvidesDialog {
-        let manager = LiveAIManager.shared
-
-        if manager.isRunning {
-            await manager.stopSession()
-            return .result(dialog: "Live AI 已停止")
-        } else {
-            return .result(dialog: "Live AI 未在运行")
-        }
+        .result(dialog: "실시간 대화 기능은 현재 제공하지 않습니다")
     }
-}
-
-// MARK: - Notification Name
-
-extension Notification.Name {
-    static let liveAITriggered = Notification.Name("liveAITriggered")
 }

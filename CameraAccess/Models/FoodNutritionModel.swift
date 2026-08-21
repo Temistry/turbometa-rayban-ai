@@ -1,11 +1,8 @@
 /*
- * Food Nutrition Model
- * 食物营养数据模型
+ * 음식 영양 분석 데이터 모델
  */
 
 import Foundation
-
-// MARK: - Food Nutrition Response
 
 struct FoodNutritionResponse: Codable {
     let foods: [FoodItem]
@@ -26,8 +23,6 @@ struct FoodNutritionResponse: Codable {
         case suggestions
     }
 }
-
-// MARK: - Food Item
 
 struct FoodItem: Codable, Identifiable {
     let id = UUID()
@@ -53,22 +48,46 @@ struct FoodItem: Codable, Identifiable {
         case healthRating = "health_rating"
     }
 
-    var healthRatingEmoji: String {
-        switch healthRating {
-        case "优秀": return "🟢"
-        case "良好": return "🟡"
-        case "一般": return "🟠"
-        case "较差": return "🔴"
-        default: return "⚪️"
+    /// 이전 중국어 응답과 새 한국어 응답을 모두 한국어 UI 값으로 정규화한다.
+    var localizedHealthRating: String {
+        switch healthRating.trimmingCharacters(in: .whitespacesAndNewlines) {
+        case "매우 좋음", "优秀", "excellent", "Excellent":
+            return "매우 좋음"
+        case "좋음", "良好", "good", "Good":
+            return "좋음"
+        case "보통", "一般", "fair", "Fair":
+            return "보통"
+        case "주의", "较差", "poor", "Poor":
+            return "주의"
+        default:
+            return healthRating.isEmpty ? "평가 없음" : healthRating
+        }
+    }
+
+    var healthRatingSymbol: String {
+        switch localizedHealthRating {
+        case "매우 좋음": return "●"
+        case "좋음": return "●"
+        case "보통": return "●"
+        case "주의": return "●"
+        default: return "○"
+        }
+    }
+
+    var healthRatingColorName: String {
+        switch localizedHealthRating {
+        case "매우 좋음": return "green"
+        case "좋음": return "yellow"
+        case "보통": return "orange"
+        case "주의": return "red"
+        default: return "gray"
         }
     }
 }
 
-// MARK: - Nutrition Summary
-
 extension FoodNutritionResponse {
     var formattedTotalCalories: String {
-        "\(totalCalories) 千卡"
+        "\(totalCalories) kcal"
     }
 
     var formattedTotalProtein: String {
@@ -84,26 +103,20 @@ extension FoodNutritionResponse {
     }
 
     var healthScoreColor: String {
-        if healthScore >= 80 {
-            return "green"
-        } else if healthScore >= 60 {
-            return "yellow"
-        } else if healthScore >= 40 {
-            return "orange"
-        } else {
-            return "red"
+        switch healthScore {
+        case 80...: return "green"
+        case 60...: return "yellow"
+        case 40...: return "orange"
+        default: return "red"
         }
     }
 
     var healthScoreText: String {
-        if healthScore >= 80 {
-            return "非常健康"
-        } else if healthScore >= 60 {
-            return "比较健康"
-        } else if healthScore >= 40 {
-            return "一般"
-        } else {
-            return "需要改善"
+        switch healthScore {
+        case 80...: return "매우 건강함"
+        case 60...: return "건강한 편"
+        case 40...: return "보통"
+        default: return "개선 필요"
         }
     }
 }
