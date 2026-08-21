@@ -89,6 +89,10 @@ The developer does **not** automatically collect or upload these diagnostics. Ex
 
 OpenClaw final-response notifications contain only the same Markdown/URL/code-stripped summary used for speech, limited to three sentences and 250 characters. While the app is running and can process the Gateway final event, it also speaks that summary through the current iPhone media output (Ray-Ban or iPhone). A local notification cannot force the iOS system Announce Notifications feature, and if iOS suspends or terminates the app before it receives the final event, the app cannot create or speak that response.
 
+## Galvis continuous voice conversation
+
+While the app remains in the foreground and the user explicitly keeps the Galvis conversation screen open, it maintains a wake-word-free **STT → OpenClaw → TTS → STT** loop after the first question. Silence and transient speech or audio failures trigger bounded microphone recovery; a recoverable Gateway disconnect reconnects and then waits for a new utterance. A question that timed out or lost its connection is never replayed automatically, and an ambiguous delivery stops with an error so the user can check for duplication. Entering the background or using a stop phrase or control cancels pending STT, OpenClaw, TTS, and audio-session work.
+
 ## OpenClaw Quick Shot and protected Gallery
 
 The top of the Home screen provides large **Photo** and **Video** Quick Shot actions. Each capture freezes the selected mode name and prompt at capture start. Modes can be created, edited, duplicated, deleted, and reordered in the app, with separate photo/video defaults and recent selections.

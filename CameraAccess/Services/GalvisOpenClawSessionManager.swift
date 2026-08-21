@@ -1,6 +1,122 @@
 import Foundation
 import UIKit
 
+enum GalvisConversationRecoveryAction: Equatable {
+    case retryListening
+    case reconnectThenListen
+    case stop
+}
+
+enum GalvisConversationFailure: Equatable {
+    case cancelled
+    case emptyTranscript
+    case speechUnavailable
+    case permissionDenied
+    case connectionFailed
+    case disconnected
+    case requestInProgress
+    case responseTimeout
+    case notConfigured
+    case invalidImage
+    case gatewayRejected
+    case deliveryAmbiguous
+    case transient
+}
+
+struct GalvisConversationRecoveryPolicy {
+    static let maximumConsecutiveFailures = 5
+
+    static func action(for failure: GalvisConversationFailure) -> GalvisConversationRecoveryAction {
+        switch failure {
+        case .emptyTranscript, .requestInProgress, .responseTimeout, .transient:
+            return .retryListening
+        case .connectionFailed, .disconnected:
+            return .reconnectThenListen
+        case .cancelled, .speechUnavailable, .permissionDenied, .notConfigured,
+             .invalidImage, .gatewayRejected, .deliveryAmbiguous:
+            return .stop
+        }
+    }
+
+    static func failure(for error: Error) -> GalvisConversationFailure {
+        if error is CancellationError {
+            return .cancelled
+        }
+
+        if let recognitionError = error as? GalvisSpeechRecognizer.RecognitionError {
+            switch recognitionError {
+            case .emptyTranscript:
+                return .emptyTranscript
+            case .unavailable:
+                return .speechUnavailable
+            case .permissionDenied:
+                return .permissionDenied
+            }
+        }
+
+        if let conversationError = error as? OpenClawConversationError {
+            switch conversationError {
+            case .connectionFailed:
+                return .connectionFailed
+            case .disconnected:
+                return .disconnected
+            case .requestInProgress:
+                return .requestInProgress
+            case .responseTimeout:
+                return .responseTimeout
+            case .notConfigured:
+                return .notConfigured
+            case .invalidImage:
+                return .invalidImage
+            case .gatewayRejected:
+                return .gatewayRejected
+            case .deliveryAmbiguous:
+                return .deliveryAmbiguous
+            }
+        }
+
+        return .transient
+    }
+
+    static func shouldRetry(afterFailureCount failureCount: Int) -> Bool {
+        failureCount < maximumConsecutiveFailures
+    }
+
+    static func retryDelayNanoseconds(forAttempt attempt: Int) -> UInt64 {
+        let delays: [UInt64] = [250, 500, 1_000, 2_000, 3_000]
+        let index = min(max(attempt, 1), delays.count) - 1
+        return delays[index] * 1_000_000
+    }
+}
+
+struct GalvisConversationLoopPolicy {
+    private(set) var consecutiveFailures = 0
+
+    mutating func recordSuccessfulTurn() {
+        consecutiveFailures = 0
+    }
+
+    mutating func recoveryAction(
+        for failure: GalvisConversationFailure
+    ) -> GalvisConversationRecoveryAction {
+        let action = GalvisConversationRecoveryPolicy.action(for: failure)
+        guard action != .stop else { return .stop }
+        guard GalvisConversationRecoveryPolicy.shouldRetry(
+            afterFailureCount: consecutiveFailures
+        ) else {
+            return .stop
+        }
+        consecutiveFailures += 1
+        return action
+    }
+
+    var retryDelayNanoseconds: UInt64 {
+        GalvisConversationRecoveryPolicy.retryDelayNanoseconds(
+            forAttempt: consecutiveFailures
+        )
+    }
+}
+
 @MainActor
 final class GalvisOpenClawSessionManager: ObservableObject {
     enum State: Equatable {
@@ -9,8 +125,9 @@ final class GalvisOpenClawSessionManager: ObservableObject {
         case connecting
         case listening
         case waitingForResponse
-        case followUp
-        case waitingForWakeWord
+        case speaking
+        case recoveringAudio
+        case reconnecting
         case error(String)
         case stopped
     }
@@ -24,12 +141,10 @@ final class GalvisOpenClawSessionManager: ObservableObject {
     private let audioSession = GalvisAudioSessionController()
     private let tts = TTSService.shared
     private var sessionTask: Task<Void, Never>?
-    private var followUpTimeoutTask: Task<Void, Never>?
     private var backgroundObserver: NSObjectProtocol?
     private var isActive = false
     private var sessionGeneration = 0
 
-    private let followUpSeconds: TimeInterval = 15
     private let stopPhrases = ["갈비스 종료", "대화 종료", "그만 들어", "마이크 꺼"]
 
     init() {
@@ -60,8 +175,6 @@ final class GalvisOpenClawSessionManager: ObservableObject {
     func stop() {
         guard isActive || state != .stopped else { return }
         isActive = false
-        followUpTimeoutTask?.cancel()
-        followUpTimeoutTask = nil
         sessionTask?.cancel()
         sessionTask = nil
         recognizer.cancel()
@@ -87,16 +200,7 @@ final class GalvisOpenClawSessionManager: ObservableObject {
 
         do {
             try audioSession.activateConversationSession()
-            state = .connecting
-            if openClaw.connectionState != .connected {
-                openClaw.refreshGatewayTokenState()
-                guard openClaw.isGatewayTokenConfigured else {
-                    throw OpenClawConversationError.notConfigured
-                }
-                openClaw.ensureConnected(reason: "GalvisOpenClawSessionManager.runSession")
-                try await waitForConnection()
-            }
-
+            try await connectIfNeeded(reason: "GalvisOpenClawSessionManager.runSession")
             try await conversationLoop()
         } catch is CancellationError {
             return
@@ -105,80 +209,83 @@ final class GalvisOpenClawSessionManager: ObservableObject {
             state = .error(error.localizedDescription)
             isActive = false
             recognizer.cancel()
+            tts.stop()
             audioSession.deactivate()
         }
     }
 
     private func conversationLoop() async throws {
-        var requiresWakeWord = false
-        var nextTimeout: TimeInterval?
+        var loopPolicy = GalvisConversationLoopPolicy()
 
         while isActive && !Task.isCancelled {
             do {
-                guard let question = try await listenForQuestion(
-                    requiresWakeWord: requiresWakeWord,
-                    timeout: nextTimeout
-                ) else {
-                    requiresWakeWord = true
-                    nextTimeout = nil
-                    continue
+                try audioSession.activateConversationSession()
+                try await connectIfNeeded(
+                    reason: "GalvisOpenClawSessionManager.conversationLoop",
+                    connectingState: .reconnecting
+                )
+                state = .listening
+                transcript = ""
+
+                let recognized = try await recognizer.listen()
+                transcript = recognized
+
+                if containsStopPhrase(recognized) {
+                    stop()
+                    return
                 }
 
-                try await processQuestion(question)
-                requiresWakeWord = false
-                nextTimeout = followUpSeconds
-                state = .followUp
-            } catch is FollowUpTimeout {
-                requiresWakeWord = true
-                nextTimeout = nil
+                try await processQuestion(recognized)
+                loopPolicy.recordSuccessfulTurn()
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                guard isActive, !Task.isCancelled else { throw CancellationError() }
+                try await recoverListening(after: error, loopPolicy: &loopPolicy)
             }
         }
     }
 
-    private struct FollowUpTimeout: Error {}
+    private func recoverListening(
+        after error: Error,
+        loopPolicy: inout GalvisConversationLoopPolicy
+    ) async throws {
+        let failure = GalvisConversationRecoveryPolicy.failure(for: error)
+        let action = loopPolicy.recoveryAction(for: failure)
+        guard action != .stop else { throw error }
 
-    private func listenForQuestion(
-        requiresWakeWord: Bool,
-        timeout: TimeInterval?
-    ) async throws -> String? {
-        state = requiresWakeWord ? .waitingForWakeWord : .listening
-        transcript = ""
+        let nsError = error as NSError
+        print(
+            "[Galvis][WARN] 대화 턴 복구 action=\(String(describing: action)) "
+            + "attempt=\(loopPolicy.consecutiveFailures) domain=\(nsError.domain) code=\(nsError.code)"
+        )
 
-        if let timeout {
-            followUpTimeoutTask?.cancel()
-            followUpTimeoutTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                await MainActor.run { self?.recognizer.cancel() }
-            }
+        recognizer.reset()
+
+        switch action {
+        case .retryListening:
+            state = .recoveringAudio
+            try audioSession.activateConversationSession()
+
+        case .reconnectThenListen:
+            try await connectIfNeeded(
+                reason: "GalvisOpenClawSessionManager.recoverListening",
+                connectingState: .reconnecting
+            )
+
+        case .stop:
+            throw error
         }
 
-        do {
-            let recognized = try await recognizer.listen()
-            followUpTimeoutTask?.cancel()
-            followUpTimeoutTask = nil
-            transcript = recognized
-
-            if containsStopPhrase(recognized) {
-                stop()
-                return nil
-            }
-
-            if requiresWakeWord {
-                return questionAfterWakeWord(recognized)
-            }
-            return recognized
-        } catch is CancellationError {
-            followUpTimeoutTask?.cancel()
-            followUpTimeoutTask = nil
-            guard isActive else { throw CancellationError() }
-            if timeout != nil { throw FollowUpTimeout() }
-            return nil
-        }
+        try await Task.sleep(
+            nanoseconds: loopPolicy.retryDelayNanoseconds
+        )
     }
 
     private func processQuestion(_ question: String) async throws {
-        guard !question.isEmpty else { return }
+        guard !question.isEmpty else {
+            throw GalvisSpeechRecognizer.RecognitionError.emptyTranscript
+        }
 
         recognizer.cancel()
         state = .waitingForResponse
@@ -196,15 +303,15 @@ final class GalvisOpenClawSessionManager: ObservableObject {
     private func speakAnswerAndRestoreConversation(_ speechText: String) async throws {
         let activeGeneration = sessionGeneration
         audioSession.deactivate()
+        state = .speaking
 
-        guard let requestID = tts.enqueue(speechText) else {
+        if let requestID = tts.enqueue(speechText) {
+            print("[Galvis][TTS] 자동 음성 요청 접수 speechLength=\(speechText.count)")
+            await waitForSpeech(requestID: requestID, speechLength: speechText.count)
+        } else {
             print("[Galvis][TTS][ERROR] 자동 음성 요청 실패 speechLength=\(speechText.count)")
-            try restoreConversationSessionIfNeeded(activeGeneration: activeGeneration)
-            return
         }
 
-        print("[Galvis][TTS] 자동 음성 요청 접수 speechLength=\(speechText.count)")
-        await waitForSpeech(requestID: requestID, speechLength: speechText.count)
         try restoreConversationSessionIfNeeded(activeGeneration: activeGeneration)
     }
 
@@ -265,17 +372,35 @@ final class GalvisOpenClawSessionManager: ObservableObject {
         print("[Galvis][AUDIO] TTS 이후 음성 대화 세션 복구 완료")
     }
 
+    private func connectIfNeeded(
+        reason: String,
+        connectingState: State = .connecting
+    ) async throws {
+        if openClaw.connectionState == .connected { return }
+
+        state = connectingState
+        openClaw.refreshGatewayTokenState()
+        guard openClaw.isGatewayTokenConfigured else {
+            throw OpenClawConversationError.notConfigured
+        }
+        openClaw.ensureConnected(reason: reason)
+        try await waitForConnection()
+    }
+
     private func waitForConnection() async throws {
         let deadline = Date().addingTimeInterval(20)
         while Date() < deadline {
             switch openClaw.connectionState {
             case .connected:
                 return
-            case .error, .waitingForPairing:
+            case .waitingForPairing:
                 throw OpenClawConversationError.connectionFailed
+            case .error:
+                openClaw.ensureConnected(reason: "GalvisOpenClawSessionManager.waitForConnection")
             case .disconnected, .connecting:
-                try await Task.sleep(nanoseconds: 200_000_000)
+                break
             }
+            try await Task.sleep(nanoseconds: 200_000_000)
         }
         throw OpenClawConversationError.connectionFailed
     }
@@ -283,11 +408,5 @@ final class GalvisOpenClawSessionManager: ObservableObject {
     private func containsStopPhrase(_ text: String) -> Bool {
         let compact = text.replacingOccurrences(of: " ", with: "")
         return stopPhrases.contains { compact.contains($0.replacingOccurrences(of: " ", with: "")) }
-    }
-
-    private func questionAfterWakeWord(_ text: String) -> String? {
-        guard let range = text.range(of: "갈비스", options: .caseInsensitive) else { return nil }
-        return text[range.upperBound...]
-            .trimmingCharacters(in: CharacterSet(charactersIn: " ,.!?。？！").union(.whitespacesAndNewlines))
     }
 }

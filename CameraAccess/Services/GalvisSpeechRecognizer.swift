@@ -101,6 +101,13 @@ final class GalvisSpeechRecognizer: NSObject, ObservableObject {
         stop(resumingWith: CancellationError())
     }
 
+    func reset() {
+        stop(resumingWith: CancellationError())
+        audioEngine.reset()
+        transcript = ""
+        print("[Galvis][STT] 음성 인식 엔진 재설정")
+    }
+
     private func scheduleSilenceFinish(generation: Int) {
         silenceTask?.cancel()
         silenceTask = Task { [weak self] in

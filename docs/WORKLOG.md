@@ -4,6 +4,32 @@
 
 ---
 
+## 2026-08-21 · 갈비스 OpenClaw 연속 대화 복구
+
+### 목적
+
+- 앱이 foreground에서 갈비스 대화 모드로 열린 동안 첫 답변 이후에도 wake word 없이 STT → OpenClaw → TTS → STT 순환을 유지한다.
+- 일시적 음성·오디오·Gateway 오류를 턴 단위로 복구하되 실패한 질문을 자동 재전송하지 않는다.
+
+### 주요 변경
+
+- 기존 15초 follow-up과 wake-word 복귀 상태를 제거하고 사용자가 종료할 때까지 계속 듣는 conversation loop로 변경했다.
+- 빈 transcript와 알 수 없는 일시적 Speech/Audio 오류는 마이크 엔진을 정리·reset하고 최대 5회 bounded backoff 후 다시 듣는다.
+- Gateway connection failure와 disconnect는 기존 연결 정책으로 복구한 뒤 새 발화를 기다린다. timeout, disconnect 또는 request-in-progress가 발생한 질문을 자동 replay하지 않는다.
+- delivery ambiguous, Gateway rejection, 설정·권한 오류는 자동 복구하지 않고 명확한 오류 상태로 종료한다.
+- TTS가 공유 AudioSession을 playback으로 바꾼 뒤 모든 경로에서 `.playAndRecord`·`.voiceChat`을 다시 설정하며, 다음 listen 전에도 실제 shared session 구성을 재확인한다.
+- cancellation은 recovery 대상으로 취급하지 않고 background·사용자 종료 시 STT, pending OpenClaw 요청, TTS와 AudioSession을 정리한다.
+- 상태 로그는 복구 action, attempt, 오류 domain/code와 text length만 사용하고 transcript·답변 원문은 기록하지 않는다.
+
+### 검증 범위
+
+- 순수 recovery/loop policy XCTest에 성공 턴 이후 budget reset, 빈 transcript·일시 오류 재청취, reconnect 후 새 발화 대기, timeout no-replay, ambiguous delivery·cancellation 종료, 최대 retry와 bounded backoff를 추가했다.
+- `git diff --check`는 오류 없이 통과했다. `python Scripts/audit_localization_security.py`는 치명 0·경고 0·기존 정보성 1을 확인했고, OpenClaw export Python 테스트 2개가 통과했다.
+- Windows에는 Xcode/Swift toolchain이 없어 Swift compile/XCTest는 macOS GitHub Actions에서 확인한다.
+- 실기기에서는 질문 1 → TTS → 질문 2, 무음 복구, TTS 실패 후 재청취, Gateway 단절·재연결, background·종료 문구 종료를 확인해야 한다.
+
+---
+
 ## 2026-08-20 · OpenClaw 사진·동영상 Quick Shot과 보호 갤러리
 
 ### 목적
