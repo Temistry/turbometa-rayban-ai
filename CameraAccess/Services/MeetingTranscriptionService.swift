@@ -55,7 +55,6 @@ final class MeetingTranscriptionService: ObservableObject {
     private var restartWorkItem: DispatchWorkItem?
     private var tickerWorkItem: DispatchWorkItem?
     private var pendingText = ""
-    private var emittedText = ""
     private var recognitionGeneration = 0
     private var consecutiveTaskErrors = 0
     private var prefersOnDevice = false
@@ -67,8 +66,6 @@ final class MeetingTranscriptionService: ObservableObject {
 
     /// 부분 결과 증분 발행 주기(초).
     static let segmentTickerInterval: TimeInterval = 0.5
-    /// 구분자 없이 이 길이 이상 쌓이면 강제로 발행한다.
-    static let hardFlushLength = 40
 
     func start() async throws {
         guard let speechRecognizer, speechRecognizer.isAvailable else {
@@ -92,7 +89,6 @@ final class MeetingTranscriptionService: ObservableObject {
         try Task.checkCancellation()
 
         pendingText = ""
-        emittedText = ""
         prefersOnDevice = false
         consecutiveTaskErrors = 0
         do {
@@ -166,7 +162,6 @@ final class MeetingTranscriptionService: ObservableObject {
         }
         teardownTask()
         pendingText = ""
-        emittedText = ""
         lastStableText = ""
         lastStableAt = Date()
 
@@ -323,62 +318,11 @@ final class MeetingTranscriptionService: ObservableObject {
         }
     }
 
-    private func emitAvailableDelta() {
-        guard let delta = Self.nextEmitDelta(pending: pendingText, emitted: emittedText) else {
-            return
-        }
-        emittedText = delta.newEmitted
-        onSegment?(delta.emit)
-    }
-
     private func flushRemainder() {
         let remainder = pendingText.trimmingCharacters(in: .whitespacesAndNewlines)
         pendingText = ""
-        emittedText = ""
-        guard remainder.count >= 2 else { return }
+        guard !remainder.isEmpty else { return }
         onSegment?(remainder)
-    }
-
-    // MARK: - 증분 분할(단위 테스트용 순수 함수)
-
-    /// 아직 발행하지 않은 텍스트에서 문장 구분자까지의 증분을 뽑는다.
-    /// 구분자가 없으면 hardFlushLength 이상일 때만 전체를 발행한다.
-    nonisolated static func nextEmitDelta(
-        pending: String,
-        emitted: String
-    ) -> (emit: String, newEmitted: String)? {
-        guard !pending.isEmpty else { return nil }
-
-        let common = commonPrefixLength(pending, emitted)
-        let tail = String(pending.dropFirst(common))
-        guard !tail.isEmpty else { return nil }
-
-        let delimiters: Set<Character> = [".", "?", "!", "…", ","]
-        if let cutIndex = tail.lastIndex(where: { delimiters.contains($0) }) {
-            let emitPart = String(tail[tail.startIndex...cutIndex])
-            let emit = emitPart.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard emit.count >= 2 else { return nil }
-            let newEmitted = String(pending.prefix(common + emitPart.count))
-            return (emit, newEmitted)
-        }
-
-        if tail.count >= hardFlushLength {
-            let emit = tail.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard emit.count >= 2 else { return nil }
-            return (emit, pending)
-        }
-
-        return nil
-    }
-
-    nonisolated static func commonPrefixLength(_ a: String, _ b: String) -> Int {
-        let aChars = Array(a)
-        let bChars = Array(b)
-        var index = 0
-        while index < aChars.count && index < bChars.count && aChars[index] == bChars[index] {
-            index += 1
-        }
-        return index
     }
 
     private func teardownTask() {

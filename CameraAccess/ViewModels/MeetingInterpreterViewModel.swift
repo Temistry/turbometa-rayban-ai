@@ -12,17 +12,7 @@ import Foundation
 import UIKit
 
 enum MeetingPolicy {
-    static let whisperCooldown: TimeInterval = 30
     static let whisperConfidenceThreshold = 0.85
-
-    static func whisperAllowed(
-        lastWhisperAt: Date?,
-        now: Date,
-        minInterval: TimeInterval = whisperCooldown
-    ) -> Bool {
-        guard let lastWhisperAt else { return true }
-        return now.timeIntervalSince(lastWhisperAt) >= minInterval
-    }
 }
 
 @MainActor
@@ -252,7 +242,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func queueAnalysis(_ text: String, lineID: UUID) {
-        guard runState == .listening, !analyzedTexts.contains(text) else { return }
+        guard runState == .listening, text.count >= 2, !analyzedTexts.contains(text) else { return }
         // Only the newest revision of an unprocessed live line is useful.
         analysisQueue.removeAll { $0.1 == lineID }
         analysisQueue.append((text, lineID))

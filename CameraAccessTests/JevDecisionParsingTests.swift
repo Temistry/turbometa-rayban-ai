@@ -51,21 +51,6 @@ final class JevDecisionParsingTests: XCTestCase {
         XCTAssertEqual(decision.explanationConfidence, 0, accuracy: 0.0001)
     }
 
-    func testWhisperCooldownPolicy() {
-        let now = Date()
-
-        XCTAssertTrue(MeetingPolicy.whisperAllowed(lastWhisperAt: nil, now: now))
-        XCTAssertFalse(MeetingPolicy.whisperAllowed(lastWhisperAt: now.addingTimeInterval(-10), now: now))
-        XCTAssertTrue(MeetingPolicy.whisperAllowed(lastWhisperAt: now.addingTimeInterval(-31), now: now))
-        XCTAssertTrue(
-            MeetingPolicy.whisperAllowed(
-                lastWhisperAt: now.addingTimeInterval(-5),
-                now: now,
-                minInterval: 3
-            )
-        )
-    }
-
     func testGeminiGroundingLinkParsing() {
         let object: [String: Any] = [
             "candidates": [
