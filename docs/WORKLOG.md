@@ -229,13 +229,14 @@
 - [x] JevDecisionParsingTests(파서·레인 매핑·쿨다운·그라운딩 링크)
 
 ### 남음
-- [ ] CodeMagic 빌드 결과 확인 및 TestFlight 배포 완료 확인(현재 브랜치 push로 ios-testflight 자동 트리거)
+- [x] CodeMagic 빌드 결과 확인 및 TestFlight 배포 완료 확인(커밋 c54db8b: ios-compile-check success, ios-testflight 워크플로 success — App Store Connect 제출 단계 포함)
 - [ ] 실기기: 안경 마이크 라우팅, 귓속말 음량/쿨다운 체감, Jev 실호출 지연(한국 기준) 측정
 - [ ] 전사 세그먼트 품질 평가 후 온디바이스/서버 인식 전략 확정
 
 ### 검증
 - 로컬 정적 감사(Windows): fatal 0건, warning 0건, informational 1건(기존 항목)
-- 로컬 Windows 환경에서는 xcodebuild 불가. 컴파일·테스트는 CodeMagic 워크플로(ios-compile-check, ios-testflight)에서 검증한다.
+- 로컬 Windows 환경에서는 xcodebuild 불가. 컴파일은 원격으로 검증했다: GitHub Actions iPhone 시뮬레이터 빌드 2건 success, CodeMagic iOS 컴파일 점검 success.
+- CodeMagic iOS TestFlight 워크플로(서명 아카이브 + App Store Connect 제출) success. TestFlight 처리 완료 여부는 App Store Connect/TestFlight 앱에서 최종 확인한다.
 
 ### 보안 메모
 - Jev/Gemini 키를 소스·문서·로그에 기록하지 않았다. Jev 키는 기기 Keychain 전용 항목으로 저장한다.
