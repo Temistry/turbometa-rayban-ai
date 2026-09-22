@@ -639,3 +639,12 @@
 "meeting.photo.busy" = "Checking scene";
 "meeting.photo.failed" = "Could not explain the scene. Tap to retry.";
 "meeting.photo.voiceFailed" = "Could not play the explanation.";
+"meeting.archive.title" = "Meeting Drawer";
+"meeting.archive.empty" = "No archived meetings yet.";
+"meeting.archive.exportText" = "Export Text";
+"meeting.archive.exportAll" = "Export All Text";
+"meeting.archive.exportAudio" = "Export Audio";
+"meeting.archive.delete" = "Delete";
+"meeting.detail.loading" = "Preparing explanation";
+"meeting.detail.failed" = "Could not generate an explanation. Try again.";
+"meeting.detail.close" = "Close";

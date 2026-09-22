@@ -12,7 +12,12 @@ import Foundation
 import UIKit
 
 enum MeetingPolicy {
-    static let whisperConfidenceThreshold = 0.85
+    /// Jev confidence는 보정된 확률이 아니라 상대적 강도이므로 0.6 이상이면 개입한다.
+    static let whisperConfidenceThreshold = 0.6
+    /// Gemini 429 이후 설명 생성을 쉬는 시간(초).
+    static let explainQuotaPause: TimeInterval = 120
+    /// Gemini 429 이후 근거 검색을 쉬는 시간(초).
+    static let factQuotaPause: TimeInterval = 300
 }
 
 @MainActor
@@ -57,9 +62,22 @@ final class MeetingInterpreterViewModel: ObservableObject {
     struct FactCard: Identifiable, Equatable {
         let id = UUID()
         let claim: String
+        let lineID: UUID
         var state: FactState = .pending
         var summary: String?
         var links: [MeetingFactLink] = []
+    }
+
+    struct DetailBubble: Identifiable, Equatable {
+        enum State: Equatable {
+            case loading
+            case ready(message: String, links: [MeetingFactLink])
+            case failed
+        }
+
+        let id: UUID
+        let query: String
+        var state: State
     }
 
     @Published private(set) var lines: [TranscriptLine] = []
@@ -73,6 +91,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var isStopping = false
     @Published private(set) var isDescribingPhoto = false
     @Published private(set) var photoError: String?
+    @Published private(set) var detailBubble: DetailBubble?
 
     /// 설정의 시각 보조 토글. 기본값은 켜짐이다.
     static var visualAssistEnabled: Bool {
@@ -107,6 +126,17 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private var checkedClaims = Set<String>()
     private var factQueue: [(String, UUID)] = []
     private var factTask: Task<Void, Never>?
+    private let archive = MeetingArchiveService()
+    private var archiveID: UUID?
+    private var archiveStartedAt: Date?
+    private var latestStable = ""
+    private var explainPausedUntil: Date?
+    private var factPausedUntil: Date?
+    private var detailTask: Task<Void, Never>?
+
+    private var isExplainPaused: Bool {
+        Date() < (explainPausedUntil ?? .distantPast)
+    }
 
     init(streamViewModel: StreamSessionViewModel) {
         self.streamViewModel = streamViewModel
@@ -126,6 +156,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         transcription.onPartial = { [weak self] text in self?.updateLiveCaption(text) }
         transcription.onStable = { [weak self] text in
             guard let self, let id = self.liveLineID else { return }
+            self.latestStable = text
             self.queueAnalysis(text, lineID: id)
         }
         transcription.onFailure = { [weak self] message in
@@ -144,6 +175,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
         analyzedTexts.removeAll()
         spokenTerms.removeAll()
         checkedClaims.removeAll()
+        explainPausedUntil = nil
+        factPausedUntil = nil
+        latestStable = ""
+        detailBubble = nil
 
         guard JevClient.storedAPIKey != nil else {
             failure = .jev(
@@ -154,6 +189,16 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
 
         isStarting = true
+        let archiveID = UUID()
+        self.archiveID = archiveID
+        archiveStartedAt = Date()
+        do {
+            try archive.prepare(id: archiveID)
+            transcription.recordingDestination = archive.audioURL(id: archiveID)
+        } catch {
+            transcription.recordingDestination = nil
+            DeveloperConsole.shared.log(.warning, category: "MeetingArchive", "prepare failed code=\((error as NSError).code)")
+        }
         let generation = self.generation
         startTask = Task {
             defer { if generation == self.generation { isStarting = false } }
@@ -274,15 +319,19 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 utterance: text,
                 previousUtterance: previous
             )
-            guard generation == self.generation, runState == .listening else { return }
+            guard generation == self.generation, runState == .listening else {
+                DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "discarded stopped=true stage=decision")
+                return
+            }
             jevReady = true
             DeveloperConsole.shared.log(.info, category: "MeetingDecision", "explain=\(decision.needsExplanation) confidence=\(decision.explanationConfidence) lane=\(decision.lane.rawValue)")
 
             if decision.lane == .factcheck {
-                beginFactCheck(claim: text)
+                beginFactCheck(claim: text, lineID: lineID)
             }
 
             if !isDescribingPhoto, !isSpeakingWhisper, !isPreparingWhisper,
+               !isExplainPaused,
                decision.needsExplanation,
                decision.explanationConfidence >= MeetingPolicy.whisperConfidenceThreshold {
                 await speakExplanation(
@@ -291,7 +340,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     confidence: decision.explanationConfidence
                 )
             } else {
-                DeveloperConsole.shared.log(.info, category: "MeetingDecision", "skipped busy=\(isDescribingPhoto || isSpeakingWhisper || isPreparingWhisper) requested=\(decision.needsExplanation) threshold=\(MeetingPolicy.whisperConfidenceThreshold)")
+                DeveloperConsole.shared.log(.info, category: "MeetingDecision", "skipped busy=\(isDescribingPhoto || isSpeakingWhisper || isPreparingWhisper) quotaPaused=\(isExplainPaused) requested=\(decision.needsExplanation) confidence=\(decision.explanationConfidence) threshold=\(MeetingPolicy.whisperConfidenceThreshold)")
             }
         } catch let error as JevClientError {
             guard generation == self.generation else { return }
@@ -305,10 +354,14 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
     }
 
-    private func beginFactCheck(claim: String) {
+    private func beginFactCheck(claim: String, lineID: UUID) {
+        if Date() < (factPausedUntil ?? .distantPast) {
+            DeveloperConsole.shared.log(.info, category: "MeetingDecision", "factcheck skipped quotaPaused=true")
+            return
+        }
         guard checkedClaims.insert(claim.lowercased()).inserted else { return }
         let generation = self.generation
-        let card = FactCard(claim: claim)
+        let card = FactCard(claim: claim, lineID: lineID)
         factCards.insert(card, at: 0)
         if factCards.count > 20 {
             factCards.removeLast(factCards.count - 20)
@@ -320,6 +373,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
         factTask = Task {
           defer { if generation == self.generation { factTask = nil } }
           while !Task.isCancelled, generation == self.generation, !factQueue.isEmpty {
+            while Date() < (factPausedUntil ?? .distantPast) {
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+                guard generation == self.generation, !Task.isCancelled else { return }
+            }
             let (claim, cardID) = factQueue.removeFirst()
             do {
                 let result = try await gemini.factCheck(claim: claim)
@@ -330,6 +387,11 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     $0.links = result.links
                 }
             } catch {
+                if let geminiError = error as? MeetingGeminiError,
+                   case .http(429) = geminiError {
+                    factPausedUntil = Date().addingTimeInterval(MeetingPolicy.factQuotaPause)
+                    DeveloperConsole.shared.log(.warning, category: "MeetingDecision", "factcheck quota paused seconds=\(Int(MeetingPolicy.factQuotaPause))")
+                }
                 guard generation == self.generation else { return }
                 updateFactCard(cardID) {
                     $0.state = .failed
@@ -350,14 +412,12 @@ final class MeetingInterpreterViewModel: ObservableObject {
         let context = previousContext(for: lineID) ?? ""
 
         do {
-            let explanation = try await gemini.explain(
-                utterance: utterance,
-                recentContext: context,
-                sceneContext: sceneSummary,
-                explainedTerms: Array(spokenTerms.sorted().prefix(100))
-            )
+            let explanation = try await requestExplanation(utterance: utterance, context: context)
             guard generation == self.generation, runState == .listening,
-                  !isDescribingPhoto, !isSpeakingWhisper else { return }
+                  !isDescribingPhoto, !isSpeakingWhisper else {
+                DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "discarded stopped=true stage=explanation")
+                return
+            }
             let term = explanation.term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !term.isEmpty, !spokenTerms.contains(term) else {
                 DeveloperConsole.shared.log(.info, category: "MeetingWhisper", "skipped emptyOrRepeatedTerm=true")
@@ -394,6 +454,106 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 )
             }
         }
+    }
+
+    /// 설명 요청: 일시 실패(503·타임아웃)는 최신 안정 문장으로 1회 재시도하고,
+    /// 429는 재시도 없이 즉시 실패 처리한 뒤 일정 시간 설명 생성을 쉰다.
+    private func requestExplanation(utterance: String, context: String) async throws -> MeetingExplanation {
+        do {
+            return try await gemini.explain(
+                utterance: utterance,
+                recentContext: context,
+                sceneContext: sceneSummary,
+                explainedTerms: Array(spokenTerms.sorted().prefix(100))
+            )
+        } catch {
+            if let geminiError = error as? MeetingGeminiError,
+               case .http(429) = geminiError {
+                explainPausedUntil = Date().addingTimeInterval(MeetingPolicy.explainQuotaPause)
+                DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "quota paused seconds=\(Int(MeetingPolicy.explainQuotaPause))")
+                throw error
+            }
+            DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "retry once domain=\((error as NSError).domain) code=\((error as NSError).code)")
+            let retryText = latestStable.isEmpty ? utterance : latestStable
+            return try await gemini.explain(
+                utterance: retryText,
+                recentContext: context,
+                sceneContext: sceneSummary,
+                explainedTerms: Array(spokenTerms.sorted().prefix(100))
+            )
+        }
+    }
+
+    /// 전사 줄을 터치하면 보관된 설명·근거 링크를 말풍선으로 보여주고 읽어 준다.
+    /// 보관된 설명이 없으면 사용자가 직접 요청한 것이므로 Jev 게이트 없이 생성한다.
+    func handleLineTap(_ lineID: UUID) {
+        guard failure == nil, !isStopping,
+              let line = lines.first(where: { $0.id == lineID }) else { return }
+        closeDetail()
+
+        if let whisper = line.whisper, !whisper.text.isEmpty {
+            showDetail(line: line, message: whisper.text, links: factLinks(for: lineID))
+            return
+        }
+        if let card = factCards.first(where: { $0.lineID == lineID }),
+           card.state == .done, let summary = card.summary {
+            showDetail(line: line, message: summary, links: card.links)
+            return
+        }
+
+        detailBubble = DetailBubble(id: lineID, query: line.text, state: .loading)
+        let generation = self.generation
+        detailTask = Task {
+            do {
+                let explanation = try await requestExplanation(
+                    utterance: line.text,
+                    context: previousContext(for: lineID) ?? ""
+                )
+                guard generation == self.generation, detailBubble?.id == lineID else { return }
+                updateLine(lineID) { target in
+                    if target.whisper == nil || target.whisper?.text.isEmpty == true {
+                        target.whisper = WhisperEvent(
+                            term: explanation.term,
+                            text: explanation.text,
+                            confidence: 1,
+                            state: .spoken
+                        )
+                    }
+                }
+                detailBubble?.state = .ready(explanation.text, factLinks(for: lineID))
+                speakDetail(explanation.text)
+            } catch {
+                guard generation == self.generation, detailBubble?.id == lineID else { return }
+                DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "detail failed domain=\((error as NSError).domain) code=\((error as NSError).code)")
+                detailBubble?.state = .failed
+            }
+        }
+    }
+
+    func closeDetail() {
+        detailTask?.cancel()
+        detailTask = nil
+        detailBubble = nil
+    }
+
+    private func factLinks(for lineID: UUID) -> [MeetingFactLink] {
+        factCards.first(where: { $0.lineID == lineID })?.links ?? []
+    }
+
+    private func showDetail(line: TranscriptLine, message: String, links: [MeetingFactLink]) {
+        detailBubble = DetailBubble(id: line.id, query: line.text, state: .ready(message, links))
+        speakDetail(message)
+    }
+
+    private func speakDetail(_ text: String) {
+        guard let requestID = tts.enqueue(
+            text,
+            volume: 0.35,
+            preserveRecordingSession: runState == .listening
+        ) else { return }
+        activeWhisperRequestID = requestID
+        sawWhisperPlayback = true
+        isSpeakingWhisper = true
     }
 
     func describeCurrentScene() {

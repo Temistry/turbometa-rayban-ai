@@ -630,3 +630,12 @@
 "meeting.photo.busy" = "장면 확인 중";
 "meeting.photo.failed" = "장면을 확인하지 못했습니다. 다시 눌러 주세요.";
 "meeting.photo.voiceFailed" = "음성을 재생하지 못했습니다.";
+"meeting.archive.title" = "회의 서랍";
+"meeting.archive.empty" = "보관된 회의가 없습니다.";
+"meeting.archive.exportText" = "텍스트 내보내기";
+"meeting.archive.exportAll" = "전체 텍스트 내보내기";
+"meeting.archive.exportAudio" = "음성 내보내기";
+"meeting.archive.delete" = "삭제";
+"meeting.detail.loading" = "설명을 준비합니다";
+"meeting.detail.failed" = "설명을 만들지 못했습니다. 다시 시도해 주세요.";
+"meeting.detail.close" = "닫기";

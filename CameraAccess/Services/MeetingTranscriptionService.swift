@@ -47,6 +47,10 @@ final class MeetingTranscriptionService: ObservableObject {
     var onFailure: ((String) -> Void)?
     /// 시각 보조가 뽑은 화면 용어. 인식 작업 시작 시 contextualStrings로 주입된다.
     var contextualTerms: [String] = []
+    /// 설정되면 입력 오디오를 이 파일에 원본으로 기록한다.
+    var recordingDestination: URL? {
+        didSet { audioFileBox.clear() }
+    }
 
     private let audioEngine = AVAudioEngine()
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "ko-KR"))
@@ -63,6 +67,7 @@ final class MeetingTranscriptionService: ObservableObject {
     private var lastStableText = ""
     private var lastStableAt = Date.distantPast
     private var onDeviceUntil = Date.distantPast
+    private let audioFileBox = MeetingAudioFileBox()
 
     /// 부분 결과 증분 발행 주기(초).
     static let segmentTickerInterval: TimeInterval = 0.5
@@ -128,6 +133,7 @@ final class MeetingTranscriptionService: ObservableObject {
         flushRemainder()
         state = .idle
         teardownEngine(keepAudioSession: false)
+        audioFileBox.clear()
     }
 
     private func configureAudioSession() throws {
@@ -194,9 +200,24 @@ final class MeetingTranscriptionService: ObservableObject {
             state = .idle
             return
         }
+        if let destination = recordingDestination, audioFileBox.currentFile == nil {
+            do {
+                audioFileBox.set(try AVAudioFile(
+                    forWriting: destination,
+                    settings: inputFormat.settings,
+                    commonFormat: inputFormat.commonFormat,
+                    interleaved: inputFormat.isInterleaved
+                ))
+                DeveloperConsole.shared.log(.info, category: "MeetingArchive", "audio recording started rate=\(inputFormat.sampleRate)")
+            } catch {
+                DeveloperConsole.shared.log(.warning, category: "MeetingArchive", "audio open failed code=\((error as NSError).code)")
+            }
+        }
 
+        let audioFileBox = self.audioFileBox
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak request] buffer, _ in
             request?.append(buffer)
+            audioFileBox.write(buffer)
         }
         hasInputTap = true
 
@@ -350,5 +371,35 @@ final class MeetingTranscriptionService: ObservableObject {
                 options: [.notifyOthersOnDeactivation]
             )
         }
+    }
+}
+
+/// 입력 탭(오디오 스레드)과 중지(메인 스레드) 사이의 파일 접근을 보호한다.
+final class MeetingAudioFileBox {
+    private let lock = NSLock()
+    private var file: AVAudioFile?
+
+    var currentFile: AVAudioFile? {
+        lock.lock()
+        defer { lock.unlock() }
+        return file
+    }
+
+    func set(_ newFile: AVAudioFile) {
+        lock.lock()
+        file = newFile
+        lock.unlock()
+    }
+
+    func write(_ buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        try? file?.write(from: buffer)
+        lock.unlock()
+    }
+
+    func clear() {
+        lock.lock()
+        file = nil
+        lock.unlock()
     }
 }

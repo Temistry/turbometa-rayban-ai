@@ -87,7 +87,7 @@ final class MeetingGeminiService {
             ]
         ]
 
-        let responseObject = try await post(body)
+        let responseObject = try await post(body, timeout: 12)
         guard let raw = Self.parseText(responseObject),
               let explanation = Self.parseExplanation(raw) else {
             throw MeetingGeminiError.invalidResponse
@@ -115,7 +115,7 @@ final class MeetingGeminiService {
         )
     }
 
-    private func post(_ body: [String: Any]) async throws -> [String: Any] {
+    private func post(_ body: [String: Any], timeout: TimeInterval = 30) async throws -> [String: Any] {
         guard !VisionAPIConfig.apiKey.isEmpty else {
             throw MeetingGeminiError.missingAPIKey
         }
@@ -128,7 +128,7 @@ final class MeetingGeminiService {
         for (name, value) in VisionAPIConfig.headers(with: VisionAPIConfig.apiKey) {
             request.setValue(value, forHTTPHeaderField: name)
         }
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeout
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let startedAt = Date()
@@ -136,9 +136,10 @@ final class MeetingGeminiService {
         DeveloperConsole.shared.log(.info, category: "MeetingGemini", "status=\((response as? HTTPURLResponse)?.statusCode ?? 0) elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1000))")
         if let httpResponse = response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
-            // 429/503은 잠시 후 1회만 재시도한다. 그 외는 그대로 실패.
-            if httpResponse.statusCode == 429 || httpResponse.statusCode == 503 {
-                try await Task.sleep(nanoseconds: 3_000_000_000)
+            // 429는 쿼터 소진이라 즉시 실패(재시도는 쿼터만 낭비한다).
+            // 503은 일시 과부하일 수 있어 2초 후 1회만 재시도한다.
+            if httpResponse.statusCode == 503 {
+                try await Task.sleep(nanoseconds: 2_000_000_000)
                 let (retryData, retryResponse) = try await session.data(for: request)
                 DeveloperConsole.shared.log(.info, category: "MeetingGemini", "retry status=\((retryResponse as? HTTPURLResponse)?.statusCode ?? 0)")
                 if let retryHTTP = retryResponse as? HTTPURLResponse,

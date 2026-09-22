@@ -11,6 +11,7 @@ struct MeetingModeView: View {
     @StateObject private var viewModel: MeetingInterpreterViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var showSettings = false
+    @State private var showArchive = false
     @State private var showFactSheet = false
     @State private var isFollowing = true
 
@@ -40,12 +41,26 @@ struct MeetingModeView: View {
                 }
             }
         }
+        .overlay(alignment: .bottom) {
+            if let bubble = viewModel.detailBubble {
+                MeetingDetailBubble(bubble: bubble) {
+                    viewModel.closeDetail()
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 158)
+            }
+        }
         .sheet(isPresented: $showFactSheet) {
             MeetingFactSheet(cards: viewModel.factCards)
         }
         .sheet(isPresented: $showSettings) {
             NavigationView {
                 UnifiedSettingsView(streamViewModel: viewModel.streamViewModel)
+            }
+        }
+        .sheet(isPresented: $showArchive) {
+            NavigationView {
+                MeetingArchiveListView()
             }
         }
     }
@@ -63,6 +78,16 @@ struct MeetingModeView: View {
             }
 
             Spacer()
+
+            Button {
+                showArchive = true
+            } label: {
+                Image(systemName: "archivebox")
+                    .font(.body)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .accessibilityLabel("meeting.archive.title".localized)
+            .padding(.trailing, 2)
 
             if !viewModel.factCards.isEmpty {
                 Button {
@@ -130,6 +155,10 @@ struct MeetingModeView: View {
                         ForEach(viewModel.lines) { line in
                             MeetingCaptionRow(line: line)
                                 .id(line.id)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    viewModel.handleLineTap(line.id)
+                                }
                         }
                     }
                     .padding(.horizontal, 18)

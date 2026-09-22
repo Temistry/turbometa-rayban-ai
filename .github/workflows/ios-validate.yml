@@ -104,6 +104,7 @@ jobs:
             -only-testing:CameraAccessTests/JevDecisionParsingTests \
             -only-testing:CameraAccessTests/MeetingContextParsingTests \
             -only-testing:CameraAccessTests/MeetingPhotoRequestTests \
+            -only-testing:CameraAccessTests/MeetingArchiveTests \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             'SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG MEETING_LOGIC_TESTS' \
             2>&1 | tee meeting-tests.log

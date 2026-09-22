@@ -14,6 +14,8 @@
 		5E70000000000000000000A8 /* MeetingInterpreterViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A7 /* MeetingInterpreterViewModel.swift */; };
 		5E70000000000000000000AA /* MeetingModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A9 /* MeetingModeView.swift */; };
 		5E70000000000000000000AC /* VisualAssistService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000AB /* VisualAssistService.swift */; };
+		5E70000000000000000000B2 /* MeetingArchiveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000B1 /* MeetingArchiveService.swift */; };
+		5E70000000000000000000B4 /* MeetingArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000B3 /* MeetingArchiveViews.swift */; };
 		217BDD58A35C2D24403F74BF /* APIProviderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111827A1CF7A278A6DC6934 /* APIProviderManager.swift */; };
 		26664DE8308E3F2981609421 /* QuickVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3E36CE337855A7F17F2AC8 /* QuickVisionService.swift */; };
 		2746170F50E225008AB717CE /* QuickVisionModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A08DC107E5A57DDE6036C3 /* QuickVisionModeManager.swift */; };
@@ -274,6 +276,8 @@
 		5E70000000000000000000A7 /* MeetingInterpreterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingInterpreterViewModel.swift; sourceTree = "<group>"; };
 		5E70000000000000000000A9 /* MeetingModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingModeView.swift; sourceTree = "<group>"; };
 		5E70000000000000000000AB /* VisualAssistService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualAssistService.swift; sourceTree = "<group>"; };
+		5E70000000000000000000B1 /* MeetingArchiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingArchiveService.swift; sourceTree = "<group>"; };
+		5E70000000000000000000B3 /* MeetingArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingArchiveViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -365,6 +369,7 @@
 				5E70000000000000000000A3 /* MeetingGeminiService.swift */,
 				5E70000000000000000000A5 /* MeetingTranscriptionService.swift */,
 				5E70000000000000000000AB /* VisualAssistService.swift */,
+				5E70000000000000000000B1 /* MeetingArchiveService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -464,6 +469,7 @@
 				4BA57ABC2EF8227E002EC214 /* StreamView.swift */,
 				4BA57ABD2EF8227E002EC214 /* TurboMetaHomeView.swift */,
 				5E70000000000000000000A9 /* MeetingModeView.swift */,
+				5E70000000000000000000B3 /* MeetingArchiveViews.swift */,
 				4BA57ABE2EF8227E002EC214 /* VisionRecognitionView.swift */,
 				6B037E0156E90DE2314A9F47 /* QuickVisionView.swift */,
 				330AF93394A09D97C504F568 /* QuickVisionSettingsView.swift */,
@@ -780,6 +786,8 @@
 				5E70000000000000000000A8 /* MeetingInterpreterViewModel.swift in Sources */,
 				5E70000000000000000000AA /* MeetingModeView.swift in Sources */,
 				5E70000000000000000000AC /* VisualAssistService.swift in Sources */,
+				5E70000000000000000000B2 /* MeetingArchiveService.swift in Sources */,
+				5E70000000000000000000B4 /* MeetingArchiveViews.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
