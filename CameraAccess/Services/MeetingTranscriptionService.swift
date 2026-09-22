@@ -58,6 +58,7 @@ final class MeetingTranscriptionService: ObservableObject {
     private var recognitionGeneration = 0
     private var consecutiveTaskErrors = 0
     private var prefersOnDevice = false
+    private var hasInputTap = false
 
     /// 부분 결과 증분 발행 주기(초).
     static let segmentTickerInterval: TimeInterval = 4
@@ -77,6 +78,13 @@ final class MeetingTranscriptionService: ObservableObject {
         guard authorized else {
             throw MeetingTranscriptionError.permissionDenied
         }
+        let microphoneAuthorized = await withCheckedContinuation { continuation in
+            AVAudioSession.sharedInstance().requestRecordPermission { granted in
+                continuation.resume(returning: granted)
+            }
+        }
+        guard microphoneAuthorized else { throw MeetingTranscriptionError.permissionDenied }
+        try Task.checkCancellation()
 
         pendingText = ""
         emittedText = ""
@@ -140,6 +148,11 @@ final class MeetingTranscriptionService: ObservableObject {
 
     private func startRecognitionLoop() {
         guard state == .running, let speechRecognizer else { return }
+        audioEngine.stop()
+        if hasInputTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInputTap = false
+        }
         teardownTask()
         pendingText = ""
         emittedText = ""
@@ -161,16 +174,16 @@ final class MeetingTranscriptionService: ObservableObject {
 
         let inputNode = audioEngine.inputNode
         let inputFormat = inputNode.outputFormat(forBus: 0)
-        guard inputFormat.sampleRate > 0 else {
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             onFailure?("입력 오디오 포맷을 사용할 수 없습니다.")
             state = .idle
             return
         }
 
-        inputNode.removeTap(onBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak request] buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak request] buffer, _ in
             request?.append(buffer)
         }
+        hasInputTap = true
 
         audioEngine.prepare()
         do {
@@ -328,8 +341,11 @@ final class MeetingTranscriptionService: ObservableObject {
         tickerWorkItem?.cancel()
         tickerWorkItem = nil
         teardownTask()
-        audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
+        if hasInputTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            hasInputTap = false
+        }
         if !keepAudioSession {
             try? AVAudioSession.sharedInstance().setActive(
                 false,

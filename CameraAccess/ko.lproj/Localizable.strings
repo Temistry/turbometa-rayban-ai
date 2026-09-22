@@ -625,3 +625,8 @@
 "settings.apikey.jev.help" = "회의 통역기의 판단 게이트가 사용합니다. typesafe.ai에서 발급받은 키를 입력하세요.";
 "settings.apikey.jev.get" = "TypeSafe AI 사이트 열기";
 "settings.visualassist" = "시각 보조";
+"meeting.photo.title" = "지금 보는 장면";
+"meeting.photo.capture" = "촬영해서 듣기";
+"meeting.photo.busy" = "장면 확인 중";
+"meeting.photo.failed" = "장면을 확인하지 못했습니다. 다시 눌러 주세요.";
+"meeting.photo.voiceFailed" = "음성을 재생하지 못했습니다.";

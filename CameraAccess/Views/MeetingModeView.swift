@@ -25,11 +25,12 @@ struct MeetingModeView: View {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
                 topBar
-                if viewModel.runState == .listening {
+                if viewModel.runState == .listening || !viewModel.lines.isEmpty {
                     captionArea
                 } else {
                     idleArea
                 }
+                cameraBar
             }
 
             if let failure = viewModel.failure {
@@ -111,6 +112,7 @@ struct MeetingModeView: View {
                 }
             }
             .accessibilityLabel("meeting.start".localized)
+            .disabled(viewModel.isStarting || viewModel.isStopping || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper)
 
             Text("meeting.start".localized)
                 .font(.footnote)
@@ -170,7 +172,13 @@ struct MeetingModeView: View {
                 }
             }
 
-            stopBar
+            if viewModel.runState == .listening || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper {
+                stopBar
+            } else {
+                Button("meeting.start".localized) { viewModel.start() }
+                    .disabled(viewModel.isStarting || viewModel.isStopping || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper)
+                    .padding()
+            }
         }
     }
 
@@ -191,6 +199,44 @@ struct MeetingModeView: View {
         .buttonStyle(.plain)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+
+    private var cameraBar: some View {
+        VStack(spacing: 8) {
+            if viewModel.runState == .idle, viewModel.lines.isEmpty, viewModel.isDescribingPhoto {
+                Button("meeting.stop".localized) { viewModel.stop() }
+                    .padding(12)
+            }
+            if let error = viewModel.photoError {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundColor(.orange)
+            }
+            Button {
+                viewModel.describeCurrentScene()
+            } label: {
+                HStack(spacing: 12) {
+                    if viewModel.isDescribingPhoto {
+                        ProgressView().tint(.white)
+                    } else {
+                        Image(systemName: "camera.fill").font(.title)
+                    }
+                    Text(viewModel.isDescribingPhoto
+                         ? "meeting.photo.busy".localized
+                         : "meeting.photo.capture".localized)
+                        .font(.headline)
+                }
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity, minHeight: 104)
+                .background(RoundedRectangle(cornerRadius: 24).fill(Color.blue.opacity(0.8)))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .disabled(viewModel.isStarting || viewModel.isStopping || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper)
+            .accessibilityLabel("meeting.photo.capture".localized)
+        }
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
     }
 }
 

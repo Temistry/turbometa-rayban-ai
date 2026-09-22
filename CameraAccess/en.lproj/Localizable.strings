@@ -634,3 +634,8 @@
 "settings.apikey.jev.help" = "Used by the meeting interpreter decision gate. Enter the key issued at typesafe.ai.";
 "settings.apikey.jev.get" = "Open TypeSafe AI";
 "settings.visualassist" = "Visual assist";
+"meeting.photo.title" = "Current scene";
+"meeting.photo.capture" = "Capture and listen";
+"meeting.photo.busy" = "Checking scene";
+"meeting.photo.failed" = "Could not explain the scene. Tap to retry.";
+"meeting.photo.voiceFailed" = "Could not play the explanation.";

@@ -28,6 +28,7 @@ enum StreamingStatus {
 }
 
 enum StreamCaptureOwner: String {
+  case meeting
   case manual
   case quickVision
   case openClawChat
@@ -88,6 +89,7 @@ class StreamSessionViewModel: ObservableObject {
   @Published var showLeanEat: Bool = false
 
   private var timerTask: Task<Void, Never>?
+  private var sessionStartTask: Task<Void, Never>?
   // The core DAT SDK StreamSession - handles all streaming operations
   // IMPORTANT: SDK requires ONE session instance, reused with start()/stop()
   private var streamSession: StreamSession
@@ -235,6 +237,11 @@ class StreamSessionViewModel: ObservableObject {
   }
 
   func startSession() async {
+    if let sessionStartTask {
+      await sessionStartTask.value
+      return
+    }
+    guard streamingStatus != .streaming else { return }
     logger.info("🚀 startSession START")
 
     // Reset to unlimited time when starting a new stream
@@ -246,7 +253,10 @@ class StreamSessionViewModel: ObservableObject {
     hasReceivedFirstFrame = false
 
     logger.info("🚀 Calling session.start()...")
-    await streamSession.start()
+    let task = Task { await streamSession.start() }
+    sessionStartTask = task
+    await task.value
+    sessionStartTask = nil
     logger.info("🚀 startSession END - session.start() returned")
   }
 
@@ -257,6 +267,7 @@ class StreamSessionViewModel: ObservableObject {
 
   func stopSession() async {
     logger.info("⏹️ stopSession START")
+    await sessionStartTask?.value
     stopTimer()
     if captureOwner != nil {
       interruptCapture()

@@ -48,40 +48,39 @@ final class VisualAssistService: ObservableObject {
                     nanoseconds: UInt64((self?.currentInterval ?? Self.analysisInterval) * 1_000_000_000)
                 )
                 guard let self, !Task.isCancelled else { break }
-                self.analyzeLatestFrame()
+                await self.analyzeLatestFrame()
             }
         }
     }
 
-    func stop() {
-        loopTask?.cancel()
+    func stop() async {
+        let task = loopTask
+        task?.cancel()
         loopTask = nil
         isActive = false
 
-        let streamViewModel = streamViewModel
-        Task {
-            await streamViewModel.stopSession()
-        }
+        await task?.value
+        await streamViewModel.stopSession()
     }
 
-    private func analyzeLatestFrame() {
+    private func analyzeLatestFrame() async {
         if let pausedUntil, Date() < pausedUntil { return }
         guard let frame = streamViewModel.currentVideoFrame else { return }
         let downscaled = Self.downscale(frame, maxDimension: 512)
 
-        Task { [weak self] in
-            do {
-                let raw = try await vision.analyzeImage(
-                    downscaled,
-                    prompt: Self.analysisPrompt
-                )
-                if let context = Self.parseScene(raw) {
-                    self?.currentInterval = Self.analysisInterval
-                    self?.onContext?(context)
-                }
-            } catch {
-                self?.handleAnalysisFailure(error)
+        do {
+            let raw = try await vision.analyzeImage(
+                downscaled,
+                prompt: Self.analysisPrompt
+            )
+            guard !Task.isCancelled, isActive else { return }
+            if let context = Self.parseScene(raw) {
+                currentInterval = Self.analysisInterval
+                onContext?(context)
             }
+        } catch {
+            guard !Task.isCancelled, isActive else { return }
+            handleAnalysisFailure(error)
         }
     }
 

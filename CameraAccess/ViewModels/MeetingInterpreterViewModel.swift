@@ -9,6 +9,7 @@
 
 import Combine
 import Foundation
+import UIKit
 
 enum MeetingPolicy {
     static let whisperCooldown: TimeInterval = 30
@@ -78,6 +79,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var isSpeakingWhisper = false
     @Published private(set) var inputRouteName = "-"
     @Published private(set) var jevReady = false
+    @Published private(set) var isStarting = false
+    @Published private(set) var isStopping = false
+    @Published private(set) var isDescribingPhoto = false
+    @Published private(set) var photoError: String?
 
     /// 설정의 시각 보조 토글. 기본값은 켜짐이다.
     static var visualAssistEnabled: Bool {
@@ -101,6 +106,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private var sawWhisperPlayback = false
     private var playbackCancellable: AnyCancellable?
     private var recentUtterances: [String] = []
+    private var generation = UUID()
+    private var startTask: Task<Void, Never>?
+    private var photoTask: Task<Void, Never>?
+    private var isPreparingWhisper = false
 
     init(streamViewModel: StreamSessionViewModel) {
         self.streamViewModel = streamViewModel
@@ -128,7 +137,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     func start() {
-        guard runState == .idle else { return }
+        guard runState == .idle, !isStarting, !isStopping, !isDescribingPhoto, !isSpeakingWhisper else { return }
         failure = nil
 
         guard JevClient.storedAPIKey != nil else {
@@ -139,13 +148,19 @@ final class MeetingInterpreterViewModel: ObservableObject {
             return
         }
 
-        Task {
+        isStarting = true
+        let generation = self.generation
+        startTask = Task {
+            defer { if generation == self.generation { isStarting = false } }
             do {
                 try await transcription.start()
+                guard generation == self.generation, !Task.isCancelled else { return }
+                guard transcription.state == .running else { return }
                 inputRouteName = transcription.inputRouteName
                 runState = .listening
                 visualAssist?.start()
             } catch {
+                guard generation == self.generation, !Task.isCancelled else { return }
                 let message = (error as? MeetingTranscriptionError)?.message
                     ?? error.localizedDescription
                 failMicrophone(message)
@@ -154,9 +169,31 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     func stop() {
+        guard !isStopping else { return }
+        isStopping = true
+        generation = UUID()
+        runState = .idle
+        let pendingStart = startTask
+        let pendingPhoto = photoTask
+        startTask?.cancel()
+        startTask = nil
+        photoTask?.cancel()
+        photoTask = nil
+        isStarting = false
+        isDescribingPhoto = false
+        isPreparingWhisper = false
         transcription.stop()
         tts.stop()
-        visualAssist?.stop()
+        Task {
+            await pendingStart?.value
+            await pendingPhoto?.value
+            if let visualAssist {
+                await visualAssist.stop()
+            } else {
+                await streamViewModel.stopSession()
+            }
+            isStopping = false
+        }
         runState = .idle
         isSpeakingWhisper = false
         isPausingForWhisper = false
@@ -185,6 +222,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func processUtterance(_ text: String, lineID: UUID) async {
+        guard runState == .listening, failure == nil else { return }
+        let generation = self.generation
         let previous = recentUtterances.count > 1
             ? recentUtterances[recentUtterances.count - 2]
             : nil
@@ -194,6 +233,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 utterance: text,
                 previousUtterance: previous
             )
+            guard generation == self.generation, runState == .listening else { return }
             jevReady = true
 
             if decision.lane == .factcheck {
@@ -201,7 +241,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
             }
 
             let now = Date()
-            if decision.needsExplanation,
+            if !isDescribingPhoto, !isSpeakingWhisper, !isPreparingWhisper,
+               decision.needsExplanation,
                decision.explanationConfidence >= MeetingPolicy.whisperConfidenceThreshold,
                MeetingPolicy.whisperAllowed(lastWhisperAt: lastWhisperAt, now: now) {
                 lastWhisperAt = now
@@ -212,8 +253,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 )
             }
         } catch let error as JevClientError {
+            guard generation == self.generation else { return }
             failStopJev(code: error.code, message: error.message)
         } catch {
+            guard generation == self.generation else { return }
             failStopJev(
                 code: JevClientError.invalidResponse.code,
                 message: JevClientError.invalidResponse.message
@@ -222,6 +265,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func beginFactCheck(claim: String) {
+        let generation = self.generation
         let card = FactCard(claim: claim)
         factCards.insert(card, at: 0)
         if factCards.count > 20 {
@@ -232,12 +276,14 @@ final class MeetingInterpreterViewModel: ObservableObject {
         Task {
             do {
                 let result = try await gemini.factCheck(claim: claim)
+                guard generation == self.generation else { return }
                 updateFactCard(cardID) {
                     $0.state = .done
                     $0.summary = result.summary
                     $0.links = result.links
                 }
             } catch {
+                guard generation == self.generation else { return }
                 updateFactCard(cardID) {
                     $0.state = .failed
                 }
@@ -250,6 +296,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
         lineID: UUID,
         confidence: Double
     ) async {
+        let generation = self.generation
+        isPreparingWhisper = true
+        defer { if generation == self.generation { isPreparingWhisper = false } }
         let context = recentUtterances.count > 1
             ? recentUtterances[recentUtterances.count - 2]
             : ""
@@ -260,6 +309,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 recentContext: context,
                 sceneContext: sceneSummary
             )
+            guard generation == self.generation, runState == .listening,
+                  !isDescribingPhoto, !isSpeakingWhisper else { return }
             updateLine(lineID) {
                 $0.whisper = WhisperEvent(
                     term: explanation.term,
@@ -284,6 +335,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 }
             }
         } catch {
+            guard generation == self.generation else { return }
             updateLine(lineID) {
                 $0.whisper = WhisperEvent(
                     term: "",
@@ -291,6 +343,80 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     confidence: confidence,
                     state: .failed
                 )
+            }
+        }
+    }
+
+    func describeCurrentScene() {
+        guard failure == nil, !isStarting, !isStopping, !isDescribingPhoto,
+              !isSpeakingWhisper else { return }
+        isDescribingPhoto = true
+        photoError = nil
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        let generation = self.generation
+        photoTask = Task {
+            let temporaryStream = runState == .idle || visualAssist == nil
+            defer {
+                if generation == self.generation { isDescribingPhoto = false }
+            }
+            do {
+                guard JevClient.storedAPIKey != nil else { throw JevClientError.missingAPIKey }
+                try Task.checkCancellation()
+                guard generation == self.generation else { return }
+                if streamViewModel.streamingStatus == .stopped {
+                    await streamViewModel.handleStartStreaming()
+                }
+                for _ in 0..<80 {
+                    try Task.checkCancellation()
+                    if streamViewModel.streamingStatus == .streaming { break }
+                    try await Task.sleep(nanoseconds: 100_000_000)
+                }
+                guard streamViewModel.streamingStatus == .streaming else {
+                    throw StreamCaptureError.captureInterrupted
+                }
+                let photo = try await streamViewModel.capturePhotoResult(owner: .meeting, timeout: 10)
+                try Task.checkCancellation()
+                print("[Meeting][PHOTO] captured width=\(photo.image.cgImage?.width ?? 0) height=\(photo.image.cgImage?.height ?? 0) bytes=\(photo.jpegData.count)")
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                if temporaryStream { await streamViewModel.stopSession() }
+                // Capture immediately; verify Jev before producing any explanation.
+                _ = try await jev.evaluate(
+                    utterance: "사용자가 현재 바라보는 사진의 상황 설명을 직접 요청했습니다.",
+                    previousUtterance: recentUtterances.last
+                )
+                try Task.checkCancellation()
+                guard generation == self.generation else { return }
+                jevReady = true
+                let text = try await gemini.describePhoto(
+                    jpegData: photo.jpegData,
+                    recentContext: recentUtterances.suffix(2).joined(separator: " ")
+                )
+                try Task.checkCancellation()
+                guard generation == self.generation else { return }
+                let line = TranscriptLine(timestamp: Date(), text: "meeting.photo.title".localized,
+                    whisper: WhisperEvent(term: "", text: text, confidence: 1, state: .speaking))
+                lines.append(line)
+                if lines.count > 200 { lines.removeFirst(lines.count - 200) }
+                transcription.pause()
+                isPausingForWhisper = runState == .listening
+                isSpeakingWhisper = true
+                sawWhisperPlayback = false
+                if let requestID = tts.enqueue(text, volume: 0.35) {
+                    activeWhisperRequestID = requestID
+                } else {
+                    finishWhisper(state: .failed)
+                    photoError = "meeting.photo.voiceFailed".localized
+                }
+            } catch {
+                guard generation == self.generation, !Task.isCancelled else { return }
+                if temporaryStream { await streamViewModel.stopSession() }
+                guard generation == self.generation else { return }
+                if let jevError = error as? JevClientError {
+                    failStopJev(code: jevError.code, message: jevError.message)
+                } else {
+                    photoError = "meeting.photo.failed".localized
+                    UINotificationFeedbackGenerator().notificationOccurred(.error)
+                }
             }
         }
     }
