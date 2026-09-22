@@ -25,7 +25,7 @@ struct ArchivedMeeting: Codable, Identifiable, Equatable {
 }
 
 @MainActor
-final class MeetingArchiveService {
+final class MeetingArchiveService: ObservableObject {
     private let fileManager = FileManager.default
     private let rootOverride: URL?
 
