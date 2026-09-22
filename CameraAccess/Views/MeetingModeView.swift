@@ -459,3 +459,68 @@ private struct MeetingErrorOverlay: View {
         }
     }
 }
+
+private struct MeetingDetailBubble: View {
+    let bubble: MeetingInterpreterViewModel.DetailBubble
+    let onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 8) {
+                Text(bubble.query)
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.55))
+                    .lineLimit(2)
+                Spacer()
+                Button(action: onClose) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.body)
+                        .foregroundColor(.white.opacity(0.5))
+                }
+                .accessibilityLabel("meeting.detail.close".localized)
+            }
+
+            switch bubble.state {
+            case .loading:
+                HStack(spacing: 8) {
+                    ProgressView().tint(.white.opacity(0.7))
+                    Text("meeting.detail.loading".localized)
+                        .font(.footnote)
+                        .foregroundColor(.white.opacity(0.75))
+                }
+            case .failed:
+                Text("meeting.detail.failed".localized)
+                    .font(.footnote)
+                    .foregroundColor(.orange)
+            case .ready(let message, let links):
+                Text(message)
+                    .font(.footnote)
+                    .foregroundColor(.white.opacity(0.92))
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(links) { link in
+                    if let url = URL(string: link.urlString) {
+                        Link(destination: url) {
+                            HStack(spacing: 6) {
+                                Image(systemName: "link")
+                                    .font(.caption2)
+                                Text(link.title)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                            }
+                            .foregroundColor(Color(red: 0.45, green: 0.66, blue: 1))
+                        }
+                    }
+                }
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(white: 0.12).opacity(0.98))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.18))
+        )
+    }
+}

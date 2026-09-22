@@ -520,7 +520,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                         )
                     }
                 }
-                detailBubble?.state = .ready(explanation.text, factLinks(for: lineID))
+                detailBubble?.state = .ready(message: explanation.text, links: factLinks(for: lineID))
                 speakDetail(explanation.text)
             } catch {
                 guard generation == self.generation, detailBubble?.id == lineID else { return }
@@ -541,7 +541,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func showDetail(line: TranscriptLine, message: String, links: [MeetingFactLink]) {
-        detailBubble = DetailBubble(id: line.id, query: line.text, state: .ready(message, links))
+        detailBubble = DetailBubble(id: line.id, query: line.text, state: .ready(message: message, links: links))
         speakDetail(message)
     }
 
