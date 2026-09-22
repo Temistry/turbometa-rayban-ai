@@ -19,6 +19,17 @@ final class JevDecisionParsingTests: XCTestCase {
         XCTAssertThrowsError(try JevClient.parseAnswers(Data("{}".utf8)))
     }
 
+    func testMissingConfidenceFailsInsteadOfSilentlyDisablingWhispers() {
+        XCTAssertThrowsError(try JevClient.parseAnswers(Data(
+            "{\"answers\":{\"needs_explanation\":{\"choice\":\"yes\"}}}".utf8)))
+    }
+
+    func testZeroConfidenceIsNotReplacedByProbability() throws {
+        let result = try JevClient.parseAnswers(Data(
+            "{\"answers\":{\"needs_explanation\":{\"choice\":\"yes\",\"confidence\":0,\"probabilities\":{\"yes\":0.9}}}}".utf8))
+        XCTAssertEqual(result["needs_explanation"]?.confidence, 0)
+    }
+
     func testDecisionMapsLanesAndConfidence() {
         let answers = [
             "needs_explanation": JevAnswer(value: "yes", confidence: 0.93),

@@ -54,7 +54,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     struct TranscriptLine: Identifiable, Equatable {
         let id = UUID()
         let timestamp: Date
-        let text: String
+        var text: String
         var whisper: WhisperEvent?
     }
 
@@ -100,8 +100,6 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private let tts = TTSService.shared
     private var visualAssist: VisualAssistService?
     private var sceneSummary: String?
-    private var lastWhisperAt: Date?
-    private var isPausingForWhisper = false
     private var activeWhisperRequestID: UUID?
     private var sawWhisperPlayback = false
     private var playbackCancellable: AnyCancellable?
@@ -110,6 +108,15 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private var startTask: Task<Void, Never>?
     private var photoTask: Task<Void, Never>?
     private var isPreparingWhisper = false
+    private var liveLineID: UUID?
+    private var analysisQueue: [(String, UUID)] = []
+    private var analysisTask: Task<Void, Never>?
+    private var analyzedTexts: [String] = []
+    private var spokenTerms = Set<String>()
+    private var activeTerm: String?
+    private var checkedClaims = Set<String>()
+    private var factQueue: [(String, UUID)] = []
+    private var factTask: Task<Void, Never>?
 
     init(streamViewModel: StreamSessionViewModel) {
         self.streamViewModel = streamViewModel
@@ -126,6 +133,11 @@ final class MeetingInterpreterViewModel: ObservableObject {
         transcription.onSegment = { [weak self] text in
             self?.handleUtterance(text)
         }
+        transcription.onPartial = { [weak self] text in self?.updateLiveCaption(text) }
+        transcription.onStable = { [weak self] text in
+            guard let self, let id = self.liveLineID else { return }
+            self.queueAnalysis(text, lineID: id)
+        }
         transcription.onFailure = { [weak self] message in
             self?.failMicrophone(message)
         }
@@ -139,6 +151,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
     func start() {
         guard runState == .idle, !isStarting, !isStopping, !isDescribingPhoto, !isSpeakingWhisper else { return }
         failure = nil
+        analyzedTexts.removeAll()
+        spokenTerms.removeAll()
+        checkedClaims.removeAll()
 
         guard JevClient.storedAPIKey != nil else {
             failure = .jev(
@@ -171,6 +186,14 @@ final class MeetingInterpreterViewModel: ObservableObject {
     func stop() {
         guard !isStopping else { return }
         isStopping = true
+        // Keep the final on-screen revision when stopping, but do not start new AI work.
+        liveLineID = nil
+        analysisTask?.cancel()
+        analysisTask = nil
+        analysisQueue.removeAll()
+        factTask?.cancel()
+        factTask = nil
+        factQueue.removeAll()
         generation = UUID()
         runState = .idle
         let pendingStart = startTask
@@ -181,6 +204,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
         photoTask = nil
         isStarting = false
         isDescribingPhoto = false
+        visualAssist?.isUserRequestActive = false
+        activeTerm = nil
         isPreparingWhisper = false
         transcription.stop()
         tts.stop()
@@ -196,37 +221,63 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
         runState = .idle
         isSpeakingWhisper = false
-        isPausingForWhisper = false
         activeWhisperRequestID = nil
         sawWhisperPlayback = false
     }
 
     private func handleUtterance(_ text: String) {
         guard failure == nil, runState == .listening else { return }
-
-        let line = TranscriptLine(timestamp: Date(), text: text)
-        lines.append(line)
-        if lines.count > 200 {
-            lines.removeFirst(lines.count - 200)
-        }
+        updateLiveCaption(text)
+        guard let lineID = liveLineID else { return }
+        liveLineID = nil
 
         recentUtterances.append(text)
         if recentUtterances.count > 6 {
             recentUtterances.removeFirst(recentUtterances.count - 6)
         }
 
-        let lineID = line.id
-        Task {
-            await processUtterance(text, lineID: lineID)
+        queueAnalysis(text, lineID: lineID)
+    }
+
+    private func updateLiveCaption(_ text: String) {
+        guard runState == .listening else { return }
+        if let id = liveLineID {
+            updateLine(id) { $0.text = text }
+        } else {
+            let line = TranscriptLine(timestamp: Date(), text: text)
+            liveLineID = line.id
+            lines.append(line)
+            if lines.count > 200 { lines.removeFirst(lines.count - 200) }
+        }
+    }
+
+    private func queueAnalysis(_ text: String, lineID: UUID) {
+        guard runState == .listening, !analyzedTexts.contains(text) else { return }
+        // Only the newest revision of an unprocessed live line is useful.
+        analysisQueue.removeAll { $0.1 == lineID }
+        analysisQueue.append((text, lineID))
+        if analysisQueue.count > 6 { analysisQueue.removeFirst() }
+        guard analysisTask == nil else { return }
+        let generation = self.generation
+        analysisTask = Task {
+            defer { if generation == self.generation { analysisTask = nil } }
+            while !Task.isCancelled, generation == self.generation, !analysisQueue.isEmpty {
+                if isDescribingPhoto || isSpeakingWhisper {
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    continue
+                }
+                let (text, id) = analysisQueue.removeFirst()
+                analyzedTexts.append(text)
+                if analyzedTexts.count > 100 { analyzedTexts.removeFirst() }
+                await processUtterance(text, lineID: id)
+            }
         }
     }
 
     private func processUtterance(_ text: String, lineID: UUID) async {
         guard runState == .listening, failure == nil else { return }
         let generation = self.generation
-        let previous = recentUtterances.count > 1
-            ? recentUtterances[recentUtterances.count - 2]
-            : nil
+        let previous = previousContext(for: lineID)
 
         do {
             let decision = try await jev.evaluate(
@@ -235,22 +286,22 @@ final class MeetingInterpreterViewModel: ObservableObject {
             )
             guard generation == self.generation, runState == .listening else { return }
             jevReady = true
+            DeveloperConsole.shared.log(.info, category: "MeetingDecision", "explain=\(decision.needsExplanation) confidence=\(decision.explanationConfidence) lane=\(decision.lane.rawValue)")
 
             if decision.lane == .factcheck {
                 beginFactCheck(claim: text)
             }
 
-            let now = Date()
             if !isDescribingPhoto, !isSpeakingWhisper, !isPreparingWhisper,
                decision.needsExplanation,
-               decision.explanationConfidence >= MeetingPolicy.whisperConfidenceThreshold,
-               MeetingPolicy.whisperAllowed(lastWhisperAt: lastWhisperAt, now: now) {
-                lastWhisperAt = now
+               decision.explanationConfidence >= MeetingPolicy.whisperConfidenceThreshold {
                 await speakExplanation(
                     for: text,
                     lineID: lineID,
                     confidence: decision.explanationConfidence
                 )
+            } else {
+                DeveloperConsole.shared.log(.info, category: "MeetingDecision", "skipped busy=\(isDescribingPhoto || isSpeakingWhisper || isPreparingWhisper) requested=\(decision.needsExplanation) threshold=\(MeetingPolicy.whisperConfidenceThreshold)")
             }
         } catch let error as JevClientError {
             guard generation == self.generation else { return }
@@ -265,6 +316,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func beginFactCheck(claim: String) {
+        guard checkedClaims.insert(claim.lowercased()).inserted else { return }
         let generation = self.generation
         let card = FactCard(claim: claim)
         factCards.insert(card, at: 0)
@@ -272,8 +324,13 @@ final class MeetingInterpreterViewModel: ObservableObject {
             factCards.removeLast(factCards.count - 20)
         }
 
-        let cardID = card.id
-        Task {
+        factQueue.append((claim, card.id))
+        if factQueue.count > 20 { factQueue.removeFirst() }
+        guard factTask == nil else { return }
+        factTask = Task {
+          defer { if generation == self.generation { factTask = nil } }
+          while !Task.isCancelled, generation == self.generation, !factQueue.isEmpty {
+            let (claim, cardID) = factQueue.removeFirst()
             do {
                 let result = try await gemini.factCheck(claim: claim)
                 guard generation == self.generation else { return }
@@ -288,6 +345,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     $0.state = .failed
                 }
             }
+          }
         }
     }
 
@@ -299,18 +357,23 @@ final class MeetingInterpreterViewModel: ObservableObject {
         let generation = self.generation
         isPreparingWhisper = true
         defer { if generation == self.generation { isPreparingWhisper = false } }
-        let context = recentUtterances.count > 1
-            ? recentUtterances[recentUtterances.count - 2]
-            : ""
+        let context = previousContext(for: lineID) ?? ""
 
         do {
             let explanation = try await gemini.explain(
                 utterance: utterance,
                 recentContext: context,
-                sceneContext: sceneSummary
+                sceneContext: sceneSummary,
+                explainedTerms: Array(spokenTerms.sorted().prefix(100))
             )
             guard generation == self.generation, runState == .listening,
                   !isDescribingPhoto, !isSpeakingWhisper else { return }
+            let term = explanation.term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            guard !term.isEmpty, !spokenTerms.contains(term) else {
+                DeveloperConsole.shared.log(.info, category: "MeetingWhisper", "skipped emptyOrRepeatedTerm=true")
+                return
+            }
+            activeTerm = term
             updateLine(lineID) {
                 $0.whisper = WhisperEvent(
                     term: explanation.term,
@@ -319,23 +382,19 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     state: .speaking
                 )
             }
-            transcription.pause()
-            isPausingForWhisper = true
             isSpeakingWhisper = true
-            if let requestID = tts.enqueue(explanation.text, volume: 0.35) {
+            if let requestID = tts.enqueue(explanation.text, volume: 0.35, preserveRecordingSession: true) {
                 activeWhisperRequestID = requestID
             } else {
+                activeTerm = nil
                 updateLine(lineID) {
                     $0.whisper?.state = .failed
                 }
                 isSpeakingWhisper = false
-                isPausingForWhisper = false
-                if runState == .listening {
-                    transcription.resume()
-                }
             }
         } catch {
             guard generation == self.generation else { return }
+            DeveloperConsole.shared.log(.error, category: "MeetingWhisper", "explanation failed domain=\((error as NSError).domain) code=\((error as NSError).code)")
             updateLine(lineID) {
                 $0.whisper = WhisperEvent(
                     term: "",
@@ -351,13 +410,17 @@ final class MeetingInterpreterViewModel: ObservableObject {
         guard failure == nil, !isStarting, !isStopping, !isDescribingPhoto,
               !isSpeakingWhisper else { return }
         isDescribingPhoto = true
+        visualAssist?.isUserRequestActive = true
         photoError = nil
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         let generation = self.generation
         photoTask = Task {
             let temporaryStream = runState == .idle || visualAssist == nil
             defer {
-                if generation == self.generation { isDescribingPhoto = false }
+                if generation == self.generation {
+                    isDescribingPhoto = false
+                    visualAssist?.isUserRequestActive = false
+                }
             }
             do {
                 guard JevClient.storedAPIKey != nil else { throw JevClientError.missingAPIKey }
@@ -397,11 +460,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     whisper: WhisperEvent(term: "", text: text, confidence: 1, state: .speaking))
                 lines.append(line)
                 if lines.count > 200 { lines.removeFirst(lines.count - 200) }
-                transcription.pause()
-                isPausingForWhisper = runState == .listening
                 isSpeakingWhisper = true
                 sawWhisperPlayback = false
-                if let requestID = tts.enqueue(text, volume: 0.35) {
+                if let requestID = tts.enqueue(text, volume: 0.35, preserveRecordingSession: runState == .listening) {
                     activeWhisperRequestID = requestID
                 } else {
                     finishWhisper(state: .failed)
@@ -422,6 +483,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func handlePlaybackStateChange(_ state: TTSService.PlaybackState) {
+        DeveloperConsole.shared.log(.info, category: "MeetingPlayback", "state=\(state) listening=\(runState == .listening)")
         switch state {
         case .queued(let requestID), .speaking(let requestID):
             guard requestID == activeWhisperRequestID else { return }
@@ -439,6 +501,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func finishWhisper(state: WhisperEvent.State) {
+        if state == .spoken, let activeTerm { spokenTerms.insert(activeTerm) }
+        activeTerm = nil
         for index in lines.indices where lines[index].whisper?.state == .speaking {
             lines[index].whisper?.state = state
         }
@@ -446,17 +510,16 @@ final class MeetingInterpreterViewModel: ObservableObject {
         activeWhisperRequestID = nil
         sawWhisperPlayback = false
 
-        if isPausingForWhisper {
-            isPausingForWhisper = false
-            if runState == .listening {
-                transcription.resume()
-            }
-        }
     }
 
     private func updateLine(_ id: UUID, _ update: (inout TranscriptLine) -> Void) {
         guard let index = lines.firstIndex(where: { $0.id == id }) else { return }
         update(&lines[index])
+    }
+
+    private func previousContext(for lineID: UUID) -> String? {
+        guard let index = lines.firstIndex(where: { $0.id == lineID }), index > 0 else { return nil }
+        return lines[index - 1].text
     }
 
     private func updateFactCard(_ id: UUID, _ update: (inout FactCard) -> Void) {

@@ -164,6 +164,9 @@ final class DeveloperConsole: ObservableObject {
 
     fflush(stdout)
     fflush(stderr)
+    // Swift print writes must reach the capture pipe even during quiet sessions.
+    setvbuf(stdout, nil, _IONBF, 0)
+    setvbuf(stderr, nil, _IONBF, 0)
 
     let outputPipe = Pipe()
     let errorPipe = Pipe()

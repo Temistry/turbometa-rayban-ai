@@ -88,6 +88,24 @@ jobs:
             ONLY_ACTIVE_ARCH=NO \
             clean build 2>&1 | tee xcodebuild.log
 
+      - name: 회의 통역 회귀 테스트
+        shell: bash
+        run: |
+          set -euo pipefail
+          device_id=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for k,v in d["devices"].items() if "iOS" in k for x in v if "iPhone" in x["name"]))')
+          xcodebuild test \
+            -project CameraAccess.xcodeproj \
+            -scheme TurboMeta \
+            -destination "platform=iOS Simulator,id=$device_id" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -parallel-testing-enabled NO \
+            -only-testing:CameraAccessTests/MeetingRealtimeTests \
+            -only-testing:CameraAccessTests/JevDecisionParsingTests \
+            -only-testing:CameraAccessTests/MeetingContextParsingTests \
+            -only-testing:CameraAccessTests/MeetingPhotoRequestTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            2>&1 | tee meeting-tests.log
+
       - name: 검증 결과 업로드
         if: always()
         uses: actions/upload-artifact@v4
@@ -95,6 +113,7 @@ jobs:
           name: ios-validation-results
           path: |
             xcodebuild.log
+            meeting-tests.log
             audit-report.txt
           if-no-files-found: ignore
           retention-days: 7

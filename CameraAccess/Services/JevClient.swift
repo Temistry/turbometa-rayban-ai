@@ -110,6 +110,11 @@ final class JevClient {
         ]
 
         let answers = try await evaluate(state: state, questions: questions)
+        guard let explanation = answers["needs_explanation"],
+              ["yes", "no"].contains(explanation.value),
+              let lane = answers["lane"], JevUtteranceLane(rawValue: lane.value) != nil else {
+            throw JevClientError.invalidResponse
+        }
         return JevUtteranceDecision.make(answers: answers)
     }
 
@@ -133,11 +138,14 @@ final class JevClient {
 
         let data: Data
         let response: URLResponse
+        let startedAt = Date()
         do {
             (data, response) = try await session.data(for: request)
         } catch {
+            DeveloperConsole.shared.log(.warning, category: "MeetingJev", "transport code=\((error as NSError).code)")
             throw JevClientError.transport(error.localizedDescription)
         }
+        DeveloperConsole.shared.log(.info, category: "MeetingJev", "status=\((response as? HTTPURLResponse)?.statusCode ?? 0) elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1000))")
 
         if let httpResponse = response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
@@ -159,10 +167,10 @@ final class JevClient {
                   let value = answerObject["choice"] as? String else {
                 continue
             }
-            var confidence = answerObject["confidence"] as? Double ?? 0
-            if confidence == 0,
-               let probabilities = answerObject["probabilities"] as? [String: Double] {
-                confidence = probabilities[value] ?? 0
+            let probabilities = answerObject["probabilities"] as? [String: Double]
+            guard let confidence = answerObject["confidence"] as? Double ?? probabilities?[value],
+                  confidence.isFinite, (0...1).contains(confidence) else {
+                throw JevClientError.invalidResponse
             }
             answers[key] = JevAnswer(value: value, confidence: confidence)
         }

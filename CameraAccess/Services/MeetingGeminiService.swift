@@ -65,13 +65,16 @@ final class MeetingGeminiService {
     func explain(
         utterance: String,
         recentContext: String,
-        sceneContext: String?
+        sceneContext: String?,
+        explainedTerms: [String] = []
     ) async throws -> MeetingExplanation {
         let prompt = """
         당신은 회의 전문용어 통역기다. 아래 '현재 발화'에서 비즈니스·기술 전문용어를 찾아 +        착용자에게 귓속말로 설명한다. 규칙: 한국어 구어체 1문장, 최대 60자, 용어명으로 시작하고 +        사전 지식 없이도 이해되게. 설명할 용어가 없으면 발화 요점을 짧게 전달한다.
         직전 발화: \(recentContext.isEmpty ? "(없음)" : recentContext)
         화면 맥락: \(sceneContext.flatMap { $0.isEmpty ? nil : $0 } ?? "(없음)")
         현재 발화: \(utterance)
+        이미 설명한 용어는 제외하고 새 용어를 선택하라: \(explainedTerms.joined(separator: ", "))
+        새로 설명할 용어가 없으면 term은 빈 문자열로 출력하라.
         출력은 JSON 하나만: {"term": "발화에서 찾은 전문용어 원문", "text": "귓속말 설명 문장"}
         """
 
@@ -128,13 +131,16 @@ final class MeetingGeminiService {
         request.timeoutInterval = 30
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
+        let startedAt = Date()
         let (data, response) = try await session.data(for: request)
+        DeveloperConsole.shared.log(.info, category: "MeetingGemini", "status=\((response as? HTTPURLResponse)?.statusCode ?? 0) elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1000))")
         if let httpResponse = response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
             // 429/503은 잠시 후 1회만 재시도한다. 그 외는 그대로 실패.
             if httpResponse.statusCode == 429 || httpResponse.statusCode == 503 {
                 try await Task.sleep(nanoseconds: 3_000_000_000)
                 let (retryData, retryResponse) = try await session.data(for: request)
+                DeveloperConsole.shared.log(.info, category: "MeetingGemini", "retry status=\((retryResponse as? HTTPURLResponse)?.statusCode ?? 0)")
                 if let retryHTTP = retryResponse as? HTTPURLResponse,
                    !(200...299).contains(retryHTTP.statusCode) {
                     throw MeetingGeminiError.http(retryHTTP.statusCode)

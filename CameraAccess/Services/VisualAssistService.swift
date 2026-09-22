@@ -24,6 +24,7 @@ final class VisualAssistService: ObservableObject {
     static let maxTerms = 30
 
     var onContext: ((Context) -> Void)?
+    var isUserRequestActive = false
 
     private let streamViewModel: StreamSessionViewModel
     private let vision = VisionAPIService()
@@ -31,6 +32,8 @@ final class VisualAssistService: ObservableObject {
     private(set) var isActive = false
     private var currentInterval = VisualAssistService.analysisInterval
     private var pausedUntil: Date?
+    private var lastSignature: [UInt8]?
+    private var lastAnalyzedAt = Date.distantPast
 
     init(streamViewModel: StreamSessionViewModel) {
         self.streamViewModel = streamViewModel
@@ -39,6 +42,8 @@ final class VisualAssistService: ObservableObject {
     func start() {
         guard loopTask == nil else { return }
         isActive = true
+        lastSignature = nil
+        isUserRequestActive = false
 
         let streamViewModel = streamViewModel
         loopTask = Task { [weak self] in
@@ -64,8 +69,13 @@ final class VisualAssistService: ObservableObject {
     }
 
     private func analyzeLatestFrame() async {
+        guard !isUserRequestActive else { return }
         if let pausedUntil, Date() < pausedUntil { return }
         guard let frame = streamViewModel.currentVideoFrame else { return }
+        let signature = Self.signature(frame)
+        if let signature, let lastSignature,
+           !Self.sceneChanged(lastSignature, signature),
+           Date().timeIntervalSince(lastAnalyzedAt) < 120 { return }
         let downscaled = Self.downscale(frame, maxDimension: 512)
 
         do {
@@ -75,6 +85,8 @@ final class VisualAssistService: ObservableObject {
             )
             guard !Task.isCancelled, isActive else { return }
             if let context = Self.parseScene(raw) {
+                lastSignature = signature
+                lastAnalyzedAt = Date()
                 currentInterval = Self.analysisInterval
                 onContext?(context)
             }
@@ -82,6 +94,25 @@ final class VisualAssistService: ObservableObject {
             guard !Task.isCancelled, isActive else { return }
             handleAnalysisFailure(error)
         }
+    }
+
+    nonisolated static func sceneChanged(_ before: [UInt8], _ after: [UInt8]) -> Bool {
+        guard !before.isEmpty, before.count == after.count else { return true }
+        let difference = zip(before, after).reduce(0) { $0 + abs(Int($1.0) - Int($1.1)) }
+        return Double(difference) / Double(before.count) >= 12
+    }
+
+    private static func signature(_ image: UIImage) -> [UInt8]? {
+        guard let cgImage = image.cgImage else { return nil }
+        var pixels = [UInt8](repeating: 0, count: 256)
+        let rendered = pixels.withUnsafeMutableBytes { bytes -> Bool in
+            guard let context = CGContext(data: bytes.baseAddress, width: 16, height: 16,
+                bitsPerComponent: 8, bytesPerRow: 16, space: CGColorSpaceCreateDeviceGray(),
+                bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+            context.draw(cgImage, in: CGRect(x: 0, y: 0, width: 16, height: 16))
+            return true
+        }
+        return rendered ? pixels : nil
     }
 
     private func handleAnalysisFailure(_ error: Error) {

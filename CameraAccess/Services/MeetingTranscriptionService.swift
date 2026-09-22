@@ -2,13 +2,12 @@
  * 회의 통역기 전사 서비스
  *
  * 안경(HFP/LE 오디오 입력)을 우선 라우팅해 iOS 음성 인식으로 한국어 발화를
- * 연속 전사한다. 귓속말(TTS) 재생은 오디오 세션을 .playback으로 바꾸므로
- * pause/resume 시마다 .playAndRecord 세션을 다시 구성해 입력을 되찾는다.
+ * 연속 전사한다. 회의 귓속말은 동일한 playAndRecord 세션을 유지한다.
  *
  * 품질과 반응성:
  * - 기본은 서버 음성 인식(전문용어 정확도) + 문장부호 추가.
- * - 4초마다 부분 인식 결과에서 문장 구분자까지의 증분만 발행해 전사가 즉시 흐른다.
- * - 연속 오류(네트워크 불가 등) 2회부터는 온디바이스 인식으로 자동 강하한다.
+ * - 모든 중간 결과를 즉시 표시하고, 안정된 스냅샷만 AI 판단으로 보낸다.
+ * - 반복 오류는 지연 재시도하고, 임시 온디바이스 전환 후 서버를 다시 시도한다.
  */
 
 import AVFoundation
@@ -43,6 +42,8 @@ final class MeetingTranscriptionService: ObservableObject {
     @Published private(set) var inputRouteName = "-"
 
     var onSegment: ((String) -> Void)?
+    var onPartial: ((String) -> Void)?
+    var onStable: ((String) -> Void)?
     var onFailure: ((String) -> Void)?
     /// 시각 보조가 뽑은 화면 용어. 인식 작업 시작 시 contextualStrings로 주입된다.
     var contextualTerms: [String] = []
@@ -59,9 +60,13 @@ final class MeetingTranscriptionService: ObservableObject {
     private var consecutiveTaskErrors = 0
     private var prefersOnDevice = false
     private var hasInputTap = false
+    private var lastPartialAt = Date.distantPast
+    private var lastStableText = ""
+    private var lastStableAt = Date.distantPast
+    private var onDeviceUntil = Date.distantPast
 
     /// 부분 결과 증분 발행 주기(초).
-    static let segmentTickerInterval: TimeInterval = 4
+    static let segmentTickerInterval: TimeInterval = 0.5
     /// 구분자 없이 이 길이 이상 쌓이면 강제로 발행한다.
     static let hardFlushLength = 40
 
@@ -88,6 +93,8 @@ final class MeetingTranscriptionService: ObservableObject {
 
         pendingText = ""
         emittedText = ""
+        prefersOnDevice = false
+        consecutiveTaskErrors = 0
         do {
             try configureAudioSession()
         } catch {
@@ -143,11 +150,15 @@ final class MeetingTranscriptionService: ObservableObject {
         }
 
         inputRouteName = session.currentRoute.inputs.first?.portName ?? "-"
-        print("[Meeting][AUDIO] 전사 세션 활성 input=\(inputRouteName)")
+        DeveloperConsole.shared.log(.info, category: "MeetingAudio", "input=\(inputRouteName) outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")) rate=\(session.sampleRate)")
     }
 
     private func startRecognitionLoop() {
         guard state == .running, let speechRecognizer else { return }
+        if prefersOnDevice, Date() >= onDeviceUntil {
+            prefersOnDevice = false
+            DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "retry server recognition")
+        }
         audioEngine.stop()
         if hasInputTap {
             audioEngine.inputNode.removeTap(onBus: 0)
@@ -156,6 +167,8 @@ final class MeetingTranscriptionService: ObservableObject {
         teardownTask()
         pendingText = ""
         emittedText = ""
+        lastStableText = ""
+        lastStableAt = Date()
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -173,7 +186,14 @@ final class MeetingTranscriptionService: ObservableObject {
         recognitionRequest = request
 
         let inputNode = audioEngine.inputNode
+        if !inputNode.isVoiceProcessingEnabled {
+            do { try inputNode.setVoiceProcessingEnabled(true) }
+            catch {
+                DeveloperConsole.shared.log(.warning, category: "MeetingAudio", "voiceProcessing unavailable code=\((error as NSError).code)")
+            }
+        }
         let inputFormat = inputNode.outputFormat(forBus: 0)
+        DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "start onDevice=\(prefersOnDevice) rate=\(inputFormat.sampleRate) channels=\(inputFormat.channelCount) echoProcessing=\(inputNode.isVoiceProcessingEnabled)")
         guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
             onFailure?("입력 오디오 포맷을 사용할 수 없습니다.")
             state = .idle
@@ -229,8 +249,21 @@ final class MeetingTranscriptionService: ObservableObject {
 
     private func tickSegment() {
         guard state == .running else { return }
-        emitAvailableDelta()
+        let now = Date()
+        if Self.shouldAnalyze(pending: pendingText, previous: lastStableText,
+            quietTime: now.timeIntervalSince(lastPartialAt), elapsed: now.timeIntervalSince(lastStableAt)) {
+            lastStableText = pendingText
+            lastStableAt = now
+            onStable?(pendingText)
+            DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "stable chars=\(pendingText.count)")
+        }
         scheduleSegmentTicker()
+    }
+
+    nonisolated static func shouldAnalyze(pending: String, previous: String,
+                                         quietTime: TimeInterval, elapsed: TimeInterval) -> Bool {
+        pending.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
+            && pending != previous && (quietTime >= 1 || elapsed >= 4)
     }
 
     private func restartCycle() {
@@ -248,22 +281,45 @@ final class MeetingTranscriptionService: ObservableObject {
 
         if let result {
             consecutiveTaskErrors = 0
-            pendingText = result.bestTranscription.formattedString
+            let text = result.bestTranscription.formattedString
+            if text != pendingText {
+                pendingText = text
+                lastPartialAt = Date()
+                onPartial?(text)
+                DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "partial chars=\(text.count) final=\(result.isFinal)")
+            }
             if result.isFinal {
                 flushRemainder()
                 startRecognitionLoop()
+                return
             }
-            return
+            if error == nil { return }
         }
 
-        if error != nil {
+        if let error {
             consecutiveTaskErrors += 1
-            if consecutiveTaskErrors >= 2 {
+            let nsError = error as NSError
+            DeveloperConsole.shared.log(.warning, category: "MeetingSpeech", "error domain=\(nsError.domain) code=\(nsError.code) count=\(consecutiveTaskErrors)")
+            if consecutiveTaskErrors >= 2, speechRecognizer?.supportsOnDeviceRecognition == true {
                 prefersOnDevice = true
+                onDeviceUntil = Date().addingTimeInterval(120)
             }
-            restartWorkItem?.cancel()
             flushRemainder()
-            startRecognitionLoop()
+            teardownEngine(keepAudioSession: true)
+            guard consecutiveTaskErrors < 5 else {
+                state = .idle
+                onFailure?("음성 인식을 계속할 수 없습니다. 다시 시작해 주세요.")
+                return
+            }
+            let generation = recognitionGeneration
+            let item = DispatchWorkItem { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self, self.recognitionGeneration == generation else { return }
+                    self.startRecognitionLoop()
+                }
+            }
+            restartWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + min(Double(consecutiveTaskErrors), 4), execute: item)
         }
     }
 
@@ -276,9 +332,7 @@ final class MeetingTranscriptionService: ObservableObject {
     }
 
     private func flushRemainder() {
-        let common = Self.commonPrefixLength(pendingText, emittedText)
-        let remainder = String(pendingText.dropFirst(common))
-            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let remainder = pendingText.trimmingCharacters(in: .whitespacesAndNewlines)
         pendingText = ""
         emittedText = ""
         guard remainder.count >= 2 else { return }

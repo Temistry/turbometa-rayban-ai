@@ -73,7 +73,7 @@ final class TTSService: NSObject, ObservableObject {
     /// 발화 요청을 queue에 넣고 UI와 세션 handoff에서 추적할 request ID를 반환한다.
     /// 회의 통역기 귓속말처럼 낮은 음량 재생이 필요할 때 volume을 지정한다.
     @discardableResult
-    func enqueue(_ text: String, volume: Float = 1.0) -> UUID? {
+    func enqueue(_ text: String, volume: Float = 1.0, preserveRecordingSession: Bool = false) -> UUID? {
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
             print("[TTS][WARN] 빈 문자열 음성 요청 무시")
@@ -81,7 +81,10 @@ final class TTSService: NSObject, ObservableObject {
         }
 
         stop()
-        guard configurePlaybackAudioSession() else {
+        let audioReady = preserveRecordingSession
+            ? AVAudioSession.sharedInstance().category == .playAndRecord
+            : configurePlaybackAudioSession()
+        guard audioReady else {
             print("[TTS][ERROR] 한국어 음성 재생 세션을 구성하지 못함")
             return nil
         }
@@ -94,6 +97,7 @@ final class TTSService: NSObject, ObservableObject {
         }
 
         let requestID = UUID()
+        DeveloperConsole.shared.log(.info, category: "MeetingTTS", "queued duplex=\(preserveRecordingSession) outputs=\(AVAudioSession.sharedInstance().currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")) chars=\(normalizedText.count)")
         let utterance = AVSpeechUtterance(string: normalizedText)
         utterance.voice = koreanVoice
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
