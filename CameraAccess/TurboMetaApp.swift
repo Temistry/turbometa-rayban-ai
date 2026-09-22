@@ -15,6 +15,16 @@ import SwiftUI
 import MWDATMockDevice
 #endif
 
+#if MEETING_LOGIC_TESTS
+// The CI parser/policy suites do not need device SDK, Siri, or notification startup.
+// The production app is built separately before this dedicated test host is used.
+@main
+struct MeetingLogicTestHost: App {
+  var body: some Scene {
+    WindowGroup { Color.clear }
+  }
+}
+#else
 @main
 struct TurboMetaApp: App {
   #if DEBUG
@@ -122,3 +132,4 @@ struct TurboMetaApp: App {
     }
   }
 }
+#endif

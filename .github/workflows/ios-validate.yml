@@ -99,11 +99,13 @@ jobs:
             -destination "platform=iOS Simulator,id=$device_id" \
             -onlyUsePackageVersionsFromResolvedFile \
             -parallel-testing-enabled NO \
+            -resultBundlePath meeting-tests.xcresult \
             -only-testing:CameraAccessTests/MeetingRealtimeTests \
             -only-testing:CameraAccessTests/JevDecisionParsingTests \
             -only-testing:CameraAccessTests/MeetingContextParsingTests \
             -only-testing:CameraAccessTests/MeetingPhotoRequestTests \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            'SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG MEETING_LOGIC_TESTS' \
             2>&1 | tee meeting-tests.log
 
       - name: 검증 결과 업로드
@@ -114,6 +116,7 @@ jobs:
           path: |
             xcodebuild.log
             meeting-tests.log
+            meeting-tests.xcresult
             audit-report.txt
           if-no-files-found: ignore
           retention-days: 7
