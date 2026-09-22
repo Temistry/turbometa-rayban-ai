@@ -76,7 +76,6 @@ final class VisualAssistService: ObservableObject {
                     prompt: Self.analysisPrompt
                 )
                 if let context = Self.parseScene(raw) {
-                    self?.consecutiveFailures = 0
                     self?.currentInterval = Self.analysisInterval
                     self?.onContext?(context)
                 }
