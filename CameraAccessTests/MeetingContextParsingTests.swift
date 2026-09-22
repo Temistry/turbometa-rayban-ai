@@ -5,7 +5,7 @@ final class MeetingContextParsingTests: XCTestCase {
     func testParseExplanationPlainJSON() throws {
         let explanation = try XCTUnwrap(
             MeetingGeminiService.parseExplanation(
-                "{\"term\":\"EBITDA\",\"text\":\"본업 수익성을 보는 지표예요."}"
+                #"{"term":"EBITDA","text":"본업 수익성을 보는 지표예요."}"#
             )
         )
 
@@ -16,7 +16,7 @@ final class MeetingContextParsingTests: XCTestCase {
     func testParseExplanationWithCodeFence() throws {
         let explanation = try XCTUnwrap(
             MeetingGeminiService.parseExplanation(
-                "```json\n{\"term\":\"ROIC\",\"text\":\"투자 대비 수익성 지표입니다."}\n```"
+                "```json\n{\"term\":\"ROIC\",\"text\":\"투자 대비 수익성 지표입니다.\"}\n```"
             )
         )
 
@@ -41,7 +41,7 @@ final class MeetingContextParsingTests: XCTestCase {
     }
 
     func testParseSceneWithCodeFenceAndCap() throws {
-        let terms = (1...25).map { "용어\($0)" }
+        let terms = (1...(VisualAssistService.maxTerms + 5)).map { "용어\($0)" }
         let data = try JSONSerialization.data(withJSONObject: ["terms": terms, "scene": "회의"])
         let fenced = "```json\n\(String(data: data, encoding: .utf8) ?? "")\n```"
 
