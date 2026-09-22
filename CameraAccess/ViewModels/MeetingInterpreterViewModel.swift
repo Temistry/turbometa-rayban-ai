@@ -84,6 +84,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private let tts = TTSService.shared
     private var lastWhisperAt: Date?
     private var isPausingForWhisper = false
+    private var activeWhisperRequestID: UUID?
+    private var sawWhisperPlayback = false
     private var playbackCancellable: AnyCancellable?
     private var recentUtterances: [String] = []
 
@@ -132,6 +134,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
         runState = .idle
         isSpeakingWhisper = false
         isPausingForWhisper = false
+        activeWhisperRequestID = nil
+        sawWhisperPlayback = false
     }
 
     private func handleUtterance(_ text: String) {
@@ -239,8 +243,17 @@ final class MeetingInterpreterViewModel: ObservableObject {
             transcription.pause()
             isPausingForWhisper = true
             isSpeakingWhisper = true
-            if tts.enqueue(explanation, volume: 0.35) == nil {
-                finishWhisper(state: .failed)
+            if let requestID = tts.enqueue(explanation, volume: 0.35) {
+                activeWhisperRequestID = requestID
+            } else {
+                updateLine(lineID) {
+                    $0.whisper?.state = .failed
+                }
+                isSpeakingWhisper = false
+                isPausingForWhisper = false
+                if runState == .listening {
+                    transcription.resume()
+                }
             }
         } catch {
             updateLine(lineID) {
@@ -255,10 +268,17 @@ final class MeetingInterpreterViewModel: ObservableObject {
 
     private func handlePlaybackStateChange(_ state: TTSService.PlaybackState) {
         switch state {
-        case .queued, .speaking:
+        case .queued(let requestID), .speaking(let requestID):
+            guard requestID == activeWhisperRequestID else { return }
+            sawWhisperPlayback = true
             isSpeakingWhisper = true
-        case .idle, .failed:
-            guard isPausingForWhisper else { return }
+        case .failed(let requestID):
+            guard requestID == activeWhisperRequestID else { return }
+            finishWhisper(state: .failed)
+        case .idle:
+            // enqueue 내부 stop()이 보내는 .idle은 무시하고
+            // 실제 재생(queued/speaking) 뒤의 .idle에서만 재개한다.
+            guard sawWhisperPlayback else { return }
             finishWhisper(state: .spoken)
         }
     }
@@ -268,6 +288,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
             lines[index].whisper?.state = state
         }
         isSpeakingWhisper = false
+        activeWhisperRequestID = nil
+        sawWhisperPlayback = false
 
         if isPausingForWhisper {
             isPausingForWhisper = false

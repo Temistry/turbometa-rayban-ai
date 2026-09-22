@@ -2,8 +2,13 @@
  * 회의 통역기 전사 서비스
  *
  * 안경(HFP/LE 오디오 입력)을 우선 라우팅해 iOS 음성 인식으로 한국어 발화를
- * 연속 전사한다. 세그먼트가 확정되면 onSegment로 전달한다.
- * 귓속말 재생 중에는 pause/resume로 인식을 잠시 멈춰 TTS 음성이 전사에 섞이지 않게 한다.
+ * 연속 전사한다. 귓속말(TTS) 재생은 오디오 세션을 .playback으로 바꾸므로
+ * pause/resume 시마다 .playAndRecord 세션을 다시 구성해 입력을 되찾는다.
+ *
+ * 품질과 반응성:
+ * - 기본은 서버 음성 인식(전문용어 정확도) + 문장부호 추가.
+ * - 4초마다 부분 인식 결과에서 문장 구분자까지의 증분만 발행해 전사가 즉시 흐른다.
+ * - 연속 오류(네트워크 불가 등) 2회부터는 온디바이스 인식으로 자동 강하한다.
  */
 
 import AVFoundation
@@ -45,8 +50,17 @@ final class MeetingTranscriptionService: ObservableObject {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var restartWorkItem: DispatchWorkItem?
+    private var tickerWorkItem: DispatchWorkItem?
     private var pendingText = ""
+    private var emittedText = ""
     private var recognitionGeneration = 0
+    private var consecutiveTaskErrors = 0
+    private var prefersOnDevice = false
+
+    /// 부분 결과 증분 발행 주기(초).
+    static let segmentTickerInterval: TimeInterval = 4
+    /// 구분자 없이 이 길이 이상 쌓이면 강제로 발행한다.
+    static let hardFlushLength = 40
 
     func start() async throws {
         guard let speechRecognizer, speechRecognizer.isAvailable else {
@@ -63,6 +77,7 @@ final class MeetingTranscriptionService: ObservableObject {
         }
 
         pendingText = ""
+        emittedText = ""
         do {
             try configureAudioSession()
         } catch {
@@ -75,19 +90,29 @@ final class MeetingTranscriptionService: ObservableObject {
 
     func pause() {
         guard state == .running else { return }
-        flushPendingSegment()
+        flushRemainder()
         state = .paused
         teardownEngine(keepAudioSession: true)
     }
 
     func resume() {
         guard state == .paused else { return }
+
+        // TTS 재생이 세션을 .playback으로 바꿔 두므로 입력 세션을 다시 구성한다.
+        do {
+            try configureAudioSession()
+        } catch {
+            onFailure?("귓속말 재생 후 전사 세션을 복구하지 못했습니다. \(error.localizedDescription)")
+            state = .idle
+            return
+        }
+
         state = .running
         startRecognitionLoop()
     }
 
     func stop() {
-        flushPendingSegment()
+        flushRemainder()
         state = .idle
         teardownEngine(keepAudioSession: false)
     }
@@ -114,10 +139,13 @@ final class MeetingTranscriptionService: ObservableObject {
     private func startRecognitionLoop() {
         guard state == .running, let speechRecognizer else { return }
         teardownTask()
+        pendingText = ""
+        emittedText = ""
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        if speechRecognizer.supportsOnDeviceRecognition {
+        request.addsPunctuation = true
+        if prefersOnDevice {
             request.requiresOnDeviceRecognition = true
         }
         recognitionRequest = request
@@ -152,6 +180,7 @@ final class MeetingTranscriptionService: ObservableObject {
             }
         }
         scheduleRestart()
+        scheduleSegmentTicker()
     }
 
     private func scheduleRestart() {
@@ -165,9 +194,26 @@ final class MeetingTranscriptionService: ObservableObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + 45, execute: item)
     }
 
+    private func scheduleSegmentTicker() {
+        tickerWorkItem?.cancel()
+        let item = DispatchWorkItem { [weak self] in
+            Task { @MainActor [weak self] in
+                self?.tickSegment()
+            }
+        }
+        tickerWorkItem = item
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.segmentTickerInterval, execute: item)
+    }
+
+    private func tickSegment() {
+        guard state == .running else { return }
+        emitAvailableDelta()
+        scheduleSegmentTicker()
+    }
+
     private func restartCycle() {
         guard state == .running else { return }
-        flushPendingSegment()
+        flushRemainder()
         startRecognitionLoop()
     }
 
@@ -179,26 +225,84 @@ final class MeetingTranscriptionService: ObservableObject {
         guard generation == recognitionGeneration, state == .running else { return }
 
         if let result {
+            consecutiveTaskErrors = 0
             pendingText = result.bestTranscription.formattedString
             if result.isFinal {
-                flushPendingSegment()
+                flushRemainder()
                 startRecognitionLoop()
             }
             return
         }
 
         if error != nil {
+            consecutiveTaskErrors += 1
+            if consecutiveTaskErrors >= 2 {
+                prefersOnDevice = true
+            }
             restartWorkItem?.cancel()
-            flushPendingSegment()
+            flushRemainder()
             startRecognitionLoop()
         }
     }
 
-    private func flushPendingSegment() {
-        let text = pendingText.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func emitAvailableDelta() {
+        guard let delta = Self.nextEmitDelta(pending: pendingText, emitted: emittedText) else {
+            return
+        }
+        emittedText = delta.newEmitted
+        onSegment?(delta.emit)
+    }
+
+    private func flushRemainder() {
+        let common = Self.commonPrefixLength(pendingText, emittedText)
+        let remainder = String(pendingText.dropFirst(common))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         pendingText = ""
-        guard text.count >= 2 else { return }
-        onSegment?(text)
+        emittedText = ""
+        guard remainder.count >= 2 else { return }
+        onSegment?(remainder)
+    }
+
+    // MARK: - 증분 분할(단위 테스트용 순수 함수)
+
+    /// 아직 발행하지 않은 텍스트에서 문장 구분자까지의 증분을 뽑는다.
+    /// 구분자가 없으면 hardFlushLength 이상일 때만 전체를 발행한다.
+    nonisolated static func nextEmitDelta(
+        pending: String,
+        emitted: String
+    ) -> (emit: String, newEmitted: String)? {
+        guard !pending.isEmpty else { return nil }
+
+        let common = commonPrefixLength(pending, emitted)
+        let tail = String(pending.dropFirst(common))
+        guard !tail.isEmpty else { return nil }
+
+        let delimiters: Set<Character> = [".", "?", "!", "…", ","]
+        if let cutIndex = tail.lastIndex(where: { delimiters.contains($0) }) {
+            let emitPart = String(tail[tail.startIndex...cutIndex])
+            let emit = emitPart.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard emit.count >= 2 else { return nil }
+            let newEmitted = String(pending.prefix(common + emitPart.count))
+            return (emit, newEmitted)
+        }
+
+        if tail.count >= hardFlushLength {
+            let emit = tail.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard emit.count >= 2 else { return nil }
+            return (emit, pending)
+        }
+
+        return nil
+    }
+
+    nonisolated static func commonPrefixLength(_ a: String, _ b: String) -> Int {
+        let aChars = Array(a)
+        let bChars = Array(b)
+        var index = 0
+        while index < aChars.count && index < bChars.count && aChars[index] == bChars[index] {
+            index += 1
+        }
+        return index
     }
 
     private func teardownTask() {
@@ -212,6 +316,8 @@ final class MeetingTranscriptionService: ObservableObject {
     private func teardownEngine(keepAudioSession: Bool) {
         restartWorkItem?.cancel()
         restartWorkItem = nil
+        tickerWorkItem?.cancel()
+        tickerWorkItem = nil
         teardownTask()
         audioEngine.inputNode.removeTap(onBus: 0)
         audioEngine.stop()
