@@ -13,6 +13,7 @@ struct TurboMetaHomeView: View {
 
     @State private var showLeanEat = false
     @State private var showQuickVision = false
+    @State private var showMeetingMode = false
     @State private var modePickerFlow: OpenClawCaptureModePickerView.Flow?
     @State private var quickShotLaunch: QuickShotLaunch?
     @ObservedObject private var openClawService = OpenClawNodeService.shared
@@ -52,6 +53,34 @@ struct TurboMetaHomeView: View {
                                 .foregroundColor(AppColors.textSecondary)
                         }
                         .padding(.top, AppSpacing.xl)
+
+                        Button {
+                            showMeetingMode = true
+                        } label: {
+                            HStack(spacing: AppSpacing.md) {
+                                Image(systemName: "waveform")
+                                    .font(.title2)
+                                    .foregroundColor(AppColors.primary)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("meeting.title".localized)
+                                        .font(.headline)
+                                        .foregroundColor(AppColors.textPrimary)
+                                    Text("meeting.subtitle".localized)
+                                        .font(.caption)
+                                        .foregroundColor(AppColors.textSecondary)
+                                }
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .font(.caption)
+                                    .foregroundColor(AppColors.textSecondary)
+                            }
+                            .padding(AppSpacing.md)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(AppColors.primary.opacity(0.12))
+                            )
+                        }
+                        .buttonStyle(.plain)
 
                         VStack(alignment: .leading, spacing: AppSpacing.md) {
                             VStack(alignment: .leading, spacing: 4) {
@@ -126,6 +155,9 @@ struct TurboMetaHomeView: View {
             }
             .fullScreenCover(isPresented: $showQuickVision) {
                 QuickVisionView(streamViewModel: streamViewModel, apiKey: apiKey)
+            }
+            .fullScreenCover(isPresented: $showMeetingMode) {
+                MeetingModeView()
             }
             .sheet(item: $modePickerFlow) { flow in
                 OpenClawCaptureModePickerView(

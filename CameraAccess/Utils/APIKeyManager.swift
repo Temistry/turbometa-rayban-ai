@@ -20,6 +20,7 @@ final class APIKeyManager {
     private let alibabaSingaporeAccount = "alibaba-singapore-api-key"
     private let openrouterAccount = "openrouter-api-key"
     private let googleAccount = "google-api-key"
+    private let jevAccount = "typesafe-jev-api-key"
     private let legacyAccount = "qwen-api-key"
     private let legacyAlibabaAccount = "alibaba-api-key"
 
@@ -29,6 +30,7 @@ final class APIKeyManager {
             alibabaSingaporeAccount,
             openrouterAccount,
             googleAccount,
+            jevAccount,
             legacyAccount,
             legacyAlibabaAccount
         ]
@@ -113,6 +115,25 @@ final class APIKeyManager {
 
     func hasGoogleAPIKey() -> Bool {
         guard let key = getGoogleAPIKey() else { return false }
+        return !key.isEmpty
+    }
+
+    // MARK: - TypeSafe Jev credential
+
+    func saveJevAPIKey(_ key: String) -> Bool {
+        saveKey(key, for: jevAccount)
+    }
+
+    func getJevAPIKey() -> String? {
+        getKey(for: jevAccount)
+    }
+
+    func deleteJevAPIKey() -> Bool {
+        deleteKey(for: jevAccount)
+    }
+
+    func hasJevAPIKey() -> Bool {
+        guard let key = getJevAPIKey() else { return false }
         return !key.isEmpty
     }
 

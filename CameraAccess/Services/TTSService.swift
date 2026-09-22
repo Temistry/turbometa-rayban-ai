@@ -71,8 +71,9 @@ final class TTSService: NSObject, ObservableObject {
     }
 
     /// 발화 요청을 queue에 넣고 UI와 세션 handoff에서 추적할 request ID를 반환한다.
+    /// 회의 통역기 귓속말처럼 낮은 음량 재생이 필요할 때 volume을 지정한다.
     @discardableResult
-    func enqueue(_ text: String) -> UUID? {
+    func enqueue(_ text: String, volume: Float = 1.0) -> UUID? {
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
             print("[TTS][WARN] 빈 문자열 음성 요청 무시")
@@ -96,7 +97,7 @@ final class TTSService: NSObject, ObservableObject {
         let utterance = AVSpeechUtterance(string: normalizedText)
         utterance.voice = koreanVoice
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate
-        utterance.volume = 1.0
+        utterance.volume = min(max(volume, 0), 1)
         utterance.pitchMultiplier = 1.0
 
         currentRequestID = requestID

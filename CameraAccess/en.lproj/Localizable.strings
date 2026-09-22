@@ -614,3 +614,25 @@
 "video.recorder.error.writer" = "The video file could not be finalized.";
 "video.recorder.error.noframes" = "No video frames were received for saving.";
 "video.recorder.error.tooshort" = "The video is too short. Record at least 0.5 seconds.";
+
+// Meeting Interpreter
+"meeting.title" = "Meeting Interpreter";
+"meeting.subtitle" = "Jargon whispered in your ear, claims verified on screen";
+"meeting.start" = "Start interpreting";
+"meeting.stop" = "Stop interpreting";
+"meeting.dot.transcription" = "STT";
+"meeting.dot.jev" = "Jev";
+"meeting.dot.whisper" = "Whisper";
+"meeting.route.format" = "Mic input %@";
+"meeting.empty" = "Conversation appears here after you start interpreting. Detected jargon is whispered through your glasses.";
+"meeting.whisper.failed" = "Whisper generation failed";
+"meeting.fact.card" = "Fact check";
+"meeting.fact.pending" = "Investigating sources.";
+"meeting.fact.failed" = "Fact check failed.";
+"meeting.error.title" = "Decision service (Jev) error";
+"meeting.error.action" = "The meeting interpreter has been stopped.";
+"meeting.error.restart" = "Check the network and API key, then start again.";
+"meeting.error.close" = "Close";
+"settings.jevkey.title" = "Jev API Key";
+"settings.apikey.jev.help" = "Used by the meeting interpreter decision gate. Enter the key issued at typesafe.ai.";
+"settings.apikey.jev.get" = "Open TypeSafe AI";

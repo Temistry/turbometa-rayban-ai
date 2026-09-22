@@ -16,6 +16,7 @@ struct UnifiedSettingsView: View {
     @ObservedObject private var knowledgeLog = KnowledgeLogService.shared
 
     @State private var showGoogleAPIKeySettings = false
+    @State private var showJevAPIKeySettings = false
     @State private var showQuickVisionSettings = false
     @State private var showOpenClawSettings = false
     @State private var showKnowledgeFolderPicker = false
@@ -23,6 +24,7 @@ struct UnifiedSettingsView: View {
     @State private var knowledgeErrorMessage = ""
 
     @State private var hasGoogleAPIKey = false
+    @State private var hasJevAPIKey = false
 
     var body: some View {
         NavigationView {
@@ -30,6 +32,7 @@ struct UnifiedSettingsView: View {
                 deviceSection
                 languageSection
                 googleAISection
+                jevSection
                 knowledgeLogSection
                 integrationSection
                 #if DEBUG
@@ -42,6 +45,12 @@ struct UnifiedSettingsView: View {
                 GoogleAPIKeySettingsView()
             }
             .onChange(of: showGoogleAPIKeySettings) { isShowing in
+                if !isShowing { refreshAPIKeyStatus() }
+            }
+            .sheet(isPresented: $showJevAPIKeySettings) {
+                JevAPIKeySettingsView()
+            }
+            .onChange(of: showJevAPIKeySettings) { isShowing in
                 if !isShowing { refreshAPIKeyStatus() }
             }
             .sheet(isPresented: $showQuickVisionSettings) {
@@ -205,6 +214,26 @@ struct UnifiedSettingsView: View {
         }
     }
 
+    private var jevSection: some View {
+        Section {
+            UnifiedSettingsRow(
+                icon: "brain",
+                iconColor: .indigo,
+                title: "TypeSafe Jev API Key",
+                value: hasJevAPIKey
+                    ? "settings.apikey.configured".localized
+                    : "settings.apikey.notconfigured".localized,
+                valueColor: hasJevAPIKey ? .green : .red
+            ) {
+                showJevAPIKeySettings = true
+            }
+        } header: {
+            Text("회의 통역기")
+        } footer: {
+            Text("settings.apikey.jev.help".localized)
+        }
+    }
+
     private var integrationSection: some View {
         Section {
             UnifiedSettingsRow(
@@ -270,6 +299,7 @@ struct UnifiedSettingsView: View {
 
     private func refreshAPIKeyStatus() {
         hasGoogleAPIKey = APIKeyManager.shared.hasGoogleAPIKey()
+        hasJevAPIKey = APIKeyManager.shared.hasJevAPIKey()
     }
 
     private func configureKnowledgeFolder(_ url: URL) {

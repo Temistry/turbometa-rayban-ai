@@ -8,6 +8,11 @@
 
 /* Begin PBXBuildFile section */
 		05043536CDB06C0B88B3C4D9 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069172850B30A2766C8BD4B5 /* TTSService.swift */; };
+		5E70000000000000000000A2 /* JevClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A1 /* JevClient.swift */; };
+		5E70000000000000000000A4 /* MeetingGeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A3 /* MeetingGeminiService.swift */; };
+		5E70000000000000000000A6 /* MeetingTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A5 /* MeetingTranscriptionService.swift */; };
+		5E70000000000000000000A8 /* MeetingInterpreterViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A7 /* MeetingInterpreterViewModel.swift */; };
+		5E70000000000000000000AA /* MeetingModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A9 /* MeetingModeView.swift */; };
 		217BDD58A35C2D24403F74BF /* APIProviderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111827A1CF7A278A6DC6934 /* APIProviderManager.swift */; };
 		26664DE8308E3F2981609421 /* QuickVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3E36CE337855A7F17F2AC8 /* QuickVisionService.swift */; };
 		2746170F50E225008AB717CE /* QuickVisionModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A08DC107E5A57DDE6036C3 /* QuickVisionModeManager.swift */; };
@@ -262,6 +267,11 @@
 		OMD20005000500050005 /* OpenClawVideoRecorder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawVideoRecorder.swift; sourceTree = "<group>"; };
 		OMD20006000600060006 /* OpenClawQuickShotCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawQuickShotCoordinator.swift; sourceTree = "<group>"; };
 		OMD20007000700070007 /* OpenClawVideoFrameExtractor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenClawVideoFrameExtractor.swift; sourceTree = "<group>"; };
+		5E70000000000000000000A1 /* JevClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = JevClient.swift; sourceTree = "<group>"; };
+		5E70000000000000000000A3 /* MeetingGeminiService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingGeminiService.swift; sourceTree = "<group>"; };
+		5E70000000000000000000A5 /* MeetingTranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingTranscriptionService.swift; sourceTree = "<group>"; };
+		5E70000000000000000000A7 /* MeetingInterpreterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingInterpreterViewModel.swift; sourceTree = "<group>"; };
+		5E70000000000000000000A9 /* MeetingModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingModeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -349,6 +359,9 @@
 				C7F490219E64EC144DAF8A8C /* QuickVisionStorage.swift */,
 				A17B2C3D4E5F60718293A4B6 /* KnowledgeLogService.swift */,
 				LT1002000200020002 /* LiveTranslateService.swift */,
+				5E70000000000000000000A1 /* JevClient.swift */,
+				5E70000000000000000000A3 /* MeetingGeminiService.swift */,
+				5E70000000000000000000A5 /* MeetingTranscriptionService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -385,6 +398,7 @@
 			isa = PBXGroup;
 			children = (
 				4B69CCC42F050D5200D1D025 /* RTMPStreamingViewModel.swift */,
+				5E70000000000000000000A7 /* MeetingInterpreterViewModel.swift */,
 				4BA57A9A2EF8227E002EC214 /* MockDeviceKit */,
 				4BA57A9B2EF8227E002EC214 /* DebugMenuViewModel.swift */,
 				4BA57A9C2EF8227E002EC214 /* LeanEatViewModel.swift */,
@@ -446,6 +460,7 @@
 				4BA57ABB2EF8227E002EC214 /* StreamSessionView.swift */,
 				4BA57ABC2EF8227E002EC214 /* StreamView.swift */,
 				4BA57ABD2EF8227E002EC214 /* TurboMetaHomeView.swift */,
+				5E70000000000000000000A9 /* MeetingModeView.swift */,
 				4BA57ABE2EF8227E002EC214 /* VisionRecognitionView.swift */,
 				6B037E0156E90DE2314A9F47 /* QuickVisionView.swift */,
 				330AF93394A09D97C504F568 /* QuickVisionSettingsView.swift */,
@@ -756,6 +771,11 @@
 				OMD10005000500050005 /* OpenClawVideoRecorder.swift in Sources */,
 				OMD10006000600060006 /* OpenClawQuickShotCoordinator.swift in Sources */,
 				OMD10007000700070007 /* OpenClawVideoFrameExtractor.swift in Sources */,
+				5E70000000000000000000A2 /* JevClient.swift in Sources */,
+				5E70000000000000000000A4 /* MeetingGeminiService.swift in Sources */,
+				5E70000000000000000000A6 /* MeetingTranscriptionService.swift in Sources */,
+				5E70000000000000000000A8 /* MeetingInterpreterViewModel.swift in Sources */,
+				5E70000000000000000000AA /* MeetingModeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

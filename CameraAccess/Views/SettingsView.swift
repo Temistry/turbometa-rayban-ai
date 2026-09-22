@@ -947,3 +947,86 @@ struct GoogleAPIKeySettingsView: View {
         }
     }
 }
+
+struct JevAPIKeySettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var apiKey = ""
+    @State private var showSaveSuccess = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    SecureField("settings.apikey.placeholder".localized, text: $apiKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("TypeSafe Jev API Key")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("settings.apikey.jev.help".localized)
+                        Link(
+                            "settings.apikey.jev.get".localized,
+                            destination: URL(string: "https://typesafe.ai")!
+                        )
+                        .font(.caption)
+                    }
+                }
+
+                Section {
+                    Button("save".localized) { saveAPIKey() }
+                        .frame(maxWidth: .infinity)
+                        .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if APIKeyManager.shared.hasJevAPIKey() {
+                        Button("settings.apikey.delete".localized, role: .destructive) {
+                            deleteAPIKey()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .navigationTitle("settings.jevkey.title".localized)
+            .alert("save".localized, isPresented: $showSaveSuccess) {
+                Button("ok".localized) { dismiss() }
+            } message: {
+                Text("settings.apikey.saved.message".localized)
+            }
+            .alert("error".localized, isPresented: $showError) {
+                Button("ok".localized) {}
+            } message: {
+                Text(errorMessage)
+            }
+            .onAppear {
+                apiKey = APIKeyManager.shared.getJevAPIKey() ?? ""
+            }
+        }
+    }
+
+    private func saveAPIKey() {
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "settings.apikey.empty".localized
+            showError = true
+            return
+        }
+
+        if APIKeyManager.shared.saveJevAPIKey(apiKey) {
+            showSaveSuccess = true
+        } else {
+            errorMessage = "settings.apikey.savefailed".localized
+            showError = true
+        }
+    }
+
+    private func deleteAPIKey() {
+        if APIKeyManager.shared.deleteJevAPIKey() {
+            apiKey = ""
+            dismiss()
+        } else {
+            errorMessage = "settings.apikey.deletefailed".localized
+            showError = true
+        }
+    }
+}

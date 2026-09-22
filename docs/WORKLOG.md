@@ -211,6 +211,36 @@
 
 ---
 
+## 2026-09-22 · 회의 통역기(회의모드) 1차 구현
+
+### 결정
+- 스파이더센스는 폐기하고 "회의 전문용어 통역기"로 목표를 축소했다. 전사(안경 마이크) 기반으로 귓속말 설명 레인과 근거 조사 레인을 운영한다.
+- TypeSafe Jev를 신경 반사 계층으로 채택: 발화별 개입 여부(needs_explanation)와 후속 레인(lane)을 choice 질문으로 판정한다. Jev 오류는 fail-stop(E-JEV-401/503/500)으로 에러 코드를 표시하고 통역을 즉시 중지한다. 대체 휴리스틱 게이트는 만들지 않는다.
+- 용어 설명·근거 조사 문장 생성은 기존 Google Gemini Key를 재사용하고, 근거 조사는 google_search 그라운딩으로 링크를 추출한다.
+- Jev API 키는 기존 패턴대로 Keychain(typesafe-jev-api-key)에만 저장하고 설정 화면에서 등록한다. 실제 키는 레포·로그에 기록하지 않는다.
+
+### 완료
+- [x] JevClient(TypeSafe /v1/systemone 클라이언트, 응답 파서, 에러 코드 체계)
+- [x] MeetingGeminiService(용어 설명 + 검색 그라운딩 근거 조사)
+- [x] MeetingTranscriptionService(HFP/LE 입력 우선, 온디바이스 한국어 연속 전사, 45초 재시작 루프, 귓속말 재생 중 pause/resume)
+- [x] MeetingInterpreterViewModel(쿨다운 30초, 신뢰도 임계 0.85, fail-stop, 팩트 카드)
+- [x] MeetingModeView(전사 스트림, 귓속말 인디케이터, 근거 링크 카드, E-JEV/E-MIC 에러 화면)
+- [x] 홈 진입 카드, 설정 Jev API Key 섹션, TTSService 저음량 귓속말(volume 0.35)
+- [x] JevDecisionParsingTests(파서·레인 매핑·쿨다운·그라운딩 링크)
+
+### 남음
+- [ ] CodeMagic 빌드 결과 확인 및 TestFlight 배포 완료 확인(현재 브랜치 push로 ios-testflight 자동 트리거)
+- [ ] 실기기: 안경 마이크 라우팅, 귓속말 음량/쿨다운 체감, Jev 실호출 지연(한국 기준) 측정
+- [ ] 전사 세그먼트 품질 평가 후 온디바이스/서버 인식 전략 확정
+
+### 검증
+- 로컬 정적 감사(Windows): fatal 0건, warning 0건, informational 1건(기존 항목)
+- 로컬 Windows 환경에서는 xcodebuild 불가. 컴파일·테스트는 CodeMagic 워크플로(ios-compile-check, ios-testflight)에서 검증한다.
+
+### 보안 메모
+- Jev/Gemini 키를 소스·문서·로그에 기록하지 않았다. Jev 키는 기기 Keychain 전용 항목으로 저장한다.
+- 회의 전사 원문은 로컬 화면 표시로 한정하고 별도 저장·업로드 경로를 추가하지 않았다.
+
 ## 기록 형식
 
 새 작업은 아래 형식을 복사해 추가한다.
