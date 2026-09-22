@@ -18,6 +18,11 @@ struct MeetingFactCheckResult: Equatable {
     let links: [MeetingFactLink]
 }
 
+struct MeetingExplanation: Equatable {
+    let term: String
+    let text: String
+}
+
 enum MeetingGeminiError: Error, Equatable {
     case missingAPIKey
     case http(Int)
@@ -31,23 +36,34 @@ final class MeetingGeminiService {
         self.session = session
     }
 
-    func explain(utterance: String, recentContext: String) async throws -> String {
+    func explain(
+        utterance: String,
+        recentContext: String,
+        sceneContext: String?
+    ) async throws -> MeetingExplanation {
         let prompt = """
         당신은 회의 전문용어 통역기다. 아래 '현재 발화'에서 비즈니스·기술 전문용어를 찾아 +        착용자에게 귓속말로 설명한다. 규칙: 한국어 구어체 1문장, 최대 60자, 용어명으로 시작하고 +        사전 지식 없이도 이해되게. 설명할 용어가 없으면 발화 요점을 짧게 전달한다.
         직전 발화: \(recentContext.isEmpty ? "(없음)" : recentContext)
+        화면 맥락: \(sceneContext.flatMap { $0.isEmpty ? nil : $0 } ?? "(없음)")
         현재 발화: \(utterance)
+        출력은 JSON 하나만: {"term": "발화에서 찾은 전문용어 원문", "text": "귓속말 설명 문장"}
         """
 
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
-            "generationConfig": ["temperature": 0.2, "maxOutputTokens": 256]
+            "generationConfig": [
+                "temperature": 0.2,
+                "maxOutputTokens": 256,
+                "responseMimeType": "application/json"
+            ]
         ]
 
         let responseObject = try await post(body)
-        guard let text = Self.parseText(responseObject) else {
+        guard let raw = Self.parseText(responseObject),
+              let explanation = Self.parseExplanation(raw) else {
             throw MeetingGeminiError.invalidResponse
         }
-        return text
+        return explanation
     }
 
     func factCheck(claim: String) async throws -> MeetingFactCheckResult {
@@ -109,6 +125,27 @@ final class MeetingGeminiService {
             .joined()
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return text.isEmpty ? nil : text
+    }
+
+    static func parseExplanation(_ raw: String) -> MeetingExplanation? {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("```") {
+            text = text
+                .replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        guard let data = text.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let explanationText = object["text"] as? String else {
+            return nil
+        }
+
+        let trimmedText = explanationText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else { return nil }
+        let term = (object["term"] as? String)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return MeetingExplanation(term: term, text: trimmedText)
     }
 
     static func parseGroundingLinks(_ object: [String: Any]) -> [MeetingFactLink] {

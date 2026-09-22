@@ -157,7 +157,7 @@ struct TurboMetaHomeView: View {
                 QuickVisionView(streamViewModel: streamViewModel, apiKey: apiKey)
             }
             .fullScreenCover(isPresented: $showMeetingMode) {
-                MeetingModeView()
+                MeetingModeView(streamViewModel: streamViewModel)
             }
             .sheet(item: $modePickerFlow) { flow in
                 OpenClawCaptureModePickerView(

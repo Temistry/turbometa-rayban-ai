@@ -44,6 +44,8 @@ final class MeetingTranscriptionService: ObservableObject {
 
     var onSegment: ((String) -> Void)?
     var onFailure: ((String) -> Void)?
+    /// 시각 보조가 뽑은 화면 용어. 인식 작업 시작 시 contextualStrings로 주입된다.
+    var contextualTerms: [String] = []
 
     private let audioEngine = AVAudioEngine()
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "ko-KR"))
@@ -145,6 +147,13 @@ final class MeetingTranscriptionService: ObservableObject {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.addsPunctuation = true
+        if !contextualTerms.isEmpty {
+            request.contextualStrings = Array(
+                contextualTerms
+                    .filter { !$0.isEmpty && $0.count <= 60 }
+                    .prefix(40)
+            )
+        }
         if prefersOnDevice {
             request.requiresOnDeviceRecognition = true
         }

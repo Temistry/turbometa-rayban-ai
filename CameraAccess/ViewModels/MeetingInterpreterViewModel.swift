@@ -44,6 +44,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
 
         let id = UUID()
+        let term: String
         let text: String
         let confidence: Double
         var state: State
@@ -78,10 +79,22 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var inputRouteName = "-"
     @Published private(set) var jevReady = false
 
+    /// 설정의 시각 보조 토글. 기본값은 켜짐이다.
+    static var visualAssistEnabled: Bool {
+        guard UserDefaults.standard.object(forKey: "meeting.visualAssist") != nil else {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: "meeting.visualAssist")
+    }
+
+    let streamViewModel: StreamSessionViewModel
+
     private let transcription = MeetingTranscriptionService()
     private let jev = JevClient.shared
     private let gemini = MeetingGeminiService()
     private let tts = TTSService.shared
+    private var visualAssist: VisualAssistService?
+    private var sceneSummary: String?
     private var lastWhisperAt: Date?
     private var isPausingForWhisper = false
     private var activeWhisperRequestID: UUID?
@@ -89,7 +102,18 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private var playbackCancellable: AnyCancellable?
     private var recentUtterances: [String] = []
 
-    init() {
+    init(streamViewModel: StreamSessionViewModel) {
+        self.streamViewModel = streamViewModel
+
+        if Self.visualAssistEnabled {
+            let visualAssist = VisualAssistService(streamViewModel: streamViewModel)
+            visualAssist.onContext = { [weak self] context in
+                self?.transcription.contextualTerms = context.terms
+                self?.sceneSummary = context.scene
+            }
+            self.visualAssist = visualAssist
+        }
+
         transcription.onSegment = { [weak self] text in
             self?.handleUtterance(text)
         }
@@ -120,6 +144,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 try await transcription.start()
                 inputRouteName = transcription.inputRouteName
                 runState = .listening
+                visualAssist?.start()
             } catch {
                 let message = (error as? MeetingTranscriptionError)?.message
                     ?? error.localizedDescription
@@ -131,6 +156,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     func stop() {
         transcription.stop()
         tts.stop()
+        visualAssist?.stop()
         runState = .idle
         isSpeakingWhisper = false
         isPausingForWhisper = false
@@ -231,11 +257,13 @@ final class MeetingInterpreterViewModel: ObservableObject {
         do {
             let explanation = try await gemini.explain(
                 utterance: utterance,
-                recentContext: context
+                recentContext: context,
+                sceneContext: sceneSummary
             )
             updateLine(lineID) {
                 $0.whisper = WhisperEvent(
-                    text: explanation,
+                    term: explanation.term,
+                    text: explanation.text,
                     confidence: confidence,
                     state: .speaking
                 )
@@ -243,7 +271,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
             transcription.pause()
             isPausingForWhisper = true
             isSpeakingWhisper = true
-            if let requestID = tts.enqueue(explanation, volume: 0.35) {
+            if let requestID = tts.enqueue(explanation.text, volume: 0.35) {
                 activeWhisperRequestID = requestID
             } else {
                 updateLine(lineID) {
@@ -258,6 +286,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         } catch {
             updateLine(lineID) {
                 $0.whisper = WhisperEvent(
+                    term: "",
                     text: "",
                     confidence: confidence,
                     state: .failed

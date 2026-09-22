@@ -43,7 +43,7 @@ struct MainAppView: View {
         }
       } else {
         // 权限已检查，显示主界面
-        MainTabView(streamViewModel: streamViewModel, wearablesViewModel: viewModel)
+        MeetingModeView(streamViewModel: streamViewModel)
           .onAppear {
             // 设置 QuickVisionManager 的 StreamViewModel 引用
             quickVisionManager.setStreamViewModel(streamViewModel)

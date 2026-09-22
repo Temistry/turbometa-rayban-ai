@@ -13,6 +13,7 @@
 		5E70000000000000000000A6 /* MeetingTranscriptionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A5 /* MeetingTranscriptionService.swift */; };
 		5E70000000000000000000A8 /* MeetingInterpreterViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A7 /* MeetingInterpreterViewModel.swift */; };
 		5E70000000000000000000AA /* MeetingModeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A9 /* MeetingModeView.swift */; };
+		5E70000000000000000000AC /* VisualAssistService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000AB /* VisualAssistService.swift */; };
 		217BDD58A35C2D24403F74BF /* APIProviderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111827A1CF7A278A6DC6934 /* APIProviderManager.swift */; };
 		26664DE8308E3F2981609421 /* QuickVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3E36CE337855A7F17F2AC8 /* QuickVisionService.swift */; };
 		2746170F50E225008AB717CE /* QuickVisionModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A08DC107E5A57DDE6036C3 /* QuickVisionModeManager.swift */; };
@@ -272,6 +273,7 @@
 		5E70000000000000000000A5 /* MeetingTranscriptionService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingTranscriptionService.swift; sourceTree = "<group>"; };
 		5E70000000000000000000A7 /* MeetingInterpreterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingInterpreterViewModel.swift; sourceTree = "<group>"; };
 		5E70000000000000000000A9 /* MeetingModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingModeView.swift; sourceTree = "<group>"; };
+		5E70000000000000000000AB /* VisualAssistService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualAssistService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -362,6 +364,7 @@
 				5E70000000000000000000A1 /* JevClient.swift */,
 				5E70000000000000000000A3 /* MeetingGeminiService.swift */,
 				5E70000000000000000000A5 /* MeetingTranscriptionService.swift */,
+				5E70000000000000000000AB /* VisualAssistService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -776,6 +779,7 @@
 				5E70000000000000000000A6 /* MeetingTranscriptionService.swift in Sources */,
 				5E70000000000000000000A8 /* MeetingInterpreterViewModel.swift in Sources */,
 				5E70000000000000000000AA /* MeetingModeView.swift in Sources */,
+				5E70000000000000000000AC /* VisualAssistService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -25,6 +25,7 @@ struct UnifiedSettingsView: View {
 
     @State private var hasGoogleAPIKey = false
     @State private var hasJevAPIKey = false
+    @AppStorage("meeting.visualAssist") private var visualAssistEnabled = true
 
     var body: some View {
         NavigationView {
@@ -226,6 +227,10 @@ struct UnifiedSettingsView: View {
                 valueColor: hasJevAPIKey ? .green : .red
             ) {
                 showJevAPIKeySettings = true
+            }
+
+            Toggle(isOn: $visualAssistEnabled) {
+                Text("settings.visualassist".localized)
             }
         } header: {
             Text("회의 통역기")
