@@ -43,14 +43,10 @@ final class OpenClawMediaRepositoryTests: XCTestCase {
             requestID: UUID()
         )
 
-        XCTAssertEqual(
-            try await repository.originalData(for: item),
-            Data([0x01, 0x02, 0x03])
-        )
-        XCTAssertEqual(
-            try await repository.thumbnailData(for: item),
-            Data([0xAA, 0xBB])
-        )
+        let original = try await repository.originalData(for: item)
+        let thumbnail = try await repository.thumbnailData(for: item)
+        XCTAssertEqual(original, Data([0x01, 0x02, 0x03]))
+        XCTAssertEqual(thumbnail, Data([0xAA, 0xBB]))
         XCTAssertEqual(item.localStatus, .ready)
         XCTAssertEqual(item.modeSnapshot.prompt, "exact retry prompt")
     }
