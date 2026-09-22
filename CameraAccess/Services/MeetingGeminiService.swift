@@ -105,8 +105,22 @@ final class MeetingGeminiService {
         let (data, response) = try await session.data(for: request)
         if let httpResponse = response as? HTTPURLResponse,
            !(200...299).contains(httpResponse.statusCode) {
+            // 429/503은 잠시 후 1회만 재시도한다. 그 외는 그대로 실패.
+            if httpResponse.statusCode == 429 || httpResponse.statusCode == 503 {
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+                let (retryData, retryResponse) = try await session.data(for: request)
+                if let retryHTTP = retryResponse as? HTTPURLResponse,
+                   !(200...299).contains(retryHTTP.statusCode) {
+                    throw MeetingGeminiError.http(retryHTTP.statusCode)
+                }
+                return try Self.decodeObject(retryData)
+            }
             throw MeetingGeminiError.http(httpResponse.statusCode)
         }
+        return try Self.decodeObject(data)
+    }
+
+    private static func decodeObject(_ data: Data) throws -> [String: Any] {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw MeetingGeminiError.invalidResponse
         }

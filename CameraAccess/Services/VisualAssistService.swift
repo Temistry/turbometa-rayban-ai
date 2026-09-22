@@ -16,7 +16,11 @@ final class VisualAssistService: ObservableObject {
         let scene: String
     }
 
-    static let analysisInterval: TimeInterval = 5
+    /// 분당 약 3회로 낮춰 Gemini 할당량을 귓속말·근거 조사와 공유한다.
+    static let analysisInterval: TimeInterval = 20
+    static let maxInterval: TimeInterval = 120
+    /// 429(쿼터 초과) 시 시각 보조를 잠시 완전히 멈춰 귓속말을 보호한다.
+    static let quotaPauseInterval: TimeInterval = 300
     static let maxTerms = 30
 
     var onContext: ((Context) -> Void)?
@@ -25,6 +29,8 @@ final class VisualAssistService: ObservableObject {
     private let vision = VisionAPIService()
     private var loopTask: Task<Void, Never>?
     private(set) var isActive = false
+    private var currentInterval = VisualAssistService.analysisInterval
+    private var pausedUntil: Date?
 
     init(streamViewModel: StreamSessionViewModel) {
         self.streamViewModel = streamViewModel
@@ -39,7 +45,7 @@ final class VisualAssistService: ObservableObject {
             await streamViewModel.handleStartStreaming()
             while !Task.isCancelled {
                 try? await Task.sleep(
-                    nanoseconds: UInt64(Self.analysisInterval * 1_000_000_000)
+                    nanoseconds: UInt64((self?.currentInterval ?? Self.analysisInterval) * 1_000_000_000)
                 )
                 guard let self, !Task.isCancelled else { break }
                 self.analyzeLatestFrame()
@@ -59,6 +65,7 @@ final class VisualAssistService: ObservableObject {
     }
 
     private func analyzeLatestFrame() {
+        if let pausedUntil, Date() < pausedUntil { return }
         guard let frame = streamViewModel.currentVideoFrame else { return }
         let downscaled = Self.downscale(frame, maxDimension: 512)
 
@@ -69,12 +76,29 @@ final class VisualAssistService: ObservableObject {
                     prompt: Self.analysisPrompt
                 )
                 if let context = Self.parseScene(raw) {
+                    self?.consecutiveFailures = 0
+                    self?.currentInterval = Self.analysisInterval
                     self?.onContext?(context)
                 }
             } catch {
-                // 시각 보조는 부가 기능이므로 회의를 방해하지 않는다.
+                self?.handleAnalysisFailure(error)
             }
         }
+    }
+
+    private func handleAnalysisFailure(_ error: Error) {
+        if case QuickVisionError.apiError(let statusCode, _, _) = error,
+           statusCode == 429 {
+            pausedUntil = Date().addingTimeInterval(Self.quotaPauseInterval)
+            currentInterval = Self.analysisInterval
+            return
+        }
+        currentInterval = Self.nextInterval(current: currentInterval, hadFailure: true)
+    }
+
+    nonisolated static func nextInterval(current: TimeInterval, hadFailure: Bool) -> TimeInterval {
+        guard hadFailure else { return analysisInterval }
+        return min(current * 2, maxInterval)
     }
 
     nonisolated static func parseScene(_ raw: String) -> Context? {

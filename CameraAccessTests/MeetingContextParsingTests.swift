@@ -54,4 +54,17 @@ final class MeetingContextParsingTests: XCTestCase {
     func testParseSceneReturnsNilForGarbage() {
         XCTAssertNil(VisualAssistService.parseScene("장면: 회의실"))
     }
+
+    func testVisualAssistIntervalBackoff() {
+        XCTAssertEqual(
+            VisualAssistService.nextInterval(current: 20, hadFailure: false),
+            VisualAssistService.analysisInterval
+        )
+        XCTAssertEqual(VisualAssistService.nextInterval(current: 20, hadFailure: true), 40)
+        XCTAssertEqual(VisualAssistService.nextInterval(current: 80, hadFailure: true), 120)
+        XCTAssertEqual(
+            VisualAssistService.nextInterval(current: 200, hadFailure: true),
+            VisualAssistService.maxInterval
+        )
+    }
 }
