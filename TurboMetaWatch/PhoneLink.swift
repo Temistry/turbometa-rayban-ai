@@ -2,7 +2,6 @@ import Combine
 import Foundation
 import WatchConnectivity
 
-@MainActor
 final class PhoneLink: NSObject, ObservableObject {
     @Published var state = "idle"
     @Published var route = "-"
@@ -36,19 +35,15 @@ final class PhoneLink: NSObject, ObservableObject {
 }
 
 extension PhoneLink: WCSessionDelegate {
-    nonisolated func session(
-        _ session: WCSession,
-        activationDidCompleteWith activationState: WCSessionActivationState,
-        error: Error?
-    ) {
+    func session(_ session: WCSession, activationDidCompleteWith activationState: WCSessionActivationState, error: Error?) {
         let context = session.receivedApplicationContext
-        Task { @MainActor [weak self] in
+        DispatchQueue.main.async { [weak self] in
             self?.apply(context)
         }
     }
 
-    nonisolated func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
-        Task { @MainActor [weak self] in
+    func session(_ session: WCSession, didReceiveApplicationContext applicationContext: [String: Any]) {
+        DispatchQueue.main.async { [weak self] in
             self?.apply(applicationContext)
         }
     }
