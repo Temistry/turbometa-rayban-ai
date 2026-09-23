@@ -47,4 +47,10 @@ extension PhoneLink: WCSessionDelegate {
             self?.apply(applicationContext)
         }
     }
+
+    func sessionDidBecomeInactive(_ session: WCSession) {}
+
+    func sessionDidDeactivate(_ session: WCSession) {
+        session.activate()
+    }
 }
