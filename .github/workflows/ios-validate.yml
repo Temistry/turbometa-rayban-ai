@@ -80,7 +80,6 @@ jobs:
             -project CameraAccess.xcodeproj \
             -scheme TurboMeta \
             -configuration Debug \
-            -sdk iphonesimulator \
             -destination 'generic/platform=iOS Simulator' \
             -onlyUsePackageVersionsFromResolvedFile \
             CODE_SIGNING_ALLOWED=NO \

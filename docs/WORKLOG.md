@@ -437,6 +437,25 @@
 ### 보안 메모
 - App Store Connect 키는 CodeMagic 연동에서만 주입되며 레포·로그에 남기지 않는다.
 
+## 2026-09-23 · 워치 빌드 반복 실패 근본 원인
+
+### 결정
+- 근본 원인: .github/workflows/ios-validate.yml의 시뮬레이터 빌드 명령에 있던 `-sdk iphonesimulator`. 이 옵션은 스킴의 모든 타깃에 SDK를 강제하므로 워치 타깃이 아이폰 시뮬레이터 SDK로 컴파일됐다(로그상 워치 산출물 30건 전부 Debug-iphonesimulator).
+- 같은 원인에서 나온 증상: WCSessionDelegate 두 메서드 필수/unavailable 모순(9d33007~1262a13), 워치 AppIcon "applicable content 없음"(7910de6). 회귀 테스트 단계는 `-sdk` 없이 destination만 써서 워치를 정상 watchOS SDK로 빌드했기 때문에 두 라운드의 에러가 서로 반대로 보였다.
+- 조치: 빌드 명령에서 `-sdk iphonesimulator` 제거(destination만으로 Xcode가 워치 타깃에 watchsimulator 선택). 증상 대응으로 넣었던 PhoneLink의 `#if os(iOS)` 우회는 제거하고 watchOS 정석 구현으로 복귀.
+- CodeMagic 두 워크플로는 원래 `-sdk`를 쓰지 않아 영향 없음(컴파일 점검 success로 확인).
+
+### 교훈
+- 에러를 고치기 전에 실패한 컴파일 명령의 `-target`/SDK와 산출물 경로를 먼저 확인한다. 같은 파일에서 서로 반대되는 에러가 나오면 코드보다 빌드 설정을 의심한다.
+
+### 완료
+- [x] 근본 원인 확정 및 워크플로 수정
+- [x] 워치 서명 단계 첫 실행 성공(App ID XDD9QM27GU, 프로필 WDT3V8WQ9V)
+
+### 남음
+- [ ] GitHub 검증(빌드+회귀 테스트) 통과 확인
+- [ ] TestFlight 업로드 결과 확인
+
 ### 검증
 - 원격 빌드로만 컴파일 가능. 실패 시 GitHub job 로그의 error 필터로 재진단.
 

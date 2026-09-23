@@ -47,15 +47,4 @@ extension PhoneLink: WCSessionDelegate {
             self?.apply(applicationContext)
         }
     }
-
-#if os(iOS)
-    // xcodebuild는 이 워치 타깃을 iOS SDK로도 컴파일한다(스킴 빌드 그래프 특성).
-    // iOS SDK에서는 이 두 메서드가 필수이므로 iOS 컴파일에만 제공하고,
-    // watchOS SDK에서는 unavailable이므로 생략한다.
-    func sessionDidBecomeInactive(_ session: WCSession) {}
-
-    func sessionDidDeactivate(_ session: WCSession) {
-        session.activate()
-    }
-#endif
 }
