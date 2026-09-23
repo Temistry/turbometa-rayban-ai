@@ -408,6 +408,8 @@
 ### 완료
 - [x] PhoneLink 델리게이트 플랫폼 조건부 구현(#if os(iOS))
 - [x] 로컬 정적 감사 통과(fatal 0 / warning 0)
+- [x] 컴파일 통과 확인(CodeMagic iOS 컴파일 점검 success)
+- [x] WKCompanionAppBundleIdentifier를 구성별 빌드 설정으로 분리(Debug com.glassai.app1 / Release io.github.temistry.turbometa). 시뮬레이터 설치 검증 오류 수정
 
 ### 남음
 - [ ] CI(iPhone 시뮬레이터 빌드 2건 + CodeMagic 컴파일·TestFlight) 결과 확인

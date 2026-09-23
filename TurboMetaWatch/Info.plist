@@ -23,6 +23,6 @@
 	<key>WKApplication</key>
 	<true/>
 	<key>WKCompanionAppBundleIdentifier</key>
-	<string>io.github.temistry.turbometa</string>
+	<string>$(COMPANION_APP_BUNDLE_IDENTIFIER)</string>
 </dict>
 </plist>

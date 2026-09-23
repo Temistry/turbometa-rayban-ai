@@ -976,6 +976,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4CXJZWV2GC;
+				COMPANION_APP_BUNDLE_IDENTIFIER = com.glassai.app1;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TurboMetaWatch/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TurboMeta;
@@ -1002,6 +1003,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = H6HPX39A33;
+				COMPANION_APP_BUNDLE_IDENTIFIER = io.github.temistry.turbometa;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TurboMetaWatch/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TurboMeta;
