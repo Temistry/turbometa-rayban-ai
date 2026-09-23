@@ -33,20 +33,28 @@ enum MeetingPolicy {
         "db", "sql", "nosql", "orm", "mvc", "mvvm", "oop", "tdd", "bdd", "ddd", "sdlc",
         "aws", "gcp", "s3", "ec2", "ecs", "eks", "vpc", "iam", "cdn", "dns", "tls", "ssl",
         "http", "https", "rest", "grpc", "json", "xml", "yaml", "csv", "k8s", "pod",
-        "docker", "helm", "terraform", "redis", "kafka", "nginx", "oauth", "jwt", "sso", "mfa",
+        "docker", "kubernetes", "helm", "terraform", "redis", "kafka", "nginx", "oauth", "jwt", "sso", "mfa",
         "xss", "csrf", "ssr", "spa", "pwa", "slo", "mttr", "mtbf", "rto", "rpo", "vpn", "ssh",
         "tcp", "udp", "iot", "ai", "ml", "llm", "nlp", "rag", "gpu", "cpu", "iops", "git",
         "repo", "prod", "dev"
     ]
 
     /// 전사 토큰 중 사전 용어가 있으면 참. 확정 판정이 아니라 문턱 완화 근거다.
+    /// 한국어 전사는 "EBITDA가"처럼 조사가 바로 붙으므로 ASCII 영문·숫자 연속 구간만 토큰으로 뗀다.
     nonisolated static func lexiconHit(in text: String) -> Bool {
-        let separator = CharacterSet.alphanumerics.inverted
-        return text.components(separatedBy: separator).contains { token in
-            let key = token.lowercased()
-            guard key.count >= 2 else { return false }
-            return lexiconTerms.contains(key)
+        var token = ""
+        func matches(_ candidate: String) -> Bool {
+            candidate.count >= 2 && lexiconTerms.contains(candidate.lowercased())
         }
+        for scalar in text.unicodeScalars {
+            if scalar.isASCII, CharacterSet.alphanumerics.contains(scalar) {
+                token.unicodeScalars.append(scalar)
+            } else {
+                if matches(token) { return true }
+                token = ""
+            }
+        }
+        return matches(token)
     }
 }
 

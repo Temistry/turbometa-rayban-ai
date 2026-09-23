@@ -23,6 +23,7 @@
 		5E70000000000000000000C8 /* PhoneLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000C7 /* PhoneLink.swift */; };
 		5E70000000000000000000E5 /* WatchMeetingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000E3 /* WatchMeetingStatus.swift */; };
 		5E70000000000000000000D9 /* TurboMetaWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000C1 /* TurboMetaWatch.app */; };
+		5E70000000000000000000F2 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000F1 /* Assets.xcassets */; };
 		217BDD58A35C2D24403F74BF /* APIProviderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111827A1CF7A278A6DC6934 /* APIProviderManager.swift */; };
 		26664DE8308E3F2981609421 /* QuickVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3E36CE337855A7F17F2AC8 /* QuickVisionService.swift */; };
 		2746170F50E225008AB717CE /* QuickVisionModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A08DC107E5A57DDE6036C3 /* QuickVisionModeManager.swift */; };
@@ -308,6 +309,7 @@
 		5E70000000000000000000C5 /* MeetingStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingStatusView.swift; sourceTree = "<group>"; };
 		5E70000000000000000000C7 /* PhoneLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneLink.swift; sourceTree = "<group>"; };
 		5E70000000000000000000C9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		5E70000000000000000000F1 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5E70000000000000000000B1 /* MeetingArchiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingArchiveService.swift; sourceTree = "<group>"; };
 		5E70000000000000000000B3 /* MeetingArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingArchiveViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -608,6 +610,7 @@
 				5E70000000000000000000C5 /* MeetingStatusView.swift */,
 				5E70000000000000000000C7 /* PhoneLink.swift */,
 				5E70000000000000000000C9 /* Info.plist */,
+				5E70000000000000000000F1 /* Assets.xcassets */,
 			);
 			path = TurboMetaWatch;
 			sourceTree = "<group>";
@@ -640,6 +643,7 @@
 			buildConfigurationList = 5E70000000000000000000D5 /* Build configuration list for PBXNativeTarget "TurboMetaWatch" */;
 			buildPhases = (
 				5E70000000000000000000D6 /* Sources */,
+				5E70000000000000000000F3 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -714,6 +718,14 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		5E70000000000000000000F3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E70000000000000000000F2 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		BBBBBBBBBBBBBBBBBBBBBB /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -977,6 +989,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 4CXJZWV2GC;
 				COMPANION_APP_BUNDLE_IDENTIFIER = com.glassai.app1;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TurboMetaWatch/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TurboMeta;
@@ -1004,6 +1017,7 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = H6HPX39A33;
 				COMPANION_APP_BUNDLE_IDENTIFIER = io.github.temistry.turbometa;
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = TurboMetaWatch/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = TurboMeta;

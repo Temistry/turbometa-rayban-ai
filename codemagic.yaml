@@ -154,6 +154,31 @@ workflows:
             -scheme "$XCODE_SCHEME" \
             -onlyUsePackageVersionsFromResolvedFile
 
+      - name: 워치 앱 App Store 서명 프로필 확보
+        script: |
+          set -euo pipefail
+          : "${APP_STORE_CONNECT_ISSUER_ID:?App Store Connect 연동 변수가 없습니다}"
+          : "${APP_STORE_CONNECT_KEY_IDENTIFIER:?App Store Connect 연동 변수가 없습니다}"
+          : "${APP_STORE_CONNECT_PRIVATE_KEY:?App Store Connect 연동 변수가 없습니다}"
+          watch_bundle_id="$BUNDLE_ID.watchkitapp"
+          profile_name="TurboMeta Watch App Store"
+          json_first_id='import json,sys; s=sys.stdin.read().strip(); d=json.loads(s) if s else []; d=d if isinstance(d,list) else [d]; print(d[0]["id"] if d else "")'
+          json_count='import json,sys; s=sys.stdin.read().strip(); d=json.loads(s) if s else []; print(len(d) if isinstance(d,list) else 1)'
+          json_ids='import json,sys; s=sys.stdin.read().strip(); d=json.loads(s) if s else []; print(" ".join(x["id"] for x in d))'
+          bundle_resource_id=$(app-store-connect bundle-ids list --bundle-id-identifier "$watch_bundle_id" --strict-match-identifier --json | python3 -c "$json_first_id")
+          if [ -z "$bundle_resource_id" ]; then
+            echo "워치 App ID 등록: $watch_bundle_id"
+            bundle_resource_id=$(app-store-connect bundle-ids create "$watch_bundle_id" --name "TurboMeta Watch" --platform IOS --json | python3 -c "$json_first_id")
+          fi
+          test -n "$bundle_resource_id"
+          existing=$(app-store-connect profiles list --type IOS_APP_STORE --state ACTIVE --name "$profile_name" --save --json | python3 -c "$json_count")
+          if [ "$existing" = "0" ]; then
+            echo "워치 App Store 프로필 생성: $profile_name"
+            cert_ids=$(app-store-connect certificates list --type DISTRIBUTION IOS_DISTRIBUTION --json | python3 -c "$json_ids")
+            test -n "$cert_ids"
+            app-store-connect profiles create "$bundle_resource_id" --certificate-ids $cert_ids --type IOS_APP_STORE --name "$profile_name" --save --json >/dev/null
+          fi
+
       - name: App Store 서명 프로필 적용
         script: xcode-project use-profiles
 
@@ -225,6 +250,31 @@ workflows:
             -project "$CM_BUILD_DIR/$XCODE_PROJECT" \
             -scheme "$XCODE_SCHEME" \
             -onlyUsePackageVersionsFromResolvedFile
+
+      - name: 워치 앱 App Store 서명 프로필 확보
+        script: |
+          set -euo pipefail
+          : "${APP_STORE_CONNECT_ISSUER_ID:?App Store Connect 연동 변수가 없습니다}"
+          : "${APP_STORE_CONNECT_KEY_IDENTIFIER:?App Store Connect 연동 변수가 없습니다}"
+          : "${APP_STORE_CONNECT_PRIVATE_KEY:?App Store Connect 연동 변수가 없습니다}"
+          watch_bundle_id="$BUNDLE_ID.watchkitapp"
+          profile_name="TurboMeta Watch App Store"
+          json_first_id='import json,sys; s=sys.stdin.read().strip(); d=json.loads(s) if s else []; d=d if isinstance(d,list) else [d]; print(d[0]["id"] if d else "")'
+          json_count='import json,sys; s=sys.stdin.read().strip(); d=json.loads(s) if s else []; print(len(d) if isinstance(d,list) else 1)'
+          json_ids='import json,sys; s=sys.stdin.read().strip(); d=json.loads(s) if s else []; print(" ".join(x["id"] for x in d))'
+          bundle_resource_id=$(app-store-connect bundle-ids list --bundle-id-identifier "$watch_bundle_id" --strict-match-identifier --json | python3 -c "$json_first_id")
+          if [ -z "$bundle_resource_id" ]; then
+            echo "워치 App ID 등록: $watch_bundle_id"
+            bundle_resource_id=$(app-store-connect bundle-ids create "$watch_bundle_id" --name "TurboMeta Watch" --platform IOS --json | python3 -c "$json_first_id")
+          fi
+          test -n "$bundle_resource_id"
+          existing=$(app-store-connect profiles list --type IOS_APP_STORE --state ACTIVE --name "$profile_name" --save --json | python3 -c "$json_count")
+          if [ "$existing" = "0" ]; then
+            echo "워치 App Store 프로필 생성: $profile_name"
+            cert_ids=$(app-store-connect certificates list --type DISTRIBUTION IOS_DISTRIBUTION --json | python3 -c "$json_ids")
+            test -n "$cert_ids"
+            app-store-connect profiles create "$bundle_resource_id" --certificate-ids $cert_ids --type IOS_APP_STORE --name "$profile_name" --save --json >/dev/null
+          fi
 
       - name: App Store 서명 프로필 적용
         script: xcode-project use-profiles

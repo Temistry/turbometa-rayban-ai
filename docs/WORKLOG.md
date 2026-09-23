@@ -414,6 +414,29 @@
 ### 남음
 - [ ] CI(iPhone 시뮬레이터 빌드 2건 + CodeMagic 컴파일·TestFlight) 결과 확인
 
+## 2026-09-23 · 사전 감지 조사 결합 버그 + 워치 TestFlight 서명
+
+### 결정
+- 회귀 테스트가 사전 감지 버그를 잡았다. 한글도 alphanumerics라서 "EBITDA가"가 한 토큰이 되어 사전 매칭이 실패했다. 실제 한국어 전사에서는 조사가 거의 항상 붙으므로 실사용 감지율이 크게 낮았을 것이다. ASCII 영문·숫자 연속 구간만 토큰으로 떼도록 수정하고 kubernetes를 사전에 추가했다.
+- CodeMagic TestFlight 실패 원인: 워치 번들(io.github.temistry.turbometa.watchkitapp)용 App Store 프로필 부재("TurboMetaWatch requires a provisioning profile").
+- 해법: ios-testflight/ios-feature-build에 워치 서명 단계를 추가해 App Store Connect 연동으로 워치 App ID를 확보하고 "TurboMeta Watch App Store" 프로필을 재사용하거나 없을 때만 생성한다. 인증서 개인키는 필요 없다(배포 인증서 ID 목록만 사용).
+- TestFlight 업로드 검증 대비로 워치 AppIcon(1024 단일 크기, 본 앱 아이콘 재사용, 알파 없음)과 Resources 빌드 단계를 추가했다.
+
+### 완료
+- [x] lexiconHit 토큰화 수정 + 조사 결합 회귀 테스트
+- [x] 워치 서명 프로필 확보 단계(codemagic.yaml)
+- [x] 워치 AppIcon 자산 카탈로그 등록
+
+### 남음
+- [ ] CodeMagic에서 App Store Connect 연동 변수가 노출되는지 확인(없으면 turbometa_secrets에 추가 필요)
+- [ ] TestFlight 업로드·처리 결과 확인, 실기기 워치 동기화 확인
+
+### 검증
+- 로컬: YAML 파싱, 워치 단계 bash -n 문법 검사, 정적 감사.
+
+### 보안 메모
+- App Store Connect 키는 CodeMagic 연동에서만 주입되며 레포·로그에 남기지 않는다.
+
 ### 검증
 - 원격 빌드로만 컴파일 가능. 실패 시 GitHub job 로그의 error 필터로 재진단.
 

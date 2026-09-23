@@ -17,4 +17,10 @@ final class MeetingLexiconTests: XCTestCase {
         XCTAssertTrue(MeetingPolicy.lexiconHit(in: "Kubernetes 클러스터 이야기입니다"))
         XCTAssertTrue(MeetingPolicy.lexiconHit(in: "ebitda 얘기가 아니라"))
     }
+
+    func testKoreanParticleAttachedToTermStillMatches() {
+        XCTAssertTrue(MeetingPolicy.lexiconHit(in: "API를 먼저 열어 두죠"))
+        XCTAssertTrue(MeetingPolicy.lexiconHit(in: "KPI는 다음 주에"))
+        XCTAssertFalse(MeetingPolicy.lexiconHit(in: "가나다라마바사"))
+    }
 }
