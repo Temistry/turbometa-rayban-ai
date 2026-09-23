@@ -248,6 +248,9 @@ final class QuickVisionService {
 
         guard (200..<300).contains(httpResponse.statusCode) else {
             let message = extractServerError(from: data)
+            if httpResponse.statusCode == 429 {
+                print("[QuickVisionAPI][WARN] quota \(MeetingGeminiService.quotaDiagnostic(from: data))")
+            }
             print(
                 "[QuickVisionAPI][ERROR] Gemini API 오류 status=\(httpResponse.statusCode) "
                 + "requestID=\(requestID) message=\(message)"

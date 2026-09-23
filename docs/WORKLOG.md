@@ -491,6 +491,20 @@
 ### 남음
 - [ ] 화면을 잠근 채 회의 지속 확인(워치에 E-JEV 코드가 뜨지 않아야 함)
 
+## 2026-09-23 · 빌드 79 로그: Gemini 429 + 회의 서랍 잠금 저장 실패
+
+### 결정
+- 빌드 79 세션의 귓속말 실패는 Gemini 429 RESOURCE_EXHAUSTED(Google API 키 할당량 소진). Jev(200)·워치(state=ready)·전사는 정상. 코드 결함이 아니라 계정 한도 문제.
+- 로그에 한도 종류가 없어 분당/일일 구분 불가 → 429 응답의 quotaId·quotaValue·retryDelay만 기록하도록 추가(MeetingGemini, QuickVisionAPI). 메시지 원문은 기록하지 않음.
+- 할당량 소비 구조: 회의 중 장면 분석이 20초마다 카메라 프레임을 보내(시간당 최대 180회) 귓속말보다 많이 소비한다. 간격 조정은 사용자 결정 사항으로 남김.
+- 직전 세션(업데이트 전 빌드)의 E-JEV-401·Gemini code=1(missingAPIKey)은 잠금 중 키체인 읽기 문제로 dca03da에서 해결됨.
+- 회의 서랍 save failed code=513: 폴더·전사 파일을 FileProtectionType.complete로 저장해 잠금 중 쓰기가 막혔다. 녹음 파일도 폴더 등급을 따라 잠금 후 끊겼을 가능성이 크다. 프로젝트 기준(ConversationStorage·QuickVisionStorage와 동일)인 completeUntilFirstUserAuthentication으로 변경하고 감사 필수 규칙에 MeetingArchiveService를 추가.
+- MetricKit 크래시 기록은 빌드 48의 과거 기록이라 무관.
+
+### 남음
+- [ ] 할당량 해소 방법 결정(유료 결제 연결 또는 장면 분석 간격 조정)
+- [ ] 새 빌드에서 화면 잠금 상태로 회의 종료 후 서랍에 전사·녹음이 남는지 확인
+
 ### 검증
 - 원격 빌드로만 컴파일 가능. 실패 시 GitHub job 로그의 error 필터로 재진단.
 

@@ -203,13 +203,45 @@ final class MeetingGeminiService {
                 DeveloperConsole.shared.log(.info, category: "MeetingGemini", "retry status=\((retryResponse as? HTTPURLResponse)?.statusCode ?? 0)")
                 if let retryHTTP = retryResponse as? HTTPURLResponse,
                    !(200...299).contains(retryHTTP.statusCode) {
+                    if retryHTTP.statusCode == 429 {
+                        DeveloperConsole.shared.log(.warning, category: "MeetingGemini", "quota \(Self.quotaDiagnostic(from: retryData))")
+                    }
                     throw MeetingGeminiError.http(retryHTTP.statusCode)
                 }
                 return try Self.decodeObject(retryData)
             }
+            if httpResponse.statusCode == 429 {
+                DeveloperConsole.shared.log(.warning, category: "MeetingGemini", "quota \(Self.quotaDiagnostic(from: data))")
+            }
             throw MeetingGeminiError.http(httpResponse.statusCode)
         }
         return try Self.decodeObject(data)
+    }
+
+    /// 429 응답에서 어떤 한도(분당·일일, 무료 등급 여부)에 걸렸는지와 재시도 대기만 뽑는다.
+    /// 메시지 원문·키는 남기지 않는다.
+    static func quotaDiagnostic(from data: Data) -> String {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let error = object["error"] as? [String: Any],
+              let details = error["details"] as? [[String: Any]] else {
+            return "quotaId=- retryDelay=-"
+        }
+        var quotaIDs: [String] = []
+        var retryDelay = "-"
+        for detail in details {
+            if let violations = detail["violations"] as? [[String: Any]] {
+                for violation in violations {
+                    let id = (violation["quotaId"] as? String) ?? "-"
+                    let value = (violation["quotaValue"] as? String) ?? "-"
+                    quotaIDs.append("\(id)(\(value))")
+                }
+            }
+            if let delay = detail["retryDelay"] as? String {
+                retryDelay = delay
+            }
+        }
+        let joined = quotaIDs.isEmpty ? "-" : quotaIDs.joined(separator: ",")
+        return "quotaId=\(joined) retryDelay=\(retryDelay)"
     }
 
     private static func decodeObject(_ data: Data) throws -> [String: Any] {

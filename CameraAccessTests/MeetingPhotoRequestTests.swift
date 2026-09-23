@@ -56,4 +56,32 @@ final class MeetingPhotoRequestTests: XCTestCase {
         XCTAssertEqual(config["maxOutputTokens"] as? Int, 1024)
         XCTAssertNotNil(stripped["contents"])
     }
+
+    /// 빌드 79: 429가 났지만 분당·일일 한도 중 무엇인지 로그로 구분할 수 없었다.
+    func testQuotaDiagnosticNamesLimitAndRetryDelay() throws {
+        let body: [String: Any] = [
+            "error": [
+                "code": 429,
+                "status": "RESOURCE_EXHAUSTED",
+                "message": "You exceeded your current quota",
+                "details": [
+                    [
+                        "@type": "type.googleapis.com/google.rpc.QuotaFailure",
+                        "violations": [[
+                            "quotaMetric": "generativelanguage.googleapis.com/generate_content_free_tier_requests",
+                            "quotaId": "GenerateRequestsPerDayPerProjectPerModel-FreeTier",
+                            "quotaValue": "250"
+                        ]]
+                    ],
+                    ["@type": "type.googleapis.com/google.rpc.RetryInfo", "retryDelay": "41s"]
+                ]
+            ]
+        ]
+        let data = try JSONSerialization.data(withJSONObject: body)
+        let line = MeetingGeminiService.quotaDiagnostic(from: data)
+        XCTAssertTrue(line.contains("GenerateRequestsPerDayPerProjectPerModel-FreeTier(250)"))
+        XCTAssertTrue(line.contains("retryDelay=41s"))
+        XCTAssertFalse(line.contains("exceeded"))
+        XCTAssertEqual(MeetingGeminiService.quotaDiagnostic(from: Data("not json".utf8)), "quotaId=- retryDelay=-")
+    }
 }

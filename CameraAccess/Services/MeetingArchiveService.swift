@@ -51,8 +51,11 @@ final class MeetingArchiveService: ObservableObject {
     func prepare(id: UUID) throws {
         let directory = sessionURL(id: id)
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        // 회의는 화면이 잠긴 뒤에도 이어지고 끝난다. complete 등급은 잠금 중 쓰기가 막혀
+        // 전사 저장이 code=513으로 실패하고 녹음(audio.caf)도 끊긴다.
+        // 대화 저장소와 같은 프로젝트 기준(첫 잠금 해제 이후 접근)을 쓴다. 새 파일은 폴더 등급을 따른다.
         try? fileManager.setAttributes(
-            [.protectionKey: FileProtectionType.complete],
+            [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
             ofItemAtPath: directory.path
         )
     }
@@ -66,7 +69,7 @@ final class MeetingArchiveService: ObservableObject {
             encoder.outputFormatting = [.sortedKeys]
             let data = try encoder.encode(meeting)
             let url = sessionURL(id: meeting.id).appendingPathComponent("transcript.json")
-            try data.write(to: url, options: [.atomic, .completeFileProtection])
+            try data.write(to: url, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
             DeveloperConsole.shared.log(.info, category: "MeetingArchive", "saved lines=\(meeting.lines.count)")
         } catch {
             DeveloperConsole.shared.log(.warning, category: "MeetingArchive", "save failed code=\((error as NSError).code)")

@@ -326,6 +326,10 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
             "completeFileProtectionUntilFirstUserAuthentication",
             "FileProtectionType.completeUntilFirstUserAuthentication",
         ],
+        "CameraAccess/Services/MeetingArchiveService.swift": [
+            "completeFileProtectionUntilFirstUserAuthentication",
+            "FileProtectionType.completeUntilFirstUserAuthentication",
+        ],
         "CameraAccess/Views/DebugMenuView.swift": [
             "SensitiveDataRedactor.redact",
             "maximumEntryCount",
