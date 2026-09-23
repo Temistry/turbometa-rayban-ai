@@ -48,9 +48,14 @@ extension PhoneLink: WCSessionDelegate {
         }
     }
 
-    func sessionDidBecomeInactive(_ session: WCSession) {}
+    // watchOS SDK는 이 두 셀렉터를 필수 요구로 두면서 Swift 인터페이스에서는
+    // unavailable로 표시한다. Swift 이름을 다르게 하고 @objc 셀렉터로
+    // 프로토콜 요구를 충족시킨다.
+    @objc(sessionDidBecomeInactive:)
+    func phoneSessionBecameInactive(_ session: WCSession) {}
 
-    func sessionDidDeactivate(_ session: WCSession) {
+    @objc(sessionDidDeactivate:)
+    func phoneSessionDidDeactivate(_ session: WCSession) {
         session.activate()
     }
 }

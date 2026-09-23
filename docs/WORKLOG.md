@@ -397,3 +397,22 @@
 ### 보안 메모
 - ...
 ```
+
+## 2026-09-23 · 워치 세션 델리게이트 watchOS SDK 모순 해소
+
+### 결정
+- watchOS SDK는 WCSessionDelegate의 sessionDidBecomeInactive/sessionDidDeactivate를 필수 요구로 두면서 Swift 인터페이스에서는 unavailable로 표시한다(커밋 ed0853f 생략 시 non-conformance, 7e6538c 일반 구현 시 cannot override 불일치 확인).
+- 해법: Swift 이름을 다르게 지정하고 @objc(sessionDidBecomeInactive:)/@objc(sessionDidDeactivate:) 셀렉터로 프로토콜 요구를 충족시킨다. PhoneLink는 워치 전용이므로 플랫폼 조건 분기는 불필요.
+
+### 완료
+- [x] PhoneLink 델리게이트 @objc 셀렉터 우회 적용
+- [x] 로컬 정적 감사 통과(fatal 0 / warning 0)
+
+### 남음
+- [ ] CI(iPhone 시뮬레이터 빌드 2건 + CodeMagic 컴파일·TestFlight) 결과 확인
+
+### 검증
+- 원격 빌드로만 컴파일 가능. 실패 시 GitHub job 로그의 error 필터로 재진단.
+
+### 보안 메모
+- 코드·로그·워크로그에 키·회의 원문 미포함. Keychain 및 CodeMagic 시크릿 구성 변경 없음.
