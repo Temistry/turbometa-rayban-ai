@@ -87,4 +87,25 @@ final class MeetingContextParsingTests: XCTestCase {
             VisualAssistService.maxInterval
         )
     }
+
+    func testSaverModeBackoffKeepsItsOwnBase() {
+        XCTAssertEqual(VisualAssistService.nextInterval(current: 60, hadFailure: false, base: 60), 60)
+        XCTAssertEqual(VisualAssistService.nextInterval(current: 60, hadFailure: true, base: 60), 120)
+        XCTAssertEqual(VisualAssistService.nextInterval(current: 120, hadFailure: true, base: 60), 120)
+    }
+
+    func testSceneModeIntervals() {
+        XCTAssertEqual(MeetingSceneMode.standard.checkInterval, 20)
+        XCTAssertEqual(MeetingSceneMode.saver.checkInterval, 60)
+        XCTAssertNil(MeetingSceneMode.off.checkInterval)
+    }
+
+    /// 이전 버전의 켜기/끄기 스위치 값을 이어받는다.
+    func testSceneModeMigratesLegacyToggle() {
+        XCTAssertEqual(MeetingSceneMode.resolve(stored: nil, legacyToggle: nil), .standard)
+        XCTAssertEqual(MeetingSceneMode.resolve(stored: nil, legacyToggle: true), .standard)
+        XCTAssertEqual(MeetingSceneMode.resolve(stored: nil, legacyToggle: false), .off)
+        XCTAssertEqual(MeetingSceneMode.resolve(stored: "saver", legacyToggle: false), .saver)
+        XCTAssertEqual(MeetingSceneMode.resolve(stored: "unknown", legacyToggle: nil), .standard)
+    }
 }

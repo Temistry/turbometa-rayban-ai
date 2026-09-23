@@ -67,7 +67,7 @@ final class MeetingGeminiService {
     }
 
     func describePhoto(jpegData: Data, recentContext: String) async throws -> String {
-        let response = try await post(Self.photoRequestBody(jpegData: jpegData, recentContext: recentContext))
+        let response = try await post(Self.photoRequestBody(jpegData: jpegData, recentContext: recentContext), lane: "photo")
         guard let text = Self.parseText(response),
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw MeetingGeminiError.invalidResponse
@@ -105,7 +105,7 @@ final class MeetingGeminiService {
             explainedTerms: explainedTerms
         )
 
-        let responseObject = try await post(body, timeout: 12)
+        let responseObject = try await post(body, timeout: 12, lane: "whisper")
         guard let raw = Self.parseText(responseObject) else {
             DeveloperConsole.shared.log(.warning, category: "MeetingGemini", "unparseable \(Self.diagnosticMetadata(responseObject))")
             throw MeetingGeminiError.invalidResponse
@@ -153,7 +153,7 @@ final class MeetingGeminiService {
             "generationConfig": Self.generationConfig(maxOutputTokens: 2048)
         ]
 
-        let responseObject = try await post(body)
+        let responseObject = try await post(body, lane: "fact")
         let summary = Self.parseText(responseObject) ?? "판단 불가"
         return MeetingFactCheckResult(
             summary: summary,
@@ -161,7 +161,16 @@ final class MeetingGeminiService {
         )
     }
 
-    private func post(_ body: [String: Any], timeout: TimeInterval = 30) async throws -> [String: Any] {
+    private func post(_ body: [String: Any], timeout: TimeInterval = 30, lane: String) async throws -> [String: Any] {
+        let object = try await postWithFallback(body, timeout: timeout)
+        if let usage = GeminiUsage.from(object) {
+            GeminiUsageLedger.shared.record(lane: lane, usage: usage)
+            DeveloperConsole.shared.log(.info, category: "MeetingGemini", "usage lane=\(lane) in=\(usage.input) out=\(usage.candidates) thoughts=\(usage.thoughts)")
+        }
+        return object
+    }
+
+    private func postWithFallback(_ body: [String: Any], timeout: TimeInterval) async throws -> [String: Any] {
         let usesThinking = Self.hasThinkingConfig(body) && !GeminiThinkingSupport.shared.rejected
         let effectiveBody = usesThinking ? body : Self.removingThinkingConfig(body)
         do {
@@ -324,13 +333,15 @@ final class MeetingGeminiService {
     }
 }
 
-/// 모델이 thinkingConfig를 거부(HTTP 400)한 적이 있으면 이후 Gemini 요청에서 뺀다.
+/// 모델이 thinkingConfig나 사진별 mediaResolution을 거부(HTTP 400)한 적이 있으면
+/// 이후 Gemini 요청에서 해당 옵션을 뺀다.
 /// 여러 요청이 동시에 읽고 쓰므로 잠금으로 보호한다.
 final class GeminiThinkingSupport {
     static let shared = GeminiThinkingSupport()
 
     private let lock = NSLock()
     private var value = false
+    private var mediaValue = false
 
     var rejected: Bool {
         lock.lock()
@@ -342,5 +353,93 @@ final class GeminiThinkingSupport {
         lock.lock()
         value = true
         lock.unlock()
+    }
+
+    var mediaResolutionRejected: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return mediaValue
+    }
+
+    func markMediaResolutionRejected() {
+        lock.lock()
+        mediaValue = true
+        lock.unlock()
+    }
+}
+
+/// 응답 usageMetadata에서 뽑은 토큰 수. 생각 토큰은 출력 요금으로 청구된다.
+struct GeminiUsage: Equatable {
+    var prompt: Int = 0
+    var toolPrompt: Int = 0
+    var candidates: Int = 0
+    var thoughts: Int = 0
+
+    var input: Int { prompt + toolPrompt }
+    var output: Int { candidates + thoughts }
+
+    static func from(_ object: [String: Any]) -> GeminiUsage? {
+        guard let meta = object["usageMetadata"] as? [String: Any] else { return nil }
+        func count(_ key: String) -> Int { (meta[key] as? NSNumber)?.intValue ?? 0 }
+        return GeminiUsage(
+            prompt: count("promptTokenCount"),
+            toolPrompt: count("toolUsePromptTokenCount"),
+            candidates: count("candidatesTokenCount"),
+            thoughts: count("thoughtsTokenCount")
+        )
+    }
+
+    static func += (lhs: inout GeminiUsage, rhs: GeminiUsage) {
+        lhs.prompt += rhs.prompt
+        lhs.toolPrompt += rhs.toolPrompt
+        lhs.candidates += rhs.candidates
+        lhs.thoughts += rhs.thoughts
+    }
+}
+
+/// 회의 한 번 동안의 Gemini 사용량을 요청 종류별로 합산한다.
+/// 요금 단가는 gemini-3.6-flash 유료 등급(2026-12-31까지): 입력 0.75, 출력 3.75 USD / 100만 토큰.
+/// Google 검색 그라운딩(월 5,000건 무료)은 포함하지 않는다.
+final class GeminiUsageLedger {
+    static let shared = GeminiUsageLedger()
+
+    static let inputPricePerMillion = 0.75
+    static let outputPricePerMillion = 3.75
+
+    private let lock = NSLock()
+    private var totals: [String: GeminiUsage] = [:]
+    private var requests: [String: Int] = [:]
+
+    func reset() {
+        lock.lock()
+        totals.removeAll()
+        requests.removeAll()
+        lock.unlock()
+    }
+
+    func record(lane: String, usage: GeminiUsage) {
+        lock.lock()
+        totals[lane, default: GeminiUsage()] += usage
+        requests[lane, default: 0] += 1
+        lock.unlock()
+    }
+
+    static func estimatedCost(_ usage: GeminiUsage) -> Double {
+        (Double(usage.input) * inputPricePerMillion + Double(usage.output) * outputPricePerMillion) / 1_000_000
+    }
+
+    /// 예: "requests=42 in=51200 out=8300(thoughts=5100) cost≈$0.0695 lanes=scene:30,whisper:10,fact:2"
+    func summary() -> String {
+        lock.lock()
+        let totals = self.totals
+        let requests = self.requests
+        lock.unlock()
+
+        var all = GeminiUsage()
+        for usage in totals.values { all += usage }
+        let count = requests.values.reduce(0, +)
+        let lanes = requests.keys.sorted().map { "\($0):\(requests[$0] ?? 0)" }.joined(separator: ",")
+        let cost = String(format: "%.4f", Self.estimatedCost(all))
+        return "requests=\(count) in=\(all.input) out=\(all.output)(thoughts=\(all.thoughts)) cost≈$\(cost) lanes=\(lanes.isEmpty ? "-" : lanes)"
     }
 }

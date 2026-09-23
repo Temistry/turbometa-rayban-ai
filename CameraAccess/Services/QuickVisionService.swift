@@ -41,11 +41,18 @@ final class QuickVisionService {
         struct Part: Encodable {
             let text: String?
             let inlineData: InlineData?
+            /// Gemini 3 사진별 해상도. 예: {"level": "MEDIA_RESOLUTION_MEDIUM"}
+            var mediaResolution: MediaResolution? = nil
 
             enum CodingKeys: String, CodingKey {
                 case text
                 case inlineData = "inline_data"
+                case mediaResolution
             }
+        }
+
+        struct MediaResolution: Encodable {
+            let level: String
         }
 
         struct InlineData: Encodable {
@@ -109,7 +116,12 @@ final class QuickVisionService {
 
     // MARK: - Public API
 
-    func analyzeImage(_ image: UIImage, customPrompt: String? = nil) async throws -> String {
+    func analyzeImage(
+        _ image: UIImage,
+        customPrompt: String? = nil,
+        mediaResolution: String? = nil,
+        usageLane: String = "vision"
+    ) async throws -> String {
         let startedAt = Date()
 
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -129,54 +141,100 @@ final class QuickVisionService {
             throw QuickVisionError.invalidResponse
         }
 
-        func requestBody(thinking: Bool) -> GenerateContentRequest {
-            GenerateContentRequest(
-                contents: [
-                    .init(
-                        role: "user",
-                        parts: [
-                            .init(text: prompt, inlineData: nil),
-                            .init(
-                                text: nil,
-                                inlineData: .init(
-                                    mimeType: "image/jpeg",
-                                    data: imageData.base64EncodedString()
-                                )
-                            )
-                        ]
-                    )
-                ],
-                // 생각 토큰도 출력 한도에서 차감되고, 사진+높은 생각 수준은 응답이 수십 초 걸린다.
-                generationConfig: .init(
-                    temperature: 0.2,
-                    maxOutputTokens: 1024,
-                    thinkingConfig: thinking ? .init(thinkingLevel: "low") : nil
-                )
-            )
-        }
+        let imageBase64 = imageData.base64EncodedString()
 
         print(
             "[QuickVisionAPI][INFO] Gemini 분석 준비 model=\(model) "
             + "imageBytes=\(imageData.count) promptLength=\(prompt.count)"
         )
 
-        let useThinking = !GeminiThinkingSupport.shared.rejected
-        let result: String
-        do {
-            result = try await makeRequest(requestBody(thinking: useThinking))
-        } catch QuickVisionError.apiError(statusCode: 400, requestID: _, message: _) where useThinking {
-            GeminiThinkingSupport.shared.markRejected()
-            print("[QuickVisionAPI][WARN] thinkingConfig 거부, 설정 없이 1회 재시도")
-            result = try await makeRequest(requestBody(thinking: false))
+        // 400이면 선택 옵션을 하나씩 빼고 다시 보낸다(해상도 → 생각 설정 순).
+        // 성공한 조합으로 어떤 옵션이 거부됐는지 판단해 이후 요청에서 뺀다.
+        let support = GeminiThinkingSupport.shared
+        var useThinking = !support.rejected
+        var useMedia = mediaResolution != nil && !support.mediaResolutionRejected
+        var droppedMedia = false
+        var droppedThinking = false
+        var output: String?
+        while output == nil {
+            do {
+                let body = Self.makeRequestBody(
+                    prompt: prompt,
+                    imageBase64: imageBase64,
+                    thinking: useThinking,
+                    mediaResolution: useMedia ? mediaResolution : nil
+                )
+                output = try await makeRequest(body, usageLane: usageLane)
+            } catch QuickVisionError.apiError(statusCode: 400, requestID: _, message: _) where useMedia || useThinking {
+                if useMedia {
+                    useMedia = false
+                    droppedMedia = true
+                    print("[QuickVisionAPI][WARN] mediaResolution 포함 요청 거부, 해상도 옵션 없이 재시도")
+                } else {
+                    useThinking = false
+                    droppedThinking = true
+                    print("[QuickVisionAPI][WARN] thinkingConfig 포함 요청 거부, 생각 설정 없이 재시도")
+                }
+            }
         }
+        if droppedThinking {
+            support.markRejected()
+        } else if droppedMedia {
+            support.markMediaResolutionRejected()
+        }
+        let result = output ?? ""
         let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
         print("[QuickVisionAPI][INFO] Gemini 분석 완료 elapsedMs=\(elapsedMs) resultLength=\(result.count)")
         return result
     }
 
+    private static func makeRequestBody(
+        prompt: String,
+        imageBase64: String,
+        thinking: Bool,
+        mediaResolution: String?
+    ) -> GenerateContentRequest {
+        GenerateContentRequest(
+            contents: [
+                .init(
+                    role: "user",
+                    parts: [
+                        .init(text: prompt, inlineData: nil),
+                        .init(
+                            text: nil,
+                            inlineData: .init(mimeType: "image/jpeg", data: imageBase64),
+                            mediaResolution: mediaResolution.map { .init(level: $0) }
+                        )
+                    ]
+                )
+            ],
+            // 생각 토큰도 출력 한도에서 차감되고, 사진+높은 생각 수준은 응답이 수십 초 걸린다.
+            generationConfig: .init(
+                temperature: 0.2,
+                maxOutputTokens: 1024,
+                thinkingConfig: thinking ? .init(thinkingLevel: "low") : nil
+            )
+        )
+    }
+
+    /// 테스트용: 실제로 전송되는 JSON 본문.
+    static func encodedRequestBody(
+        prompt: String,
+        imageBase64: String,
+        thinking: Bool,
+        mediaResolution: String?
+    ) throws -> Data {
+        try JSONEncoder().encode(makeRequestBody(
+            prompt: prompt,
+            imageBase64: imageBase64,
+            thinking: thinking,
+            mediaResolution: mediaResolution
+        ))
+    }
+
     // MARK: - Request
 
-    private func makeRequest(_ requestBody: GenerateContentRequest) async throws -> String {
+    private func makeRequest(_ requestBody: GenerateContentRequest, usageLane: String) async throws -> String {
         guard let url = URL(string: "\(baseURL)/models/\(model):generateContent") else {
             print("[QuickVisionAPI][ERROR] Gemini URL 생성 실패 model=\(model)")
             throw QuickVisionError.invalidResponse
@@ -273,6 +331,13 @@ final class QuickVisionService {
                 + "responseBytes=\(data.count)"
             )
             throw QuickVisionError.invalidResponse
+        }
+
+        // 응답이 비거나 차단돼도 토큰은 청구되므로 해석 직후에 기록한다.
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let usage = GeminiUsage.from(object) {
+            GeminiUsageLedger.shared.record(lane: usageLane, usage: usage)
+            print("[QuickVisionAPI][INFO] usage lane=\(usageLane) in=\(usage.input) out=\(usage.candidates) thoughts=\(usage.thoughts)")
         }
 
         if let blockReason = responseBody.promptFeedback?.blockReason, !blockReason.isEmpty {

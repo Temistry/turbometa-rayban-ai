@@ -132,14 +132,6 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var photoError: String?
     @Published private(set) var detailBubble: DetailBubble?
 
-    /// 설정의 시각 보조 토글. 기본값은 켜짐이다.
-    static var visualAssistEnabled: Bool {
-        guard UserDefaults.standard.object(forKey: "meeting.visualAssist") != nil else {
-            return true
-        }
-        return UserDefaults.standard.bool(forKey: "meeting.visualAssist")
-    }
-
     let streamViewModel: StreamSessionViewModel
 
     private let transcription = MeetingTranscriptionService()
@@ -182,15 +174,6 @@ final class MeetingInterpreterViewModel: ObservableObject {
     init(streamViewModel: StreamSessionViewModel) {
         self.streamViewModel = streamViewModel
 
-        if Self.visualAssistEnabled {
-            let visualAssist = VisualAssistService(streamViewModel: streamViewModel)
-            visualAssist.onContext = { [weak self] context in
-                self?.transcription.contextualTerms = context.terms
-                self?.sceneSummary = context.scene
-            }
-            self.visualAssist = visualAssist
-        }
-
         transcription.onSegment = { [weak self] text in
             self?.handleUtterance(text)
         }
@@ -209,6 +192,25 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 self?.handlePlaybackStateChange(state)
             }
         watchBridge.activate()
+    }
+
+    /// 설정 단계에 맞춰 장면 분석을 구성한다. 끄기면 안경 카메라 스트림도 켜지 않는다.
+    /// 이전 회의의 장면 용어·요약은 새 회의로 넘기지 않는다.
+    private func configureVisualAssist(for mode: MeetingSceneMode) {
+        DeveloperConsole.shared.log(.info, category: "MeetingScene", "mode=\(mode.rawValue)")
+        transcription.contextualTerms = []
+        sceneSummary = nil
+        guard let interval = mode.checkInterval else {
+            visualAssist = nil
+            return
+        }
+        if let existing = visualAssist, existing.baseInterval == interval { return }
+        let assist = VisualAssistService(streamViewModel: streamViewModel, baseInterval: interval)
+        assist.onContext = { [weak self] context in
+            self?.transcription.contextualTerms = context.terms
+            self?.sceneSummary = context.scene
+        }
+        visualAssist = assist
     }
 
     func start() {
@@ -236,6 +238,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
         // 화면이 잠긴 뒤에도 회의가 이어지도록 Gemini 키도 지금 읽어 둔다.
         APIKeyManager.shared.prewarmMeetingKeys()
+        // 설정 변경이 앱 재실행 없이 다음 회의부터 적용되도록 시작할 때마다 구성한다.
+        configureVisualAssist(for: MeetingSceneMode.current)
+        GeminiUsageLedger.shared.reset()
 
         isStarting = true
         let archiveID = UUID()
@@ -318,11 +323,13 @@ final class MeetingInterpreterViewModel: ObservableObject {
         detailTask = nil
         detailBubble = nil
         syncWatch(force: true)
+        DeveloperConsole.shared.log(.info, category: "MeetingCost", GeminiUsageLedger.shared.summary())
+        let assistToStop = visualAssist
         Task {
             await pendingStart?.value
             await pendingPhoto?.value
-            if let visualAssist {
-                await visualAssist.stop()
+            if let assistToStop {
+                await assistToStop.stop()
             } else {
                 await streamViewModel.stopSession()
             }

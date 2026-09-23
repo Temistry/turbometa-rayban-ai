@@ -84,4 +84,60 @@ final class MeetingPhotoRequestTests: XCTestCase {
         XCTAssertFalse(line.contains("exceeded"))
         XCTAssertEqual(MeetingGeminiService.quotaDiagnostic(from: Data("not json".utf8)), "quotaId=- retryDelay=-")
     }
+
+    func testUsageParsingCountsThoughtsAsOutput() throws {
+        let usage = try XCTUnwrap(GeminiUsage.from([
+            "usageMetadata": [
+                "promptTokenCount": 800,
+                "candidatesTokenCount": 60,
+                "thoughtsTokenCount": 140,
+                "totalTokenCount": 1000
+            ]
+        ]))
+        XCTAssertEqual(usage.input, 800)
+        XCTAssertEqual(usage.output, 200)
+        XCTAssertNil(GeminiUsage.from(["candidates": []]))
+    }
+
+    func testCostEstimateUsesFlashPrices() {
+        // 입력 100만 토큰 0.75달러 + 출력 100만 토큰 3.75달러
+        let usage = GeminiUsage(prompt: 1_000_000, toolPrompt: 0, candidates: 500_000, thoughts: 500_000)
+        XCTAssertEqual(GeminiUsageLedger.estimatedCost(usage), 4.5, accuracy: 0.0001)
+    }
+
+    func testLedgerSummarizesByLane() {
+        let ledger = GeminiUsageLedger()
+        ledger.record(lane: "scene", usage: GeminiUsage(prompt: 700, toolPrompt: 0, candidates: 50, thoughts: 100))
+        ledger.record(lane: "scene", usage: GeminiUsage(prompt: 700, toolPrompt: 0, candidates: 50, thoughts: 100))
+        ledger.record(lane: "whisper", usage: GeminiUsage(prompt: 500, toolPrompt: 0, candidates: 40, thoughts: 60))
+        let summary = ledger.summary()
+        XCTAssertTrue(summary.contains("requests=3"))
+        XCTAssertTrue(summary.contains("in=1900"))
+        XCTAssertTrue(summary.contains("out=400(thoughts=260)"))
+        XCTAssertTrue(summary.contains("lanes=scene:2,whisper:1"))
+        ledger.reset()
+        XCTAssertTrue(ledger.summary().contains("requests=0"))
+    }
+
+    /// 자동 장면 사진만 중간 해상도를 붙이고, 형식은 Gemini 3 사진별 해상도 규격을 따른다.
+    func testSceneImageRequestCarriesMediaResolution() throws {
+        let data = try QuickVisionService.encodedRequestBody(
+            prompt: "장면", imageBase64: "AAAA", thinking: true,
+            mediaResolution: VisualAssistService.sceneMediaResolution
+        )
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let contents = try XCTUnwrap(object["contents"] as? [[String: Any]])
+        let parts = try XCTUnwrap(contents.first?["parts"] as? [[String: Any]])
+        let image = try XCTUnwrap(parts.last)
+        let resolution = try XCTUnwrap(image["mediaResolution"] as? [String: Any])
+        XCTAssertEqual(resolution["level"] as? String, "MEDIA_RESOLUTION_MEDIUM")
+        XCTAssertNil(parts.first?["mediaResolution"])
+
+        let plain = try QuickVisionService.encodedRequestBody(
+            prompt: "장면", imageBase64: "AAAA", thinking: false, mediaResolution: nil
+        )
+        let plainText = String(decoding: plain, as: UTF8.self)
+        XCTAssertFalse(plainText.contains("mediaResolution"))
+        XCTAssertFalse(plainText.contains("thinkingConfig"))
+    }
 }

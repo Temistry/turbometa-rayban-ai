@@ -25,7 +25,20 @@ struct UnifiedSettingsView: View {
 
     @State private var hasGoogleAPIKey = false
     @State private var hasJevAPIKey = false
-    @AppStorage("meeting.visualAssist") private var visualAssistEnabled = true
+    @AppStorage(MeetingSceneMode.storageKey) private var sceneModeRaw = ""
+
+    /// 저장값이 없으면 이전 켜기/끄기 스위치 값을 이어받는다.
+    private var sceneMode: Binding<MeetingSceneMode> {
+        Binding(
+            get: {
+                MeetingSceneMode.resolve(
+                    stored: sceneModeRaw.isEmpty ? nil : sceneModeRaw,
+                    legacyToggle: UserDefaults.standard.object(forKey: MeetingSceneMode.legacyToggleKey) as? Bool
+                )
+            },
+            set: { sceneModeRaw = $0.rawValue }
+        )
+    }
 
     var body: some View {
         NavigationView {
@@ -229,8 +242,17 @@ struct UnifiedSettingsView: View {
                 showJevAPIKeySettings = true
             }
 
-            Toggle(isOn: $visualAssistEnabled) {
-                Text("settings.visualassist".localized)
+            Picker(selection: sceneMode) {
+                ForEach(MeetingSceneMode.allCases) { mode in
+                    Text(mode.titleKey.localized).tag(mode)
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("settings.scene".localized)
+                    Text(sceneMode.wrappedValue.detailKey.localized)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
             }
         } header: {
             Text("회의 통역기")

@@ -27,11 +27,18 @@ struct VisionAPIService {
 
     func analyzeImage(
         _ image: UIImage,
-        prompt: String = "사진의 핵심 내용을 자연스러운 한국어로 자세히 설명해 주세요."
+        prompt: String = "사진의 핵심 내용을 자연스러운 한국어로 자세히 설명해 주세요.",
+        mediaResolution: String? = nil,
+        usageLane: String = "vision"
     ) async throws -> String {
         print("[Vision][INFO] 일반 이미지 인식 시작 promptLength=\(prompt.count)")
         do {
-            let result = try await quickVisionService.analyzeImage(image, customPrompt: prompt)
+            let result = try await quickVisionService.analyzeImage(
+                image,
+                customPrompt: prompt,
+                mediaResolution: mediaResolution,
+                usageLane: usageLane
+            )
             print("[Vision][INFO] 일반 이미지 인식 완료 resultLength=\(result.count)")
             return result
         } catch {
