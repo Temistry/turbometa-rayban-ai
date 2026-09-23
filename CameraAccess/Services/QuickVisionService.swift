@@ -61,11 +61,17 @@ final class QuickVisionService {
         struct GenerationConfig: Encodable {
             let temperature: Double
             let maxOutputTokens: Int
+            let thinkingConfig: ThinkingConfig?
 
             enum CodingKeys: String, CodingKey {
                 case temperature
                 case maxOutputTokens = "maxOutputTokens"
+                case thinkingConfig
             }
+        }
+
+        struct ThinkingConfig: Encodable {
+            let thinkingLevel: String
         }
     }
 
@@ -123,34 +129,46 @@ final class QuickVisionService {
             throw QuickVisionError.invalidResponse
         }
 
-        let requestBody = GenerateContentRequest(
-            contents: [
-                .init(
-                    role: "user",
-                    parts: [
-                        .init(text: prompt, inlineData: nil),
-                        .init(
-                            text: nil,
-                            inlineData: .init(
-                                mimeType: "image/jpeg",
-                                data: imageData.base64EncodedString()
+        func requestBody(thinking: Bool) -> GenerateContentRequest {
+            GenerateContentRequest(
+                contents: [
+                    .init(
+                        role: "user",
+                        parts: [
+                            .init(text: prompt, inlineData: nil),
+                            .init(
+                                text: nil,
+                                inlineData: .init(
+                                    mimeType: "image/jpeg",
+                                    data: imageData.base64EncodedString()
+                                )
                             )
-                        )
-                    ]
+                        ]
+                    )
+                ],
+                // 생각 토큰도 출력 한도에서 차감되고, 사진+높은 생각 수준은 응답이 수십 초 걸린다.
+                generationConfig: .init(
+                    temperature: 0.2,
+                    maxOutputTokens: 1024,
+                    thinkingConfig: thinking ? .init(thinkingLevel: "low") : nil
                 )
-            ],
-            generationConfig: .init(
-                temperature: 0.2,
-                maxOutputTokens: 768
             )
-        )
+        }
 
         print(
             "[QuickVisionAPI][INFO] Gemini 분석 준비 model=\(model) "
             + "imageBytes=\(imageData.count) promptLength=\(prompt.count)"
         )
 
-        let result = try await makeRequest(requestBody)
+        let useThinking = !GeminiThinkingSupport.shared.rejected
+        let result: String
+        do {
+            result = try await makeRequest(requestBody(thinking: useThinking))
+        } catch QuickVisionError.apiError(statusCode: 400, requestID: _, message: _) where useThinking {
+            GeminiThinkingSupport.shared.markRejected()
+            print("[QuickVisionAPI][WARN] thinkingConfig 거부, 설정 없이 1회 재시도")
+            result = try await makeRequest(requestBody(thinking: false))
+        }
         let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
         print("[QuickVisionAPI][INFO] Gemini 분석 완료 elapsedMs=\(elapsedMs) resultLength=\(result.count)")
         return result

@@ -456,6 +456,28 @@
 - [ ] GitHub 검증(빌드+회귀 테스트) 통과 확인
 - [ ] TestFlight 업로드 결과 확인
 
+## 2026-09-23 · 귓속말 생성 실패 근본 원인(빌드 75 실기기 로그)
+
+### 결정
+- 귓속말 실패는 매번 `MeetingGemini malformed finish=MAX_TOKENS` 뒤 code=2(invalidResponse)였다. gemini-3.6-flash는 답 전에 생각 토큰을 쓰고 이것도 maxOutputTokens(256)에서 차감되어 JSON이 잘렸다. 이전 빌드의 "귓속말 생성 실패"도 같은 원인으로 본다(당시엔 finish 로그가 없었다).
+- 같은 원인으로 응답이 느려져 백그라운드 전환 직후 12초 타임아웃(-1001)도 발생했다.
+- 장면 맥락(카메라 프레임) 요청은 두 세션 모두 응답을 받지 못했다(55초 대기 후 취소, 30초 이상 무응답). 사진+기본 생각 수준 조합으로 추정.
+- 조치: 회의 Gemini 요청 3종과 QuickVisionService에 thinkingConfig(thinkingLevel=low) 추가, 출력 한도 상향(귓속말·사진 1024, 근거 조사 2048, 장면 1024). 모델이 thinkingConfig를 400으로 거부하면 설정을 빼고 1회 재시도하고, 이후 요청에서도 뺀다(GeminiThinkingSupport).
+- 워치 WCError 7006 = 워치에 앱 미설치. 전송 전에 isPaired/isWatchAppInstalled를 확인하고, 미설치 시 최신 상태를 보관했다가 sessionWatchStateDidChange에서 보낸다. 경고 반복 대신 상태 변화 시 1회만 기록.
+- 참고: 회의 중 안경 연결 후 입력 16kHz인데 엔진 탭은 48kHz로 보고됨. 음성 처리 단계가 변환하며 전사는 정상이라 이번 범위에서 제외.
+
+### 완료
+- [x] 생각 수준·출력 한도 조정 + 400 폴백
+- [x] 워치 미설치 시 전송 보류 + 설치 즉시 전송
+- [x] 요청 설정 회귀 테스트 3건(MeetingPhotoRequestTests)
+
+### 남음
+- [ ] 실기기에서 귓속말 재생 확인(로그에 malformed/MAX_TOKENS가 사라지는지)
+- [ ] 아이폰 Watch 앱에서 TurboMeta 워치 앱 설치 후 실시간 표시 확인
+
+### 보안 메모
+- 로그에는 finish/block 코드와 상태 문자열만 남기며 응답 원문·키는 기록하지 않는다.
+
 ### 검증
 - 원격 빌드로만 컴파일 가능. 실패 시 GitHub job 로그의 error 필터로 재진단.
 

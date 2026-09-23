@@ -21,4 +21,39 @@ final class MeetingPhotoRequestTests: XCTestCase {
             "candidates": [["content": ["parts": [["text": "  \n"]]]]]
         ]))
     }
+
+    /// 빌드 75: 생각 토큰이 256 한도를 다 써서 finish=MAX_TOKENS로 귓속말 JSON이 잘렸다.
+    func testWhisperRequestLimitsThinkingAndLeavesOutputRoom() throws {
+        let body = MeetingGeminiService.explainRequestBody(
+            utterance: "이번 분기 EBITDA가 개선됐습니다",
+            recentContext: "",
+            sceneContext: nil,
+            explainedTerms: []
+        )
+        let config = try XCTUnwrap(body["generationConfig"] as? [String: Any])
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(config["maxOutputTokens"] as? Int), 1024)
+        XCTAssertEqual(config["responseMimeType"] as? String, "application/json")
+        let thinking = try XCTUnwrap(config["thinkingConfig"] as? [String: Any])
+        XCTAssertEqual(thinking["thinkingLevel"] as? String, "low")
+        XCTAssertNoThrow(try JSONSerialization.data(withJSONObject: body))
+    }
+
+    func testPhotoRequestAlsoLimitsThinking() throws {
+        let body = MeetingGeminiService.photoRequestBody(jpegData: Data([0xff, 0xd8]), recentContext: "")
+        XCTAssertTrue(MeetingGeminiService.hasThinkingConfig(body))
+        let config = try XCTUnwrap(body["generationConfig"] as? [String: Any])
+        XCTAssertGreaterThanOrEqual(try XCTUnwrap(config["maxOutputTokens"] as? Int), 1024)
+    }
+
+    func testRemovingThinkingConfigKeepsOtherSettings() throws {
+        let body = MeetingGeminiService.explainRequestBody(
+            utterance: "API 연동", recentContext: "", sceneContext: nil, explainedTerms: []
+        )
+        let stripped = MeetingGeminiService.removingThinkingConfig(body)
+        XCTAssertFalse(MeetingGeminiService.hasThinkingConfig(stripped))
+        let config = try XCTUnwrap(stripped["generationConfig"] as? [String: Any])
+        XCTAssertEqual(config["responseMimeType"] as? String, "application/json")
+        XCTAssertEqual(config["maxOutputTokens"] as? Int, 1024)
+        XCTAssertNotNil(stripped["contents"])
+    }
 }

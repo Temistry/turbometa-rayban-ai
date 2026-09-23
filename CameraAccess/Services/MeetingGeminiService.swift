@@ -37,6 +37,35 @@ final class MeetingGeminiService {
         self.session = session
     }
 
+    /// 회의 요청 공통 생성 설정.
+    /// gemini-3.x는 답하기 전 생각 토큰을 쓰고, 그 토큰도 maxOutputTokens에서 차감된다.
+    /// 한도가 작으면 생각만 하다 JSON이 잘려 finish=MAX_TOKENS가 된다(빌드 75 로그).
+    /// 짧은 답이라 생각 수준을 낮추고 한도는 여유 있게 둔다.
+    static func generationConfig(maxOutputTokens: Int, json: Bool = false) -> [String: Any] {
+        var config: [String: Any] = [
+            "temperature": 0.2,
+            "maxOutputTokens": maxOutputTokens,
+            "thinkingConfig": ["thinkingLevel": "low"]
+        ]
+        if json {
+            config["responseMimeType"] = "application/json"
+        }
+        return config
+    }
+
+    static func removingThinkingConfig(_ body: [String: Any]) -> [String: Any] {
+        guard var config = body["generationConfig"] as? [String: Any],
+              config["thinkingConfig"] != nil else { return body }
+        config.removeValue(forKey: "thinkingConfig")
+        var stripped = body
+        stripped["generationConfig"] = config
+        return stripped
+    }
+
+    static func hasThinkingConfig(_ body: [String: Any]) -> Bool {
+        (body["generationConfig"] as? [String: Any])?["thinkingConfig"] != nil
+    }
+
     func describePhoto(jpegData: Data, recentContext: String) async throws -> String {
         let response = try await post(Self.photoRequestBody(jpegData: jpegData, recentContext: recentContext))
         guard let text = Self.parseText(response),
@@ -59,7 +88,7 @@ final class MeetingGeminiService {
                 ["text": prompt],
                 ["inline_data": ["mime_type": "image/jpeg", "data": jpegData.base64EncodedString()]]
             ]]],
-            "generationConfig": ["temperature": 0.2, "maxOutputTokens": 512]
+            "generationConfig": generationConfig(maxOutputTokens: 1024)
         ]
     }
 
@@ -69,26 +98,12 @@ final class MeetingGeminiService {
         sceneContext: String?,
         explainedTerms: [String] = []
     ) async throws -> MeetingExplanation {
-        let prompt = """
-        당신은 회의 전문용어 통역기다. 아래 '현재 발화'에서 비즈니스(재무·회계·전략·마케팅·영업·법무·계약) 또는 개발(소프트웨어·인프라·클라우드·데이터·보안) 용어를 찾아 착용자에게 귓속말로 설명한다.
-        규칙: 한국어 구어체 1문장, 최대 60자, 용어명으로 시작하고 사전 지식 없이도 이해되게.
-        두 도메인 밖의 단어(일상어·다른 분야 전문용어·고유명사)는 설명하지 않는다. 그 경우 term과 text를 모두 빈 문자열로 출력한다.
-        직전 발화: \(recentContext.isEmpty ? "(없음)" : recentContext)
-        화면 맥락: \(sceneContext.flatMap { $0.isEmpty ? nil : $0 } ?? "(없음)")
-        현재 발화: \(utterance)
-        이미 설명한 용어는 제외하고 새 용어를 선택하라: \(explainedTerms.joined(separator: ", "))
-        새로 설명할 용어가 없으면 term은 빈 문자열로 출력하라.
-        출력은 JSON 하나만: {"term": "발화에서 찾은 전문용어 원문", "text": "귓속말 설명 문장", "category": "business" 또는 "dev" 또는 ""}
-        """
-
-        let body: [String: Any] = [
-            "contents": [["parts": [["text": prompt]]]],
-            "generationConfig": [
-                "temperature": 0.2,
-                "maxOutputTokens": 256,
-                "responseMimeType": "application/json"
-            ]
-        ]
+        let body = Self.explainRequestBody(
+            utterance: utterance,
+            recentContext: recentContext,
+            sceneContext: sceneContext,
+            explainedTerms: explainedTerms
+        )
 
         let responseObject = try await post(body, timeout: 12)
         guard let raw = Self.parseText(responseObject) else {
@@ -102,6 +117,30 @@ final class MeetingGeminiService {
         return explanation
     }
 
+    static func explainRequestBody(
+        utterance: String,
+        recentContext: String,
+        sceneContext: String?,
+        explainedTerms: [String]
+    ) -> [String: Any] {
+        let prompt = """
+        당신은 회의 전문용어 통역기다. 아래 '현재 발화'에서 비즈니스(재무·회계·전략·마케팅·영업·법무·계약) 또는 개발(소프트웨어·인프라·클라우드·데이터·보안) 용어를 찾아 착용자에게 귓속말로 설명한다.
+        규칙: 한국어 구어체 1문장, 최대 60자, 용어명으로 시작하고 사전 지식 없이도 이해되게.
+        두 도메인 밖의 단어(일상어·다른 분야 전문용어·고유명사)는 설명하지 않는다. 그 경우 term과 text를 모두 빈 문자열로 출력한다.
+        직전 발화: \(recentContext.isEmpty ? "(없음)" : recentContext)
+        화면 맥락: \(sceneContext.flatMap { $0.isEmpty ? nil : $0 } ?? "(없음)")
+        현재 발화: \(utterance)
+        이미 설명한 용어는 제외하고 새 용어를 선택하라: \(explainedTerms.joined(separator: ", "))
+        새로 설명할 용어가 없으면 term은 빈 문자열로 출력하라.
+        출력은 JSON 하나만: {"term": "발화에서 찾은 전문용어 원문", "text": "귓속말 설명 문장", "category": "business" 또는 "dev" 또는 ""}
+        """
+
+        return [
+            "contents": [["parts": [["text": prompt]]]],
+            "generationConfig": generationConfig(maxOutputTokens: 1024, json: true)
+        ]
+    }
+
     func factCheck(claim: String) async throws -> MeetingFactCheckResult {
         let prompt = """
         아래 회의 발언 주장의 진위를 웹에서 조사한다. 요약은 한국어 1~2문장으로 +        '지지 근거 N건', '반박 근거 N건', '판단 불가' 중 하나로 시작한다.
@@ -111,7 +150,7 @@ final class MeetingGeminiService {
         let body: [String: Any] = [
             "contents": [["parts": [["text": prompt]]]],
             "tools": [["google_search": [String: Any]()]],
-            "generationConfig": ["temperature": 0.2, "maxOutputTokens": 512]
+            "generationConfig": Self.generationConfig(maxOutputTokens: 2048)
         ]
 
         let responseObject = try await post(body)
@@ -123,6 +162,19 @@ final class MeetingGeminiService {
     }
 
     private func post(_ body: [String: Any], timeout: TimeInterval = 30) async throws -> [String: Any] {
+        let usesThinking = Self.hasThinkingConfig(body) && !GeminiThinkingSupport.shared.rejected
+        let effectiveBody = usesThinking ? body : Self.removingThinkingConfig(body)
+        do {
+            return try await send(effectiveBody, timeout: timeout)
+        } catch MeetingGeminiError.http(400) where usesThinking {
+            // 생각 설정을 지원하지 않는 모델이면 설정을 빼고 한 번만 다시 보낸다.
+            GeminiThinkingSupport.shared.markRejected()
+            DeveloperConsole.shared.log(.warning, category: "MeetingGemini", "thinkingConfig rejected, retry without")
+            return try await send(Self.removingThinkingConfig(body), timeout: timeout)
+        }
+    }
+
+    private func send(_ body: [String: Any], timeout: TimeInterval) async throws -> [String: Any] {
         guard !VisionAPIConfig.apiKey.isEmpty else {
             throw MeetingGeminiError.missingAPIKey
         }
@@ -237,5 +289,26 @@ final class MeetingGeminiService {
             }
         }
         return links
+    }
+}
+
+/// 모델이 thinkingConfig를 거부(HTTP 400)한 적이 있으면 이후 Gemini 요청에서 뺀다.
+/// 여러 요청이 동시에 읽고 쓰므로 잠금으로 보호한다.
+final class GeminiThinkingSupport {
+    static let shared = GeminiThinkingSupport()
+
+    private let lock = NSLock()
+    private var value = false
+
+    var rejected: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return value
+    }
+
+    func markRejected() {
+        lock.lock()
+        value = true
+        lock.unlock()
     }
 }
