@@ -234,6 +234,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
             )
             return
         }
+        // 화면이 잠긴 뒤에도 회의가 이어지도록 Gemini 키도 지금 읽어 둔다.
+        APIKeyManager.shared.prewarmMeetingKeys()
 
         isStarting = true
         let archiveID = UUID()

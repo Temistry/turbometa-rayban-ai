@@ -23,11 +23,11 @@ final class APIKeyManager {
 
     private let service = "com.smartview.glassai.apikey"
 
-    /// 화면이 꺼진 채 회의가 이어지므로 잠금 상태에서도 읽을 수 있어야 한다.
-    /// 첫 잠금 해제 이후 읽기 가능 + 이 기기 전용(백업·동기화 제외).
-    private let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+    /// 보안 기준: 잠금 해제 상태에서만 읽기 + 이 기기 전용.
+    private let accessibility = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
 
     /// 한 번 읽은 키는 실행 중 메모리에만 보관한다(로그·파일 기록 없음).
+    /// 회의는 화면이 잠긴 뒤에도 이어지므로, 시작 시점(잠금 해제 상태)에 읽어 둔 키를 쓴다.
     private let cacheLock = NSLock()
     private var cache: [String: String] = [:]
 
@@ -145,6 +145,12 @@ final class APIKeyManager {
 
     func readJevAPIKey() -> APIKeyReadResult {
         readKey(for: jevAccount)
+    }
+
+    /// 회의 시작 시(잠금 해제 상태) 회의에 필요한 키를 미리 읽어 메모리에 올린다.
+    func prewarmMeetingKeys() {
+        _ = readKey(for: jevAccount)
+        _ = readKey(for: googleAccount)
     }
 
     func deleteJevAPIKey() -> Bool {
