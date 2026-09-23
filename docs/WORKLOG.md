@@ -401,11 +401,12 @@
 ## 2026-09-23 · 워치 세션 델리게이트 watchOS SDK 모순 해소
 
 ### 결정
-- watchOS SDK는 WCSessionDelegate의 sessionDidBecomeInactive/sessionDidDeactivate를 필수 요구로 두면서 Swift 인터페이스에서는 unavailable로 표시한다(커밋 ed0853f 생략 시 non-conformance, 7e6538c 일반 구현 시 cannot override 불일치 확인).
-- 해법: Swift 이름을 다르게 지정하고 @objc(sessionDidBecomeInactive:)/@objc(sessionDidDeactivate:) 셀렉터로 프로토콜 요구를 충족시킨다. PhoneLink는 워치 전용이므로 플랫폼 조건 분기는 불필요.
+- 재진단: xcodebuild가 TurboMetaWatch 타깃을 같은 빌드에서 iOS SDK 라운드와 watchOS SDK 라운드로 각각 컴파일한다(7e6538c 로그에서 두 라운드 모두 확인).
+- iOS 라운드에서는 두 델리게이트 메서드가 필수+사용 가능(생략·이름변경 시 non-conformance가 iOS 라운드에서 발생), watchOS 라운드에서는 unavailable(구현 시 cannot override). 기존 catch-22 판단은 실패 라운드를 혼동한 오진.
+- 해법: sessionDidBecomeInactive/sessionDidDeactivate를 #if os(iOS)로 감싸 iOS 컴파일에만 제공하고 watchOS 컴파일에서는 생략한다.
 
 ### 완료
-- [x] PhoneLink 델리게이트 @objc 셀렉터 우회 적용
+- [x] PhoneLink 델리게이트 플랫폼 조건부 구현(#if os(iOS))
 - [x] 로컬 정적 감사 통과(fatal 0 / warning 0)
 
 ### 남음
