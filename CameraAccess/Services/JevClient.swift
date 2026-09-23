@@ -40,6 +40,7 @@ struct JevUtteranceDecision: Equatable {
 
 enum JevClientError: Error, Equatable {
     case missingAPIKey
+    case keyLocked
     case transport(String)
     case http(Int)
     case invalidResponse
@@ -48,6 +49,10 @@ enum JevClientError: Error, Equatable {
         switch self {
         case .missingAPIKey:
             return "E-JEV-401"
+        case .keyLocked:
+            return "E-JEV-423"
+        case .http(401), .http(403):
+            return "E-JEV-403"
         case .transport, .http:
             return "E-JEV-503"
         case .invalidResponse:
@@ -59,6 +64,10 @@ enum JevClientError: Error, Equatable {
         switch self {
         case .missingAPIKey:
             return "Jev API 키가 설정되지 않았습니다."
+        case .keyLocked:
+            return "아이폰이 잠겨 있어 Jev API 키를 읽지 못했습니다. 잠금을 해제한 뒤 다시 시작하세요."
+        case .http(401), .http(403):
+            return "Jev가 API 키를 거부했습니다. 설정에서 키를 확인하세요."
         case .transport:
             return "판단 서비스에 연결하지 못했습니다."
         case .http:
@@ -81,8 +90,19 @@ final class JevClient {
     }
 
     static var storedAPIKey: String? {
-        guard let key = APIKeyManager.shared.getJevAPIKey(), !key.isEmpty else { return nil }
-        return key
+        try? loadAPIKey()
+    }
+
+    /// 키가 없을 때와 기기 잠금으로 못 읽었을 때를 다른 오류로 구분한다.
+    static func loadAPIKey() throws -> String {
+        switch APIKeyManager.shared.readJevAPIKey() {
+        case .found(let key) where !key.isEmpty:
+            return key
+        case .locked:
+            throw JevClientError.keyLocked
+        default:
+            throw JevClientError.missingAPIKey
+        }
     }
 
     func evaluate(utterance: String, previousUtterance: String?) async throws -> JevUtteranceDecision {
@@ -135,9 +155,7 @@ final class JevClient {
     }
 
     func evaluate(state: String, questions: [String: Any]) async throws -> [String: JevAnswer] {
-        guard let apiKey = Self.storedAPIKey else {
-            throw JevClientError.missingAPIKey
-        }
+        let apiKey = try Self.loadAPIKey()
 
         var request = URLRequest(url: endpoint)
         request.httpMethod = "POST"

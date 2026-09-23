@@ -478,6 +478,18 @@
 ### 보안 메모
 - 로그에는 finish/block 코드와 상태 문자열만 남기며 응답 원문·키는 기록하지 않는다.
 
+## 2026-09-23 · E-JEV-401(워치 표시) 원인: 잠금 중 키체인 읽기 차단
+
+### 결정
+- E-JEV-401은 서버 401이 아니라 JevClientError.missingAPIKey(키체인에서 키를 못 읽음)였다. 서버 오류는 모두 E-JEV-503으로 묶여 있었다.
+- API 키가 kSecAttrAccessibleWhenUnlockedThisDeviceOnly로 저장되어 있어 백그라운드 통역 중 아이폰이 잠기면 SecItemCopyMatching이 errSecInteractionNotAllowed를 반환했고, 이 상태는 로그에서도 숨겨져 '키 없음'으로 처리되어 fail-stop했다. 워치로 보고 있었다는 정황(폰 잠김)과 일치. Gemini 키도 같은 위험.
+- 조치: 접근 정책을 AfterFirstUnlockThisDeviceOnly로 변경(기존 항목은 실행 시 갱신), 읽은 키는 실행 중 메모리 캐시, 읽기 결과를 found/notFound/locked로 구분. 오류 코드 분리: 401 키 없음, 423 잠금으로 읽기 실패, 403 서버가 키 거부, 503 연결·기타 서버 오류.
+- 보안 트레이드오프: 재부팅 후 첫 잠금 해제 전에는 여전히 읽을 수 없고, 이 기기 전용이라 백업·iCloud 동기화로 나가지 않는다. 잠금 중 읽기를 허용하는 대가로 보호 등급이 한 단계 낮아진다. 백그라운드 동작 요구상 불가피.
+- RTMP·OpenClaw 레거시 키 항목은 회의 기능과 무관해 변경하지 않았다.
+
+### 남음
+- [ ] 업데이트 후 앱을 한 번 잠금 해제 상태로 실행(기존 키 항목 정책 갱신) → 화면 잠근 채 회의 지속 확인
+
 ### 검증
 - 원격 빌드로만 컴파일 가능. 실패 시 GitHub job 로그의 error 필터로 재진단.
 

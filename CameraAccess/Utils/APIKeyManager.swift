@@ -11,10 +11,25 @@
 import Foundation
 import Security
 
+/// 키체인 읽기 결과. 잠금 때문에 못 읽은 경우를 '없음'과 구분한다.
+enum APIKeyReadResult: Equatable {
+    case found(String)
+    case notFound
+    case locked
+}
+
 final class APIKeyManager {
     static let shared = APIKeyManager()
 
     private let service = "com.smartview.glassai.apikey"
+
+    /// 화면이 꺼진 채 회의가 이어지므로 잠금 상태에서도 읽을 수 있어야 한다.
+    /// 첫 잠금 해제 이후 읽기 가능 + 이 기기 전용(백업·동기화 제외).
+    private let accessibility = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+
+    /// 한 번 읽은 키는 실행 중 메모리에만 보관한다(로그·파일 기록 없음).
+    private let cacheLock = NSLock()
+    private var cache: [String: String] = [:]
 
     private let alibabaBeijingAccount = "alibaba-beijing-api-key"
     private let alibabaSingaporeAccount = "alibaba-singapore-api-key"
@@ -68,7 +83,7 @@ final class APIKeyManager {
             ]
 
             let attributes: [String: Any] = [
-                kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+                kSecAttrAccessible as String: accessibility
             ]
 
             let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
@@ -126,6 +141,10 @@ final class APIKeyManager {
 
     func getJevAPIKey() -> String? {
         getKey(for: jevAccount)
+    }
+
+    func readJevAPIKey() -> APIKeyReadResult {
+        readKey(for: jevAccount)
     }
 
     func deleteJevAPIKey() -> Bool {
@@ -187,7 +206,7 @@ final class APIKeyManager {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
-            kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            kSecAttrAccessible as String: accessibility,
             kSecValueData as String: data
         ]
 
@@ -195,12 +214,24 @@ final class APIKeyManager {
         if status != errSecSuccess {
             print("[Keychain][ERROR] 자격 증명 저장 실패 account=\(account) status=\(status)")
         } else {
+            setCached(normalizedKey, for: account)
             print("[Keychain][INFO] 자격 증명 저장 완료 account=\(account)")
         }
         return status == errSecSuccess
     }
 
     private func getKey(for account: String) -> String? {
+        if case .found(let key) = readKey(for: account) {
+            return key
+        }
+        return nil
+    }
+
+    private func readKey(for account: String) -> APIKeyReadResult {
+        if let cached = cachedKey(for: account) {
+            return .found(cached)
+        }
+
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -215,16 +246,22 @@ final class APIKeyManager {
         guard status == errSecSuccess,
               let data = result as? Data,
               let key = String(data: data, encoding: .utf8) else {
-            if status != errSecItemNotFound && status != errSecInteractionNotAllowed {
+            if status == errSecInteractionNotAllowed {
+                print("[Keychain][WARN] 기기 잠금으로 자격 증명 읽기 실패 account=\(account)")
+                return .locked
+            }
+            if status != errSecItemNotFound {
                 print("[Keychain][WARN] 자격 증명 읽기 실패 account=\(account) status=\(status)")
             }
-            return nil
+            return .notFound
         }
 
-        return key
+        setCached(key, for: account)
+        return .found(key)
     }
 
     private func deleteKey(for account: String) -> Bool {
+        setCached(nil, for: account)
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
@@ -237,5 +274,17 @@ final class APIKeyManager {
             print("[Keychain][ERROR] 자격 증명 삭제 실패 account=\(account) status=\(status)")
         }
         return succeeded
+    }
+
+    private func cachedKey(for account: String) -> String? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return cache[account]
+    }
+
+    private func setCached(_ key: String?, for account: String) {
+        cacheLock.lock()
+        cache[account] = key
+        cacheLock.unlock()
     }
 }

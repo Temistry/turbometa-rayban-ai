@@ -222,7 +222,12 @@ final class MeetingInterpreterViewModel: ObservableObject {
         latestStable = ""
         detailBubble = nil
 
-        guard JevClient.storedAPIKey != nil else {
+        do {
+            _ = try JevClient.loadAPIKey()
+        } catch JevClientError.keyLocked {
+            failure = .jev(code: JevClientError.keyLocked.code, message: JevClientError.keyLocked.message)
+            return
+        } catch {
             failure = .jev(
                 code: JevClientError.missingAPIKey.code,
                 message: "Jev API 키가 설정되지 않았습니다. 설정에서 TypeSafe Jev API Key를 등록하세요."
@@ -656,7 +661,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 }
             }
             do {
-                guard JevClient.storedAPIKey != nil else { throw JevClientError.missingAPIKey }
+                _ = try JevClient.loadAPIKey()
                 try Task.checkCancellation()
                 guard generation == self.generation else { return }
                 if streamViewModel.streamingStatus == .stopped {

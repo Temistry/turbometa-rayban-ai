@@ -87,4 +87,15 @@ final class JevDecisionParsingTests: XCTestCase {
         XCTAssertEqual(links[1].title, "https://example.com/b")
         XCTAssertEqual(links[2].urlString, "https://example.com/c")
     }
+
+    /// 키 없음·잠금으로 읽기 실패·서버 거부·연결 실패가 서로 다른 코드로 보여야 원인을 구분할 수 있다.
+    func testJevErrorCodesSeparateKeyAndServerCauses() {
+        XCTAssertEqual(JevClientError.missingAPIKey.code, "E-JEV-401")
+        XCTAssertEqual(JevClientError.keyLocked.code, "E-JEV-423")
+        XCTAssertEqual(JevClientError.http(401).code, "E-JEV-403")
+        XCTAssertEqual(JevClientError.http(403).code, "E-JEV-403")
+        XCTAssertEqual(JevClientError.http(500).code, "E-JEV-503")
+        XCTAssertEqual(JevClientError.transport("x").code, "E-JEV-503")
+        XCTAssertNotEqual(JevClientError.keyLocked.message, JevClientError.missingAPIKey.message)
+    }
 }
