@@ -16,16 +16,16 @@ enum WatchMeetingStatus {
                         recent: [String], whisperCount: Int, error: String,
                         quotaPaused: Bool) -> [String: Any] {
         var payload: [String: Any] = [
-            state: state,
-            route: route,
-            latest: latest,
-            recent: recent,
-            whisperCount: whisperCount,
-            error: error,
-            quotaPaused: quotaPaused
+            Self.state: state,
+            Self.route: route,
+            Self.latest: latest,
+            Self.recent: recent,
+            Self.whisperCount: whisperCount,
+            Self.error: error,
+            Self.quotaPaused: quotaPaused
         ]
         if let startedAt {
-            payload[startedAt] = startedAt.timeIntervalSince1970
+            payload[Self.startedAt] = startedAt.timeIntervalSince1970
         }
         return payload
     }
