@@ -49,4 +49,10 @@ extension WatchBridgeService: WCSessionDelegate {
     ) {
         // iOS 측 재활성화 흐름은 없다.
     }
+
+    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {}
+
+    nonisolated func sessionDidDeactivate(_ session: WCSession) {
+        session.activate()
+    }
 }
