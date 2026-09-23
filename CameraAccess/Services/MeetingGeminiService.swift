@@ -21,6 +21,7 @@ struct MeetingFactCheckResult: Equatable {
 struct MeetingExplanation: Equatable {
     let term: String
     let text: String
+    var category: String = ""
 }
 
 enum MeetingGeminiError: Error, Equatable {
@@ -69,13 +70,15 @@ final class MeetingGeminiService {
         explainedTerms: [String] = []
     ) async throws -> MeetingExplanation {
         let prompt = """
-        당신은 회의 전문용어 통역기다. 아래 '현재 발화'에서 비즈니스·기술 전문용어를 찾아 +        착용자에게 귓속말로 설명한다. 규칙: 한국어 구어체 1문장, 최대 60자, 용어명으로 시작하고 +        사전 지식 없이도 이해되게. 설명할 용어가 없으면 발화 요점을 짧게 전달한다.
+        당신은 회의 전문용어 통역기다. 아래 '현재 발화'에서 비즈니스(재무·회계·전략·마케팅·영업·법무·계약) 또는 개발(소프트웨어·인프라·클라우드·데이터·보안) 용어를 찾아 착용자에게 귓속말로 설명한다.
+        규칙: 한국어 구어체 1문장, 최대 60자, 용어명으로 시작하고 사전 지식 없이도 이해되게.
+        두 도메인 밖의 단어(일상어·다른 분야 전문용어·고유명사)는 설명하지 않는다. 그 경우 term과 text를 모두 빈 문자열로 출력한다.
         직전 발화: \(recentContext.isEmpty ? "(없음)" : recentContext)
         화면 맥락: \(sceneContext.flatMap { $0.isEmpty ? nil : $0 } ?? "(없음)")
         현재 발화: \(utterance)
         이미 설명한 용어는 제외하고 새 용어를 선택하라: \(explainedTerms.joined(separator: ", "))
         새로 설명할 용어가 없으면 term은 빈 문자열로 출력하라.
-        출력은 JSON 하나만: {"term": "발화에서 찾은 전문용어 원문", "text": "귓속말 설명 문장"}
+        출력은 JSON 하나만: {"term": "발화에서 찾은 전문용어 원문", "text": "귓속말 설명 문장", "category": "business" 또는 "dev" 또는 ""}
         """
 
         let body: [String: Any] = [
@@ -88,8 +91,12 @@ final class MeetingGeminiService {
         ]
 
         let responseObject = try await post(body, timeout: 12)
-        guard let raw = Self.parseText(responseObject),
-              let explanation = Self.parseExplanation(raw) else {
+        guard let raw = Self.parseText(responseObject) else {
+            DeveloperConsole.shared.log(.warning, category: "MeetingGemini", "unparseable \(Self.diagnosticMetadata(responseObject))")
+            throw MeetingGeminiError.invalidResponse
+        }
+        guard let explanation = Self.parseExplanation(raw) else {
+            DeveloperConsole.shared.log(.warning, category: "MeetingGemini", "malformed \(Self.diagnosticMetadata(responseObject))")
             throw MeetingGeminiError.invalidResponse
         }
         return explanation
@@ -189,10 +196,19 @@ final class MeetingGeminiService {
         }
 
         let trimmedText = explanationText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedText.isEmpty else { return nil }
         let term = (object["term"] as? String)?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return MeetingExplanation(term: term, text: trimmedText)
+        let category = (object["category"] as? String) ?? ""
+        return MeetingExplanation(term: term, text: trimmedText, category: category)
+    }
+
+    /// 차단·빈 후보 등 200 응답 실패 원인을 내용 없이 기록하기 위한 메타데이터.
+    static func diagnosticMetadata(_ object: [String: Any]) -> String {
+        let candidates = object["candidates"] as? [[String: Any]]
+        let finish = (candidates?.first?["finishReason"] as? String) ?? "-"
+        let feedback = object["promptFeedback"] as? [String: Any]
+        let block = (feedback?["blockReason"] as? String) ?? "-"
+        return "finish=\(finish) block=\(block)"
     }
 
     static func parseGroundingLinks(_ object: [String: Any]) -> [MeetingFactLink] {

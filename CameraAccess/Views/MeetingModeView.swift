@@ -321,6 +321,13 @@ private struct MeetingCaptionRow: View {
                     HStack(spacing: 6) {
                         Image(systemName: whisper.state == .speaking ? "speaker.wave.2.fill" : "ear")
                             .font(.caption)
+                        if !whisper.category.isEmpty {
+                            Text(whisper.category == "business" ? "비즈니스" : "개발")
+                                .font(.caption2.weight(.semibold))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Color.white.opacity(0.12)))
+                        }
                         Text(whisper.text)
                             .font(.footnote)
                     }

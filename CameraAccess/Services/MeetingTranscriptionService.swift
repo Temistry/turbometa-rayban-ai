@@ -68,6 +68,10 @@ final class MeetingTranscriptionService: ObservableObject {
     private var lastStableAt = Date.distantPast
     private var onDeviceUntil = Date.distantPast
     private let audioFileBox = MeetingAudioFileBox()
+    private var interruptionObserver: NSObjectProtocol?
+    private var routeObserver: NSObjectProtocol?
+    private var engineRetryCount = 0
+    private var engineRetryWorkItem: DispatchWorkItem?
 
     /// 부분 결과 증분 발행 주기(초).
     static let segmentTickerInterval: TimeInterval = 0.5
@@ -92,6 +96,7 @@ final class MeetingTranscriptionService: ObservableObject {
         }
         guard microphoneAuthorized else { throw MeetingTranscriptionError.permissionDenied }
         try Task.checkCancellation()
+        registerSystemObservers()
 
         pendingText = ""
         prefersOnDevice = false
@@ -134,6 +139,7 @@ final class MeetingTranscriptionService: ObservableObject {
         state = .idle
         teardownEngine(keepAudioSession: false)
         audioFileBox.clear()
+        removeSystemObservers()
     }
 
     private func configureAudioSession() throws {
@@ -224,9 +230,26 @@ final class MeetingTranscriptionService: ObservableObject {
         audioEngine.prepare()
         do {
             try audioEngine.start()
+            engineRetryCount = 0
         } catch {
-            onFailure?("오디오 엔진을 시작하지 못했습니다. \(error.localizedDescription)")
-            state = .idle
+            // 방해(통화·시리) 직후에는 즉시 실패 대신 몇 차례 재시도한다.
+            engineRetryCount += 1
+            DeveloperConsole.shared.log(.warning, category: "MeetingSpeech", "engine start failed code=\((error as NSError).code) count=\(engineRetryCount)")
+            guard engineRetryCount < 3 else {
+                onFailure?("오디오 엔진을 시작하지 못했습니다. 다시 시작해 주세요.")
+                state = .idle
+                return
+            }
+            let generation = recognitionGeneration
+            let item = DispatchWorkItem { [weak self] in
+                Task { @MainActor [weak self] in
+                    guard let self, self.recognitionGeneration == generation, self.state == .running else { return }
+                    self.startRecognitionLoop()
+                }
+            }
+            engineRetryWorkItem?.cancel()
+            engineRetryWorkItem = item
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: item)
             return
         }
 
@@ -352,6 +375,77 @@ final class MeetingTranscriptionService: ObservableObject {
         recognitionTask = nil
         recognitionRequest?.endAudio()
         recognitionRequest = nil
+    }
+
+    private func registerSystemObservers() {
+        guard interruptionObserver == nil else { return }
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor [weak self] in
+                self?.handleInterruption(notification)
+            }
+        }
+        routeObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.routeChangeNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            Task { @MainActor [weak self] in
+                self?.handleRouteChange(notification)
+            }
+        }
+    }
+
+    private func removeSystemObservers() {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        if let routeObserver {
+            NotificationCenter.default.removeObserver(routeObserver)
+        }
+        interruptionObserver = nil
+        routeObserver = nil
+        engineRetryWorkItem?.cancel()
+        engineRetryWorkItem = nil
+    }
+
+    private func handleInterruption(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let typeRaw = userInfo[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else { return }
+        switch type {
+        case .began:
+            DeveloperConsole.shared.log(.warning, category: "MeetingAudio", "interruption began")
+        case .ended:
+            DeveloperConsole.shared.log(.info, category: "MeetingAudio", "interruption ended")
+            recoverSession()
+        @unknown default:
+            break
+        }
+    }
+
+    private func handleRouteChange(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let reasonRaw = userInfo[AVAudioSessionRouteChangeReasonKey] as? UInt,
+              let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw),
+              reason == .oldDeviceUnavailable || reason == .newDeviceAvailable else { return }
+        DeveloperConsole.shared.log(.info, category: "MeetingAudio", "route changed reason=\(reason.rawValue)")
+        recoverSession()
+    }
+
+    /// 방해·라우트 변경 뒤 세션을 다시 구성하고 전사를 이어간다.
+    private func recoverSession() {
+        guard state == .running else { return }
+        do {
+            try configureAudioSession()
+        } catch {
+            DeveloperConsole.shared.log(.warning, category: "MeetingAudio", "recover failed code=\((error as NSError).code)")
+            return
+        }
+        startRecognitionLoop()
     }
 
     private func teardownEngine(keepAudioSession: Bool) {

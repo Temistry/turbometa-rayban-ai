@@ -16,6 +16,13 @@
 		5E70000000000000000000AC /* VisualAssistService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000AB /* VisualAssistService.swift */; };
 		5E70000000000000000000B2 /* MeetingArchiveService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000B1 /* MeetingArchiveService.swift */; };
 		5E70000000000000000000B4 /* MeetingArchiveViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000B3 /* MeetingArchiveViews.swift */; };
+		5E70000000000000000000E2 /* WatchBridgeService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000E1 /* WatchBridgeService.swift */; };
+		5E70000000000000000000E4 /* WatchMeetingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000E3 /* WatchMeetingStatus.swift */; };
+		5E70000000000000000000C4 /* TurboMetaWatchApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000C3 /* TurboMetaWatchApp.swift */; };
+		5E70000000000000000000C6 /* MeetingStatusView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000C5 /* MeetingStatusView.swift */; };
+		5E70000000000000000000C8 /* PhoneLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000C7 /* PhoneLink.swift */; };
+		5E70000000000000000000E5 /* WatchMeetingStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000E3 /* WatchMeetingStatus.swift */; };
+		5E70000000000000000000D9 /* TurboMetaWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000C1 /* TurboMetaWatch.app */; };
 		217BDD58A35C2D24403F74BF /* APIProviderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1111827A1CF7A278A6DC6934 /* APIProviderManager.swift */; };
 		26664DE8308E3F2981609421 /* QuickVisionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = CA3E36CE337855A7F17F2AC8 /* QuickVisionService.swift */; };
 		2746170F50E225008AB717CE /* QuickVisionModeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51A08DC107E5A57DDE6036C3 /* QuickVisionModeManager.swift */; };
@@ -133,6 +140,13 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		5E70000000000000000000DB /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = CCCCCCCCCCCCCCCCCCCCCC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5E70000000000000000000C0;
+			remoteInfo = TurboMetaWatch;
+		};
 		E699CC992E8150670052C240 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = CCCCCCCCCCCCCCCCCCCCCC /* Project object */;
@@ -143,6 +157,17 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		5E70000000000000000000D8 /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolderSpec = 16;
+			files = (
+				5E70000000000000000000D9 /* TurboMetaWatch.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		8FD96B932E6F0C6E00F56AB1 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
@@ -276,6 +301,13 @@
 		5E70000000000000000000A7 /* MeetingInterpreterViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingInterpreterViewModel.swift; sourceTree = "<group>"; };
 		5E70000000000000000000A9 /* MeetingModeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingModeView.swift; sourceTree = "<group>"; };
 		5E70000000000000000000AB /* VisualAssistService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VisualAssistService.swift; sourceTree = "<group>"; };
+		5E70000000000000000000E1 /* WatchBridgeService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchBridgeService.swift; sourceTree = "<group>"; };
+		5E70000000000000000000E3 /* WatchMeetingStatus.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchMeetingStatus.swift; sourceTree = "<group>"; };
+		5E70000000000000000000C1 /* TurboMetaWatch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TurboMetaWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5E70000000000000000000C3 /* TurboMetaWatchApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TurboMetaWatchApp.swift; sourceTree = "<group>"; };
+		5E70000000000000000000C5 /* MeetingStatusView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingStatusView.swift; sourceTree = "<group>"; };
+		5E70000000000000000000C7 /* PhoneLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhoneLink.swift; sourceTree = "<group>"; };
+		5E70000000000000000000C9 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5E70000000000000000000B1 /* MeetingArchiveService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingArchiveService.swift; sourceTree = "<group>"; };
 		5E70000000000000000000B3 /* MeetingArchiveViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeetingArchiveViews.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -370,6 +402,8 @@
 				5E70000000000000000000A5 /* MeetingTranscriptionService.swift */,
 				5E70000000000000000000AB /* VisualAssistService.swift */,
 				5E70000000000000000000B1 /* MeetingArchiveService.swift */,
+				5E70000000000000000000E1 /* WatchBridgeService.swift */,
+				5E70000000000000000000E3 /* WatchMeetingStatus.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -498,6 +532,7 @@
 			isa = PBXGroup;
 			children = (
 				8FD96B7D2E6F0A9800F56AB1 /* CameraAccess */,
+				5E70000000000000000000C2 /* TurboMetaWatch */,
 				8F2A14F12DDBCEB900D4E5F2 /* Frameworks */,
 				7A7A7A7A7A7A7A7A7A7A7A7A /* Products */,
 				E699CC962E8150670052C240 /* CameraAccessTests */,
@@ -509,6 +544,7 @@
 			children = (
 				3A3A3A3A3A3A3A3A3A3A3A3A /* CameraAccess.app */,
 				E699CC952E8150670052C240 /* CameraAccessTests.xctest */,
+				5E70000000000000000000C1 /* TurboMetaWatch.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -565,6 +601,17 @@
 			path = OpenClaw;
 			sourceTree = "<group>";
 		};
+		5E70000000000000000000C2 /* TurboMetaWatch */ = {
+			isa = PBXGroup;
+			children = (
+				5E70000000000000000000C3 /* TurboMetaWatchApp.swift */,
+				5E70000000000000000000C5 /* MeetingStatusView.swift */,
+				5E70000000000000000000C7 /* PhoneLink.swift */,
+				5E70000000000000000000C9 /* Info.plist */,
+			);
+			path = TurboMetaWatch;
+			sourceTree = "<group>";
+		};
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
@@ -576,14 +623,31 @@
 				4A4A4A4A4A4A4A4A4A4A4A4A /* Frameworks */,
 				BBBBBBBBBBBBBBBBBBBBBB /* Resources */,
 				8FD96B932E6F0C6E00F56AB1 /* Embed Frameworks */,
+				5E70000000000000000000D8 /* Embed Watch Content */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5E70000000000000000000DA /* PBXTargetDependency */,
+			);
+			name = CameraAccess;
+			productName = CameraAccess;
+			productReference = 3A3A3A3A3A3A3A3A3A3A3A3A /* CameraAccess.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5E70000000000000000000C0 /* TurboMetaWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5E70000000000000000000D5 /* Build configuration list for PBXNativeTarget "TurboMetaWatch" */;
+			buildPhases = (
+				5E70000000000000000000D6 /* Sources */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 			);
-			name = CameraAccess;
-			productName = CameraAccess;
-			productReference = 3A3A3A3A3A3A3A3A3A3A3A3A /* CameraAccess.app */;
+			name = TurboMetaWatch;
+			productName = TurboMetaWatch;
+			productReference = 5E70000000000000000000C1 /* TurboMetaWatch.app */;
 			productType = "com.apple.product-type.application";
 		};
 		E699CC942E8150670052C240 /* CameraAccessTests */ = {
@@ -643,6 +707,7 @@
 			projectRoot = "";
 			targets = (
 				8A8A8A8A8A8A8A8A8A8A8A8A /* CameraAccess */,
+				5E70000000000000000000C0 /* TurboMetaWatch */,
 				E699CC942E8150670052C240 /* CameraAccessTests */,
 			);
 		};
@@ -669,6 +734,17 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		5E70000000000000000000D6 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5E70000000000000000000C4 /* TurboMetaWatchApp.swift in Sources */,
+				5E70000000000000000000C6 /* MeetingStatusView.swift in Sources */,
+				5E70000000000000000000C8 /* PhoneLink.swift in Sources */,
+				5E70000000000000000000E5 /* WatchMeetingStatus.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AAAAAAAAAAAAAAAAAAAAAA /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -788,6 +864,8 @@
 				5E70000000000000000000AC /* VisualAssistService.swift in Sources */,
 				5E70000000000000000000B2 /* MeetingArchiveService.swift in Sources */,
 				5E70000000000000000000B4 /* MeetingArchiveViews.swift in Sources */,
+				5E70000000000000000000E2 /* WatchBridgeService.swift in Sources */,
+				5E70000000000000000000E4 /* WatchMeetingStatus.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -801,6 +879,11 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		5E70000000000000000000DA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5E70000000000000000000C0 /* TurboMetaWatch */;
+			targetProxy = 5E70000000000000000000DB /* PBXContainerItemProxy */;
+		};
 		E699CC9A2E8150670052C240 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 8A8A8A8A8A8A8A8A8A8A8A8A /* CameraAccess */;
@@ -884,6 +967,58 @@
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		5E70000000000000000000D3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4CXJZWV2GC;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TurboMetaWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TurboMeta;
+				INFOPLIST_KEY_WKApplication = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.glassai.app1.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
+			};
+			name = Debug;
+		};
+		5E70000000000000000000D4 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = H6HPX39A33;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = TurboMetaWatch/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = TurboMeta;
+				INFOPLIST_KEY_WKApplication = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.4.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.temistry.turbometa.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 9.0;
 			};
 			name = Release;
 		};
@@ -1063,6 +1198,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5E70000000000000000000D5 /* Build configuration list for PBXNativeTarget "TurboMetaWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5E70000000000000000000D3 /* Debug */,
+				5E70000000000000000000D4 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		9A9A9A9A9A9A9A9A9A9A9A9A /* Build configuration list for PBXNativeTarget "CameraAccess" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

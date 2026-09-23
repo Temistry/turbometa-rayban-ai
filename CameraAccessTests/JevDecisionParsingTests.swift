@@ -51,6 +51,17 @@ final class JevDecisionParsingTests: XCTestCase {
         XCTAssertEqual(decision.explanationConfidence, 0, accuracy: 0.0001)
     }
 
+    func testDecisionCarriesTermCategory() {
+        let answers = [
+            "needs_explanation": JevAnswer(value: "yes", confidence: 0.9),
+            "category": JevAnswer(value: "dev", confidence: 0.95),
+            "lane": JevAnswer(value: "explain", confidence: 0.9)
+        ]
+
+        XCTAssertEqual(JevUtteranceDecision.make(answers: answers).category, "dev")
+        XCTAssertEqual(JevUtteranceDecision.make(answers: [:]).category, "none")
+    }
+
     func testGeminiGroundingLinkParsing() {
         let object: [String: Any] = [
             "candidates": [

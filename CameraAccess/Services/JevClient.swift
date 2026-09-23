@@ -23,6 +23,8 @@ struct JevUtteranceDecision: Equatable {
     let needsExplanation: Bool
     let explanationConfidence: Double
     let lane: JevUtteranceLane
+    /// 비즈니스(business)·개발(dev)·그 외(none).
+    let category: String
 
     static func make(answers: [String: JevAnswer]) -> JevUtteranceDecision {
         let explanation = answers["needs_explanation"]
@@ -30,7 +32,8 @@ struct JevUtteranceDecision: Equatable {
         return JevUtteranceDecision(
             needsExplanation: explanation?.value == "yes",
             explanationConfidence: explanation?.confidence ?? 0,
-            lane: JevUtteranceLane(rawValue: laneRaw) ?? .none
+            lane: JevUtteranceLane(rawValue: laneRaw) ?? .none,
+            category: answers["category"]?.value ?? "none"
         )
     }
 }
@@ -92,10 +95,19 @@ final class JevClient {
         let questions: [String: Any] = [
             "needs_explanation": [
                 "type": "choice",
-                "instructions": "현재 발화에 비즈니스·기술 전문용어가 있어 즉석 설명이 도움이 되는가?",
+                "instructions": "현재 발화에 비즈니스 또는 개발 도메인의 전문용어·약어가 있어 즉석 설명이 필요한가?",
                 "criteria": [
-                    "yes": "설명이 필요한 전문용어가 포함되어 있다",
-                    "no": "일상 표현뿐이라 설명이 불필요하다"
+                    "yes": "재무·회계·전략·마케팅·법무 또는 소프트웨어·인프라·데이터·보안 전문용어가 포함되어 있다",
+                    "no": "두 도메인 밖이거나 설명이 불필요하다"
+                ]
+            ],
+            "category": [
+                "type": "choice",
+                "instructions": "발화의 난해한 표현이 어느 분야 용어인가? 두 도메인 밖이면 none이다.",
+                "criteria": [
+                    "business": "비즈니스 용어다(재무·회계·전략·마케팅·영업·법무·계약)",
+                    "dev": "개발 용어다(소프트웨어·인프라·클라우드·데이터·보안)",
+                    "none": "두 도메인 밖이다(일상어 또는 다른 분야 전문용어)"
                 ]
             ],
             "lane": [
@@ -113,6 +125,10 @@ final class JevClient {
         guard let explanation = answers["needs_explanation"],
               ["yes", "no"].contains(explanation.value),
               let lane = answers["lane"], JevUtteranceLane(rawValue: lane.value) != nil else {
+            throw JevClientError.invalidResponse
+        }
+        guard let category = answers["category"],
+              ["business", "dev", "none"].contains(category.value) else {
             throw JevClientError.invalidResponse
         }
         return JevUtteranceDecision.make(answers: answers)

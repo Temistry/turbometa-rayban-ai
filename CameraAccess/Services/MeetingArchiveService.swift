@@ -15,6 +15,7 @@ struct ArchivedMeetingLine: Codable, Identifiable, Equatable {
     let text: String
     var term: String?
     var whisper: String?
+    var category: String?
 }
 
 struct ArchivedMeeting: Codable, Identifiable, Equatable {

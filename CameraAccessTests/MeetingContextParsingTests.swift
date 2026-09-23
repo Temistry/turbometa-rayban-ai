@@ -24,9 +24,29 @@ final class MeetingContextParsingTests: XCTestCase {
         XCTAssertFalse(explanation.text.isEmpty)
     }
 
-    func testParseExplanationRejectsInvalidAndEmpty() {
+    func testParseExplanationRejectsMalformedButAllowsEmptyAsNoTerm() {
         XCTAssertNil(MeetingGeminiService.parseExplanation("설명 문장 그대로"))
-        XCTAssertNil(MeetingGeminiService.parseExplanation("{\"term\":\"X\",\"text\":\"  \"}"))
+        let noTerm = MeetingGeminiService.parseExplanation("{\"term\":\"\",\"text\":\"\"}")
+        XCTAssertNotNil(noTerm)
+        XCTAssertEqual(noTerm?.text, "")
+    }
+
+    func testParseExplanationCarriesCategory() {
+        let explanation = MeetingGeminiService.parseExplanation(
+            "{\"term\":\"Kubernetes\",\"text\":\"컨테이너를 관리하는 도구예요.\",\"category\":\"dev\"}"
+        )
+
+        XCTAssertEqual(explanation?.category, "dev")
+    }
+
+    func testDiagnosticMetadataSurfacesFinishAndBlockReasons() {
+        let metadata = MeetingGeminiService.diagnosticMetadata([
+            "candidates": [["finishReason": "SAFETY"]],
+            "promptFeedback": ["blockReason": "SAFETY"]
+        ])
+
+        XCTAssertTrue(metadata.contains("finish=SAFETY"))
+        XCTAssertTrue(metadata.contains("block=SAFETY"))
     }
 
     func testParseSceneTermsAndSummary() throws {

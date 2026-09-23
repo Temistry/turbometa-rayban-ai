@@ -14,10 +14,40 @@ import UIKit
 enum MeetingPolicy {
     /// Jev confidence는 보정된 확률이 아니라 상대적 강도이므로 0.6 이상이면 개입한다.
     static let whisperConfidenceThreshold = 0.6
+    /// 사전(lexicon) 적중 시 낮춘 문턱. 확정이 아니라 가중치다.
+    static let lexiconConfidenceThreshold = 0.3
     /// Gemini 429 이후 설명 생성을 쉬는 시간(초).
     static let explainQuotaPause: TimeInterval = 120
     /// Gemini 429 이후 근거 검색을 쉬는 시간(초).
     static let factQuotaPause: TimeInterval = 300
+
+    /// 자주 나오는 비즈니스·개발 용어와 약어. 전부 소문자로 저장한다.
+    static let lexiconTerms: Set<String> = [
+        // 비즈니스/재무/전략
+        "ebitda", "roi", "roas", "kpi", "okr", "mrr", "arr", "cac", "ltv", "npv", "irr",
+        "dcf", "gmv", "aov", "ctr", "cpa", "cpc", "ttm", "qoq", "yoy", "mom", "pnl",
+        "crm", "erp", "b2b", "b2c", "sla", "sow", "rfp", "nda", "msa", "po", "csat", "nps",
+        "churn", "upsell", "seo", "sem", "ugc", "kyc", "aml",
+        // 개발/인프라/데이터/보안
+        "api", "sdk", "ide", "cli", "gui", "ux", "ui", "qa", "ci", "cd", "vcs", "pr", "mr",
+        "db", "sql", "nosql", "orm", "mvc", "mvvm", "oop", "tdd", "bdd", "ddd", "sdlc",
+        "aws", "gcp", "s3", "ec2", "ecs", "eks", "vpc", "iam", "cdn", "dns", "tls", "ssl",
+        "http", "https", "rest", "grpc", "json", "xml", "yaml", "csv", "k8s", "pod",
+        "docker", "helm", "terraform", "redis", "kafka", "nginx", "oauth", "jwt", "sso", "mfa",
+        "xss", "csrf", "ssr", "spa", "pwa", "slo", "mttr", "mtbf", "rto", "rpo", "vpn", "ssh",
+        "tcp", "udp", "iot", "ai", "ml", "llm", "nlp", "rag", "gpu", "cpu", "iops", "git",
+        "repo", "prod", "dev"
+    ]
+
+    /// 전사 토큰 중 사전 용어가 있으면 참. 확정 판정이 아니라 문턱 완화 근거다.
+    nonisolated static func lexiconHit(in text: String) -> Bool {
+        let separator = CharacterSet.alphanumerics.inverted
+        return text.components(separatedBy: separator).contains { token in
+            let key = token.lowercased()
+            guard key.count >= 2 else { return false }
+            return lexiconTerms.contains(key)
+        }
+    }
 }
 
 @MainActor
@@ -44,6 +74,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         let text: String
         let confidence: Double
         var state: State
+        var category: String = ""
     }
 
     struct TranscriptLine: Identifiable, Equatable {
@@ -126,6 +157,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private var checkedClaims = Set<String>()
     private var factQueue: [(String, UUID)] = []
     private var factTask: Task<Void, Never>?
+    private let watchBridge = WatchBridgeService.shared
+    private var lastWatchSyncAt = Date.distantPast
     private let archive = MeetingArchiveService()
     private var archiveID: UUID?
     private var archiveStartedAt: Date?
@@ -167,6 +200,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
             .sink { [weak self] state in
                 self?.handlePlaybackStateChange(state)
             }
+        watchBridge.activate()
     }
 
     func start() {
@@ -209,6 +243,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 inputRouteName = transcription.inputRouteName
                 runState = .listening
                 visualAssist?.start()
+                syncWatch(force: true)
             } catch {
                 guard generation == self.generation, !Task.isCancelled else { return }
                 let message = (error as? MeetingTranscriptionError)?.message
@@ -244,6 +279,30 @@ final class MeetingInterpreterViewModel: ObservableObject {
         isPreparingWhisper = false
         transcription.stop()
         tts.stop()
+        if let archiveID, let archiveStartedAt {
+            let archivedLines = lines.map { line in
+                ArchivedMeetingLine(
+                    offset: line.timestamp.timeIntervalSince(archiveStartedAt),
+                    text: line.text,
+                    term: line.whisper?.term.isEmpty == false ? line.whisper?.term : nil,
+                    whisper: line.whisper?.text.isEmpty == false ? line.whisper?.text : nil,
+                    category: line.whisper?.category.isEmpty == false ? line.whisper?.category : nil
+                )
+            }
+            archive.save(ArchivedMeeting(
+                id: archiveID,
+                startedAt: archiveStartedAt,
+                endedAt: Date(),
+                lines: archivedLines
+            ))
+        }
+        archiveID = nil
+        archiveStartedAt = nil
+        transcription.recordingDestination = nil
+        detailTask?.cancel()
+        detailTask = nil
+        detailBubble = nil
+        syncWatch(force: true)
         Task {
             await pendingStart?.value
             await pendingPhoto?.value
@@ -284,6 +343,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
             lines.append(line)
             if lines.count > 200 { lines.removeFirst(lines.count - 200) }
         }
+        syncWatch()
     }
 
     private func queueAnalysis(_ text: String, lineID: UUID) {
@@ -330,17 +390,22 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 beginFactCheck(claim: text, lineID: lineID)
             }
 
+            let lexiconHit = MeetingPolicy.lexiconHit(in: text)
+            let threshold = lexiconHit
+                ? MeetingPolicy.lexiconConfidenceThreshold
+                : MeetingPolicy.whisperConfidenceThreshold
             if !isDescribingPhoto, !isSpeakingWhisper, !isPreparingWhisper,
                !isExplainPaused,
                decision.needsExplanation,
-               decision.explanationConfidence >= MeetingPolicy.whisperConfidenceThreshold {
+               decision.category != "none",
+               decision.explanationConfidence >= threshold {
                 await speakExplanation(
                     for: text,
                     lineID: lineID,
                     confidence: decision.explanationConfidence
                 )
             } else {
-                DeveloperConsole.shared.log(.info, category: "MeetingDecision", "skipped busy=\(isDescribingPhoto || isSpeakingWhisper || isPreparingWhisper) quotaPaused=\(isExplainPaused) requested=\(decision.needsExplanation) confidence=\(decision.explanationConfidence) threshold=\(MeetingPolicy.whisperConfidenceThreshold)")
+                DeveloperConsole.shared.log(.info, category: "MeetingDecision", "skipped busy=\(isDescribingPhoto || isSpeakingWhisper || isPreparingWhisper) quotaPaused=\(isExplainPaused) requested=\(decision.needsExplanation) category=\(decision.category) confidence=\(decision.explanationConfidence) lexicon=\(lexiconHit) threshold=\(threshold)")
             }
         } catch let error as JevClientError {
             guard generation == self.generation else { return }
@@ -391,6 +456,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                    case .http(429) = geminiError {
                     factPausedUntil = Date().addingTimeInterval(MeetingPolicy.factQuotaPause)
                     DeveloperConsole.shared.log(.warning, category: "MeetingDecision", "factcheck quota paused seconds=\(Int(MeetingPolicy.factQuotaPause))")
+                    syncWatch(force: true)
                 }
                 guard generation == self.generation else { return }
                 updateFactCard(cardID) {
@@ -418,6 +484,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "discarded stopped=true stage=explanation")
                 return
             }
+            guard !explanation.text.isEmpty else {
+                DeveloperConsole.shared.log(.info, category: "MeetingWhisper", "skipped noTerm=true")
+                return
+            }
             let term = explanation.term.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
             guard !term.isEmpty, !spokenTerms.contains(term) else {
                 DeveloperConsole.shared.log(.info, category: "MeetingWhisper", "skipped emptyOrRepeatedTerm=true")
@@ -429,7 +499,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     term: explanation.term,
                     text: explanation.text,
                     confidence: confidence,
-                    state: .speaking
+                    state: .speaking,
+                    category: explanation.category
                 )
             }
             isSpeakingWhisper = true
@@ -471,6 +542,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                case .http(429) = geminiError {
                 explainPausedUntil = Date().addingTimeInterval(MeetingPolicy.explainQuotaPause)
                 DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "quota paused seconds=\(Int(MeetingPolicy.explainQuotaPause))")
+                syncWatch(force: true)
                 throw error
             }
             DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "retry once domain=\((error as NSError).domain) code=\((error as NSError).code)")
@@ -521,6 +593,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     }
                 }
                 detailBubble?.state = .ready(message: explanation.text, links: factLinks(for: lineID))
+                updateLine(lineID) { target in
+                    target.whisper?.category = explanation.category
+                }
                 speakDetail(explanation.text)
             } catch {
                 guard generation == self.generation, detailBubble?.id == lineID else { return }
@@ -681,11 +756,37 @@ final class MeetingInterpreterViewModel: ObservableObject {
         stop()
         jevReady = false
         failure = .jev(code: code, message: message)
+        syncWatch(force: true)
         print("[Meeting][ERROR] 판단 서비스 중지 code=\(code)")
     }
 
     private func failMicrophone(_ message: String) {
         stop()
         failure = .microphone(message)
+        syncWatch(force: true)
+    }
+
+    private func syncWatch(force: Bool = false) {
+        let now = Date()
+        guard force || now.timeIntervalSince(lastWatchSyncAt) >= 2 else { return }
+        lastWatchSyncAt = now
+        watchBridge.update(
+            state: runState == .listening ? "listening" : "idle",
+            route: inputRouteName,
+            startedAt: archiveStartedAt,
+            latest: lines.last?.text ?? "",
+            recent: Array(lines.suffix(5).map(\.text)),
+            whisperCount: lines.filter { $0.whisper?.text.isEmpty == false }.count,
+            error: failureText,
+            quotaPaused: isExplainPaused || Date() < (factPausedUntil ?? .distantPast)
+        )
+    }
+
+    private var failureText: String {
+        switch failure {
+        case .jev(let code, _): return code
+        case .microphone: return "E-MIC-503"
+        case nil: return ""
+        }
     }
 }

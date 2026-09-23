@@ -298,6 +298,31 @@
 ### 보안 메모
 - 키는 기존 Keychain 경로 사용. 사진 원본은 사용자 촬영 요청 시 Gemini로 전송하며 키·사진 내용은 로그에 기록하지 않음.
 
+## 2026-09-23 · 백그라운드 통역·애플워치 디스플레이·도메인 사전 감지
+
+### 결정
+- 오디오 백그라운드 모드는 이미 선언돼 있으므로, 통화·시리 방해 종료 후 세션 재구성·전사 재개, 라우트 변경(안경 연결 해제→아이폰 마이크) 복구, 엔진 시작 실패 시 즉사 대신 2초 간격 재시도(3회)를 추가한다.
+- watchOS 컴패니언 앱(TurboMetaWatch)을 iOS 앱에 내장해 TestFlight로 함께 배포한다. WatchConnectivity applicationContext로 상태를 밀어주고(자막 2초 스로틀, 상태·오류 즉시), 실패는 로그만 남긴다.
+- 귓속말 개입 대상을 비즈니스(재무·회계·전략·마케팅·법무)와 개발(소프트웨어·인프라·데이터·보안) 두 도메인으로 한정한다. Jev questions에 category(business/dev/none)를 추가하고 category=none이면 생략한다.
+- 사전 감지: 기기 내 약어 사전(EBITDA·API·S3 등) 적중 시 신뢰도 문턱을 0.6→0.3으로 낮춘다. 확정 판정이 아니라 가중치다.
+- Gemini 설명 프롬프트도 두 도메인으로 제한하고 category를 받아 저장한다. 유효한 JSON의 빈 text는 실패가 아니라 정상 생략으로 처리하고, 200 실패 원인(finishReason·blockReason)을 내용 없이 기록한다.
+
+### 완료
+- [x] 방해·라우트 복구, 엔진 재시도 상한, 관련 진단 로그
+- [x] 워치 앱 4파일 + WatchMeetingStatus/WatchBridgeService + watchOS 타깃 등록(Embed Watch Content, 의존성, 서명 설정)
+- [x] 사전 감지, Jev category 게이트, Gemini 도메인 필터·category·빈 설명 정상 처리
+- [x] 회귀 테스트 추가(사전 3건, 워치 페이로드 2건, Jev category 1건, Gemini category/diagnostic 2건) 및 CI 테스트 목록 갱신
+
+### 남음
+- [ ] CodeMagic에서 워치 번들(io.github.temistry.turbometa.watchkitapp) 프로비저닝 자동 생성 확인 — 실패 시 대안 작업
+- [ ] 실기기: 홈 나가기·화면 끄기 상태 실시간 귓속말, 통화 후 복구, 안경 연결 해제 시 폰 마이크 전환, 워치 실시간 갱신
+
+### 검증
+- 로컬 정적 감사: fatal 0, warning 0, informational 1(기존). git diff --check 통과.
+
+### 보안 메모
+- 워치 페이로드는 상태·자막 일부만 담고 회의 전문은 폰에만 보관한다. 키·서버 값은 기록하지 않는다.
+
 ## 2026-09-23 · 귓속말 복원력과 회의 서랍
 
 ### 결정
