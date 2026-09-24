@@ -24,6 +24,7 @@ final class PhoneLink: NSObject, ObservableObject {
     @Published var error = ""
     @Published var quotaPaused = false
     @Published var scene = ""
+    @Published var micQuiet = false
     @Published var captureFeedback: CaptureFeedback = .idle
 
     private var feedbackToken = UUID()
@@ -48,6 +49,7 @@ final class PhoneLink: NSObject, ObservableObject {
         if let value = context[WatchMeetingStatus.error] as? String { error = value }
         if let value = context[WatchMeetingStatus.quotaPaused] as? Bool { quotaPaused = value }
         if let value = context[WatchMeetingStatus.scene] as? String { scene = value }
+        if let value = context[WatchMeetingStatus.micQuiet] as? Bool { micQuiet = value }
     }
 
     /// 폰에 촬영을 요청한다. 폰은 앱의 촬영 버튼과 같은 동작(촬영→설명→귓속말)을 한다.

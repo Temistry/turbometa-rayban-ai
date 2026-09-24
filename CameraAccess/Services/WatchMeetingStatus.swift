@@ -15,10 +15,12 @@ enum WatchMeetingStatus {
     static let scene = "scene"
     static let sceneWorking = "working"
     static let sceneFailed = "failed"
+    /// 최근 30초 동안 마이크에 거의 소리가 들어오지 않음.
+    static let micQuiet = "micQuiet"
 
     static func payload(state: String, route: String, startedAt: Date?, latest: String,
                         recent: [String], whisperCount: Int, error: String,
-                        quotaPaused: Bool, scene: String = "") -> [String: Any] {
+                        quotaPaused: Bool, scene: String = "", micQuiet: Bool = false) -> [String: Any] {
         var payload: [String: Any] = [
             Self.state: state,
             Self.route: route,
@@ -27,7 +29,8 @@ enum WatchMeetingStatus {
             Self.whisperCount: whisperCount,
             Self.error: error,
             Self.quotaPaused: quotaPaused,
-            Self.scene: scene
+            Self.scene: scene,
+            Self.micQuiet: micQuiet
         ]
         if let startedAt {
             payload[Self.startedAt] = startedAt.timeIntervalSince1970

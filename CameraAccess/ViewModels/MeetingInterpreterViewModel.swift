@@ -134,6 +134,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var photoError: String? {
         didSet { if photoError != oldValue { syncWatch(force: true) } }
     }
+    /// 최근 30초 동안 마이크에 거의 소리가 들어오지 않음(폰을 상대 쪽으로 옮기라는 신호).
+    @Published private(set) var isInputQuiet = false {
+        didSet { if isInputQuiet != oldValue { syncWatch(force: true) } }
+    }
     @Published private(set) var detailBubble: DetailBubble?
 
     let streamViewModel: StreamSessionViewModel
@@ -189,6 +193,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
         transcription.onFailure = { [weak self] message in
             self?.failMicrophone(message)
+        }
+        transcription.onInputQuality = { [weak self] _, quiet in
+            self?.isInputQuiet = quiet
         }
         playbackCancellable = tts.$playbackState
             .receive(on: DispatchQueue.main)
@@ -270,6 +277,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
         // 설정 변경이 앱 재실행 없이 다음 회의부터 적용되도록 시작할 때마다 구성한다.
         configureVisualAssist(for: MeetingSceneMode.current)
         GeminiUsageLedger.shared.reset()
+        transcription.micMode = MeetingMicMode.current
+        isInputQuiet = false
 
         isStarting = true
         let archiveID = UUID()
@@ -838,7 +847,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
             quotaPaused: isExplainPaused || Date() < (factPausedUntil ?? .distantPast),
             scene: isDescribingPhoto
                 ? WatchMeetingStatus.sceneWorking
-                : (photoError == nil ? "" : WatchMeetingStatus.sceneFailed)
+                : (photoError == nil ? "" : WatchMeetingStatus.sceneFailed),
+            micQuiet: runState == .listening && isInputQuiet
         )
     }
 

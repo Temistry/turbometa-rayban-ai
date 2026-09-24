@@ -632,6 +632,11 @@
 "settings.scene.saver.detail" = "1분마다 확인해요";
 "settings.scene.off" = "끄기";
 "settings.scene.off.detail" = "소리로만 통역해요";
+"settings.mic" = "마이크";
+"settings.mic.phone" = "폰";
+"settings.mic.phone.detail" = "상대 말을 잘 들어요. 폰을 테이블에 두세요";
+"settings.mic.headset" = "안경·이어폰";
+"settings.mic.headset.detail" = "내 말 위주로 들어요";
 "meeting.photo.title" = "지금 보는 장면";
 "meeting.photo.capture" = "촬영해서 듣기";
 "meeting.photo.busy" = "장면 확인 중";

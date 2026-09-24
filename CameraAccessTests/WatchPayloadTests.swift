@@ -41,6 +41,15 @@ final class WatchPayloadTests: XCTestCase {
             scene: WatchMeetingStatus.sceneWorking
         )
         XCTAssertEqual(payload[WatchMeetingStatus.scene] as? String, "working")
+        XCTAssertEqual(payload[WatchMeetingStatus.micQuiet] as? Bool, false)
+    }
+
+    func testPayloadCarriesMicQuiet() {
+        let payload = WatchMeetingStatus.payload(
+            state: "listening", route: "iPhone 마이크", startedAt: nil, latest: "",
+            recent: [], whisperCount: 0, error: "", quotaPaused: false, micQuiet: true
+        )
+        XCTAssertEqual(payload[WatchMeetingStatus.micQuiet] as? Bool, true)
     }
 
     /// 워치와 폰이 같은 값을 써야 촬영 요청이 통한다. 값이 바뀌면 두 앱을 같이 배포해야 한다.

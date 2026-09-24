@@ -73,4 +73,37 @@ final class MeetingRealtimeTests: XCTestCase {
         XCTAssertTrue(VisualAssistService.sceneChanged([], [120]))
         XCTAssertTrue(VisualAssistService.sceneChanged(before, Array(before.prefix(10))))
     }
+
+    // MARK: - 마이크 선택과 입력 품질
+
+    func testMicModeDefaultsToPhone() {
+        XCTAssertEqual(MeetingMicMode.resolve(stored: nil), .phone)
+        XCTAssertEqual(MeetingMicMode.resolve(stored: "unknown"), .phone)
+        XCTAssertEqual(MeetingMicMode.resolve(stored: "headset"), .headset)
+    }
+
+    /// 귓속말이 폰 스피커로 나올 때만 에코 제거를 켠다. 안경(A2DP)으로 나가면 끈다.
+    func testEchoCancellationOnlyForPhoneOutputs() {
+        XCTAssertTrue(MeetingTranscriptionService.needsEchoCancellation(outputs: [.builtInSpeaker]))
+        XCTAssertTrue(MeetingTranscriptionService.needsEchoCancellation(outputs: [.builtInReceiver]))
+        XCTAssertFalse(MeetingTranscriptionService.needsEchoCancellation(outputs: [.bluetoothA2DP]))
+        XCTAssertFalse(MeetingTranscriptionService.needsEchoCancellation(outputs: []))
+    }
+
+    func testRmsDecibels() {
+        XCTAssertEqual(MeetingInputMeter.rmsDecibels([Float](repeating: 0, count: 64)), MeetingInputMeter.floorDb)
+        let sine = (0..<4800).map { Float(sin(Double($0) * 2 * .pi / 48)) }
+        XCTAssertEqual(MeetingInputMeter.rmsDecibels(sine), -3.01, accuracy: 0.05)
+        let quiet = sine.map { $0 * 0.001 }
+        XCTAssertEqual(MeetingInputMeter.rmsDecibels(quiet), -63.01, accuracy: 0.05)
+    }
+
+    func testQuietNeedsThirtySecondsOfSilence() {
+        let silent = MeetingInputWindow(buffers: 100, averageDb: -70, peakDb: -60, speechRatio: 0)
+        let talking = MeetingInputWindow(buffers: 100, averageDb: -40, peakDb: -25, speechRatio: 0.5)
+        XCTAssertFalse(MeetingInputMeter.isQuiet([silent, silent]))
+        XCTAssertTrue(MeetingInputMeter.isQuiet([silent, silent, silent]))
+        XCTAssertFalse(MeetingInputMeter.isQuiet([silent, talking, silent]))
+        XCTAssertTrue(MeetingInputMeter.isQuiet([talking, silent, silent, silent]))
+    }
 }

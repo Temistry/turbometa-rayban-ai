@@ -641,6 +641,11 @@
 "settings.scene.saver.detail" = "Checks once a minute";
 "settings.scene.off" = "Off";
 "settings.scene.off.detail" = "Interprets from audio only";
+"settings.mic" = "Microphone";
+"settings.mic.phone" = "Phone";
+"settings.mic.phone.detail" = "Hears others best. Place the phone on the table";
+"settings.mic.headset" = "Glasses/earbuds";
+"settings.mic.headset.detail" = "Focuses on your own voice";
 "meeting.photo.title" = "Current scene";
 "meeting.photo.capture" = "Capture and listen";
 "meeting.photo.busy" = "Checking scene";

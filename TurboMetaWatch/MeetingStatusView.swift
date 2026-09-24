@@ -66,6 +66,12 @@ struct MeetingStatusView: View {
                         .foregroundStyle(.yellow)
                 }
 
+                if link.micQuiet {
+                    Label("소리 작음 · 폰을 상대 쪽으로", systemImage: "mic.slash")
+                        .font(.caption2)
+                        .foregroundStyle(.yellow)
+                }
+
                 VStack(alignment: .leading, spacing: 5) {
                     ForEach(Array(link.recent.suffix(3).enumerated().reversed()), id: \.offset) { _, text in
                         Text(text)

@@ -26,6 +26,14 @@ struct UnifiedSettingsView: View {
     @State private var hasGoogleAPIKey = false
     @State private var hasJevAPIKey = false
     @AppStorage(MeetingSceneMode.storageKey) private var sceneModeRaw = ""
+    @AppStorage(MeetingMicMode.storageKey) private var micModeRaw = MeetingMicMode.phone.rawValue
+
+    private var micMode: Binding<MeetingMicMode> {
+        Binding(
+            get: { MeetingMicMode.resolve(stored: micModeRaw) },
+            set: { micModeRaw = $0.rawValue }
+        )
+    }
 
     /// 저장값이 없으면 이전 켜기/끄기 스위치 값을 이어받는다.
     private var sceneMode: Binding<MeetingSceneMode> {
@@ -250,6 +258,19 @@ struct UnifiedSettingsView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("settings.scene".localized)
                     Text(sceneMode.wrappedValue.detailKey.localized)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            Picker(selection: micMode) {
+                ForEach(MeetingMicMode.allCases) { mode in
+                    Text(mode.titleKey.localized).tag(mode)
+                }
+            } label: {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("settings.mic".localized)
+                    Text(micMode.wrappedValue.detailKey.localized)
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
