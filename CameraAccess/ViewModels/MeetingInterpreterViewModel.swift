@@ -128,8 +128,12 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var jevReady = false
     @Published private(set) var isStarting = false
     @Published private(set) var isStopping = false
-    @Published private(set) var isDescribingPhoto = false
-    @Published private(set) var photoError: String?
+    @Published private(set) var isDescribingPhoto = false {
+        didSet { if isDescribingPhoto != oldValue { syncWatch(force: true) } }
+    }
+    @Published private(set) var photoError: String? {
+        didSet { if photoError != oldValue { syncWatch(force: true) } }
+    }
     @Published private(set) var detailBubble: DetailBubble?
 
     let streamViewModel: StreamSessionViewModel
@@ -192,6 +196,31 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 self?.handlePlaybackStateChange(state)
             }
         watchBridge.activate()
+        watchBridge.onCaptureRequest = { [weak self] in
+            self?.handleWatchCaptureRequest() ?? WatchCapture.unavailable
+        }
+    }
+
+    /// 워치 촬영 버튼. 앱 촬영 버튼과 같은 describeCurrentScene()을 실행한다.
+    private func handleWatchCaptureRequest() -> String {
+        DeveloperConsole.shared.log(
+            .info,
+            category: "MeetingWatch",
+            "capture request app=\(Self.appStateName) stream=\(streamViewModel.streamingStatus) run=\(runState)"
+        )
+        guard failure == nil, !isStarting, !isStopping else { return WatchCapture.unavailable }
+        guard !isDescribingPhoto, !isSpeakingWhisper else { return WatchCapture.busy }
+        describeCurrentScene()
+        return isDescribingPhoto ? WatchCapture.accepted : WatchCapture.busy
+    }
+
+    private static var appStateName: String {
+        switch UIApplication.shared.applicationState {
+        case .active: return "active"
+        case .inactive: return "inactive"
+        case .background: return "background"
+        @unknown default: return "unknown"
+        }
     }
 
     /// 설정 단계에 맞춰 장면 분석을 구성한다. 끄기면 안경 카메라 스트림도 켜지 않는다.
@@ -686,7 +715,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 }
                 let photo = try await streamViewModel.capturePhotoResult(owner: .meeting, timeout: 10)
                 try Task.checkCancellation()
-                print("[Meeting][PHOTO] captured width=\(photo.image.cgImage?.width ?? 0) height=\(photo.image.cgImage?.height ?? 0) bytes=\(photo.jpegData.count)")
+                print("[Meeting][PHOTO] captured app=\(Self.appStateName) width=\(photo.image.cgImage?.width ?? 0) height=\(photo.image.cgImage?.height ?? 0) bytes=\(photo.jpegData.count)")
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 if temporaryStream { await streamViewModel.stopSession() }
                 // Capture immediately; verify Jev before producing any explanation.
@@ -717,6 +746,12 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 }
             } catch {
                 guard generation == self.generation, !Task.isCancelled else { return }
+                let nsError = error as NSError
+                DeveloperConsole.shared.log(
+                    .warning,
+                    category: "MeetingPhoto",
+                    "failed app=\(Self.appStateName) stream=\(streamViewModel.streamingStatus) domain=\(nsError.domain) code=\(nsError.code)"
+                )
                 if temporaryStream { await streamViewModel.stopSession() }
                 guard generation == self.generation else { return }
                 if let jevError = error as? JevClientError {
@@ -800,7 +835,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
             recent: Array(lines.suffix(5).map(\.text)),
             whisperCount: lines.filter { $0.whisper?.text.isEmpty == false }.count,
             error: failureText,
-            quotaPaused: isExplainPaused || Date() < (factPausedUntil ?? .distantPast)
+            quotaPaused: isExplainPaused || Date() < (factPausedUntil ?? .distantPast),
+            scene: isDescribingPhoto
+                ? WatchMeetingStatus.sceneWorking
+                : (photoError == nil ? "" : WatchMeetingStatus.sceneFailed)
         )
     }
 

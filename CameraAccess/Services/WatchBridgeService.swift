@@ -17,6 +17,10 @@ final class WatchBridgeService: NSObject, ObservableObject {
     /// 같은 경고가 갱신마다 반복되지 않도록 마지막으로 기록한 워치 상태.
     private var lastLoggedReachability: String?
 
+    /// 워치의 촬영 버튼 요청을 처리한다. WatchCapture 응답 값을 돌려준다.
+    /// 회의 화면이 준비되지 않았으면 nil이며 unavailable로 응답한다.
+    var onCaptureRequest: (() -> String)?
+
     func activate() {
         guard WCSession.isSupported() else { return }
         let session = WCSession.default
@@ -26,7 +30,8 @@ final class WatchBridgeService: NSObject, ObservableObject {
     }
 
     func update(state: String, route: String, startedAt: Date?, latest: String,
-                recent: [String], whisperCount: Int, error: String, quotaPaused: Bool) {
+                recent: [String], whisperCount: Int, error: String, quotaPaused: Bool,
+                scene: String = "") {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
         let payload = WatchMeetingStatus.payload(
             state: state,
@@ -36,7 +41,8 @@ final class WatchBridgeService: NSObject, ObservableObject {
             recent: recent,
             whisperCount: whisperCount,
             error: error,
-            quotaPaused: quotaPaused
+            quotaPaused: quotaPaused,
+            scene: scene
         )
         send(payload)
     }
@@ -66,6 +72,15 @@ final class WatchBridgeService: NSObject, ObservableObject {
         guard let payload = pendingPayload else { return }
         send(payload)
     }
+
+    fileprivate func handleMessage(action: String?) -> String {
+        guard action == WatchCapture.captureAction else { return WatchCapture.unavailable }
+        guard let handler = onCaptureRequest else {
+            DeveloperConsole.shared.log(.warning, category: "MeetingWatch", "capture request without meeting screen")
+            return WatchCapture.unavailable
+        }
+        return handler()
+    }
 }
 
 extension WatchBridgeService: WCSessionDelegate {
@@ -87,6 +102,19 @@ extension WatchBridgeService: WCSessionDelegate {
     nonisolated func sessionWatchStateDidChange(_ session: WCSession) {
         Task { @MainActor in
             WatchBridgeService.shared.flushPendingIfReady()
+        }
+    }
+
+    /// 워치 촬영 버튼. 워치가 replyHandler와 함께 보내므로 이 형태로 받아야 한다.
+    nonisolated func session(
+        _ session: WCSession,
+        didReceiveMessage message: [String: Any],
+        replyHandler: @escaping ([String: Any]) -> Void
+    ) {
+        let action = message[WatchCapture.actionKey] as? String
+        Task { @MainActor in
+            let result = WatchBridgeService.shared.handleMessage(action: action)
+            replyHandler([WatchCapture.resultKey: result])
         }
     }
 }

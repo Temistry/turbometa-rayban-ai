@@ -13,6 +13,32 @@ struct MeetingStatusView: View {
         return link.state == "listening" ? "듣는 중" : "대기"
     }
 
+    private var captureTitle: String {
+        switch link.captureFeedback {
+        case .sending: return "보내는 중"
+        case .accepted: return "보는 중"
+        case .busy: return "잠시 후 다시"
+        case .unreachable: return "폰 연결 안 됨"
+        case .unavailable: return "폰에서 앱 열기"
+        case .failed: return "촬영 실패"
+        case .idle:
+            if link.scene == WatchMeetingStatus.sceneWorking { return "보는 중" }
+            if link.scene == WatchMeetingStatus.sceneFailed { return "다시 촬영" }
+            return "장면 설명"
+        }
+    }
+
+    private var captureTint: Color {
+        switch link.captureFeedback {
+        case .busy, .unreachable, .unavailable, .failed: return .orange
+        default: return .blue
+        }
+    }
+
+    private var captureDisabled: Bool {
+        link.captureFeedback == .sending || link.scene == WatchMeetingStatus.sceneWorking
+    }
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 8) {
@@ -58,6 +84,17 @@ struct MeetingStatusView: View {
                     .foregroundStyle(.secondary)
             }
             .padding(.horizontal, 4)
+        }
+        // 화면을 보지 않고도 누를 수 있게 스크롤과 무관하게 아래에 고정한다.
+        .safeAreaInset(edge: .bottom) {
+            Button(action: link.requestCapture) {
+                Label(captureTitle, systemImage: "camera.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(captureTint)
+            .disabled(captureDisabled)
         }
         .navigationTitle("TurboMeta")
         .onAppear { link.activate() }

@@ -31,5 +31,26 @@ final class WatchPayloadTests: XCTestCase {
         )
 
         XCTAssertNil(payload[WatchMeetingStatus.startedAt])
+        XCTAssertEqual(payload[WatchMeetingStatus.scene] as? String, "")
+    }
+
+    func testPayloadCarriesPhotoSceneState() {
+        let payload = WatchMeetingStatus.payload(
+            state: "listening", route: "-", startedAt: nil, latest: "",
+            recent: [], whisperCount: 0, error: "", quotaPaused: false,
+            scene: WatchMeetingStatus.sceneWorking
+        )
+        XCTAssertEqual(payload[WatchMeetingStatus.scene] as? String, "working")
+    }
+
+    /// 워치와 폰이 같은 값을 써야 촬영 요청이 통한다. 값이 바뀌면 두 앱을 같이 배포해야 한다.
+    func testCaptureMessageContractIsStable() {
+        XCTAssertEqual(WatchCapture.actionKey, "action")
+        XCTAssertEqual(WatchCapture.captureAction, "capturePhoto")
+        XCTAssertEqual(WatchCapture.resultKey, "result")
+        XCTAssertEqual(
+            Set([WatchCapture.accepted, WatchCapture.busy, WatchCapture.unavailable]),
+            Set(["accepted", "busy", "unavailable"])
+        )
     }
 }

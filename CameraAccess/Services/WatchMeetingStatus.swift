@@ -11,10 +11,14 @@ enum WatchMeetingStatus {
     static let whisperCount = "whispers"
     static let error = "error"
     static let quotaPaused = "quotaPaused"
+    /// 사진 설명 진행 상태: "" 없음, "working" 촬영·설명 중, "failed" 실패.
+    static let scene = "scene"
+    static let sceneWorking = "working"
+    static let sceneFailed = "failed"
 
     static func payload(state: String, route: String, startedAt: Date?, latest: String,
                         recent: [String], whisperCount: Int, error: String,
-                        quotaPaused: Bool) -> [String: Any] {
+                        quotaPaused: Bool, scene: String = "") -> [String: Any] {
         var payload: [String: Any] = [
             Self.state: state,
             Self.route: route,
@@ -22,11 +26,25 @@ enum WatchMeetingStatus {
             Self.recent: recent,
             Self.whisperCount: whisperCount,
             Self.error: error,
-            Self.quotaPaused: quotaPaused
+            Self.quotaPaused: quotaPaused,
+            Self.scene: scene
         ]
         if let startedAt {
             payload[Self.startedAt] = startedAt.timeIntervalSince1970
         }
         return payload
     }
+}
+
+/// 워치 → 폰 촬영 요청 메시지와 응답 값. 두 타깃이 공유한다.
+enum WatchCapture {
+    static let actionKey = "action"
+    static let captureAction = "capturePhoto"
+    static let resultKey = "result"
+    /// 촬영을 시작했다.
+    static let accepted = "accepted"
+    /// 이미 촬영·설명·귓속말 중이다.
+    static let busy = "busy"
+    /// 폰 앱이 요청을 처리할 수 없다(회의 화면 미준비, 오류 중지, 시작·종료 중).
+    static let unavailable = "unavailable"
 }

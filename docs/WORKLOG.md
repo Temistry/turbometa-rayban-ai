@@ -527,6 +527,24 @@
 - [ ] 기본 단계로 20~30분 회의 후 진단 로그로 실제 1시간 비용과 diff 분포 확인, 기준값 조정
 - [ ] 글자만 바뀌는 슬라이드 누락이 확인되면 Vision 특징 비교 검토
 
+## 2026-09-23 · 애플워치 촬영 버튼
+
+### 결정
+- 안경 물리 촬영 버튼은 앱에 전달되지 않는다. DAT SDK 0.5.0 공개 인터페이스(MWDATCamera/MWDATCore swiftinterface)에 버튼·터치·제스처 이벤트 API가 없고, photoDataPublisher는 앱이 요청한 capturePhoto 결과만 전달한다.
+- 대안으로 애플워치 촬영 버튼을 추가. 워치 → sendMessage(action=capturePhoto) → 폰 WatchBridgeService → VM이 앱 촬영 버튼과 같은 describeCurrentScene() 실행. 응답: accepted/busy/unavailable.
+- 워치 UI: 화면 하단 고정(safeAreaInset) 큰 버튼, 누를 때 click 진동, 결과에 success/failure 진동, 3초간 결과 문구. 사진 설명 상태(scene: working/failed)를 applicationContext로 실시간 반영.
+- 위험: 앱 스트림 코덱이 VideoCodec.raw라 SDK 문서상 앱이 백그라운드면 스트리밍이 멈춘다. 폰이 잠긴 상태에서 워치 촬영이 실패할 수 있다. hvc1(백그라운드 지속)은 모든 프레임 소비자(makeUIImage 단일 경로)에 영향을 주고 hvc1에서 변환 동작이 문서로 확인되지 않아 이번에는 보류. 요청 시 앱 상태·스트림 상태, 실패 시 오류 코드를 기록해 실기기로 판단한다.
+
+### 완료
+- [x] 공유 계약 WatchCapture + scene 페이로드
+- [x] 폰 메시지 수신(replyHandler) + VM 연결 + 상태 동기화 + 진단 로그
+- [x] 워치 버튼 UI·진동·결과 표시
+- [x] 테스트: 페이로드 scene 2건, 메시지 계약 1건
+
+### 남음
+- [ ] 실기기: 폰 화면 켠 상태 / 잠근 상태 각각 워치 촬영 시도 후 로그(MeetingWatch capture request, MeetingPhoto failed) 확인
+- [ ] 잠금 상태 실패 시 hvc1 코덱 전환 검토
+
 ### 검증
 - 원격 빌드로만 컴파일 가능. 실패 시 GitHub job 로그의 error 필터로 재진단.
 
