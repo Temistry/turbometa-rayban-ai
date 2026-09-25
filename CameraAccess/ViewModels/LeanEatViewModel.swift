@@ -1,14 +1,12 @@
 /*
- * LeanEat ViewModel
- * 食物营养分析视图模型
+ * 음식 영양 분석 화면 상태
  */
 
 import Foundation
 import SwiftUI
 
 @MainActor
-class LeanEatViewModel: ObservableObject {
-    // Published properties
+final class LeanEatViewModel: ObservableObject {
     @Published var isAnalyzing = false
     @Published var nutritionData: FoodNutritionResponse?
     @Published var errorMessage: String?
@@ -21,21 +19,22 @@ class LeanEatViewModel: ObservableObject {
         self.service = LeanEatService(apiKey: apiKey)
     }
 
-    // MARK: - Public Methods
-
     func analyzeFood() async {
+        guard !isAnalyzing else { return }
+
         isAnalyzing = true
         errorMessage = nil
         nutritionData = nil
+        print("[LeanEatVM][INFO] 음식 영양 분석 시작 imageSize=\(photo.size.width)x\(photo.size.height)")
 
         do {
-            print("🍎 [LeanEat] 开始分析食物营养...")
             let result = try await service.analyzeFood(photo)
             nutritionData = result
-            print("✅ [LeanEat] 分析完成: \(result.foods.count) 种食物")
+            print("[LeanEatVM][INFO] 음식 영양 분석 완료 foodCount=\(result.foods.count) healthScore=\(result.healthScore)")
         } catch {
+            let nsError = error as NSError
             errorMessage = error.localizedDescription
-            print("❌ [LeanEat] 分析失败: \(error)")
+            print("[LeanEatVM][ERROR] 음식 영양 분석 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) userInfo=\(nsError.userInfo)")
         }
 
         isAnalyzing = false

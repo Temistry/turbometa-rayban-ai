@@ -1,10 +1,5 @@
 /*
- * RTMP Streaming View
- * Live streaming interface with video preview and RTMP controls
- *
- * Supports all major streaming platforms:
- * - YouTube Live, Twitch, Bilibili, Douyin, TikTok, Facebook Live
- * - Any custom RTMP server (MediaMTX, nginx-rtmp, etc.)
+ * RTMP 라이브 송출 화면
  */
 
 import SwiftUI
@@ -19,10 +14,8 @@ struct RTMPStreamingView: View {
 
     var body: some View {
         ZStack {
-            // Black background
             Color.black.ignoresSafeArea()
 
-            // Video preview
             if let videoFrame = streamViewModel.currentVideoFrame {
                 GeometryReader { geometry in
                     Image(uiImage: videoFrame)
@@ -34,55 +27,35 @@ struct RTMPStreamingView: View {
                 .ignoresSafeArea()
             } else {
                 VStack(spacing: AppSpacing.lg) {
-                    ProgressView()
-                        .scaleEffect(1.5)
-                        .tint(.white)
+                    ProgressView().scaleEffect(1.5).tint(.white)
                     Text("rtmp.connecting.video".localized)
                         .font(AppTypography.body)
                         .foregroundColor(.white)
                 }
             }
 
-            // UI Overlay
             if showUI {
                 VStack(spacing: 0) {
-                    // Header
                     headerView
-                        .transition(.move(edge: .top).combined(with: .opacity))
-
                     Spacer()
-
-                    // Stats (when streaming)
-                    if rtmpViewModel.isStreaming {
-                        statsView
-                            .transition(.opacity)
-                    }
-
-                    // Controls
+                    if rtmpViewModel.isStreaming { statsView }
                     controlsView
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
         }
         .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.3)) {
-                showUI.toggle()
-            }
+            withAnimation(.easeInOut(duration: 0.3)) { showUI.toggle() }
         }
         .onAppear {
             startVideoStream()
             rtmpViewModel.setStreamViewModel(streamViewModel)
         }
-        .onDisappear {
-            stopAll()
-        }
+        .onDisappear { stopAll() }
         .sheet(isPresented: $rtmpViewModel.showSettings) {
             RTMPSettingsView(viewModel: rtmpViewModel)
         }
         .alert("error".localized, isPresented: $rtmpViewModel.showError) {
-            Button("ok".localized) {
-                rtmpViewModel.dismissError()
-            }
+            Button("ok".localized) { rtmpViewModel.dismissError() }
         } message: {
             if let error = rtmpViewModel.errorMessage {
                 Text(error)
@@ -90,32 +63,25 @@ struct RTMPStreamingView: View {
         }
     }
 
-    // MARK: - Header
-
     private var headerView: some View {
         HStack {
-            Button {
-                dismiss()
-            } label: {
+            Button { dismiss() } label: {
                 Image(systemName: "xmark.circle.fill")
                     .font(.title)
                     .foregroundColor(.white)
             }
+            .accessibilityLabel("닫기")
 
             Spacer()
 
-            // Connection status
             HStack(spacing: AppSpacing.sm) {
                 Circle()
                     .fill(rtmpViewModel.connectionStatus.color)
                     .frame(width: 10, height: 10)
-
                 Text(rtmpViewModel.connectionStatus.displayText)
                     .font(AppTypography.caption)
                     .foregroundColor(.white)
-
                 if rtmpViewModel.isStreaming {
-                    // Blinking record indicator
                     Circle()
                         .fill(Color.red)
                         .frame(width: 8, height: 8)
@@ -129,14 +95,12 @@ struct RTMPStreamingView: View {
 
             Spacer()
 
-            // Settings button
-            Button {
-                rtmpViewModel.showSettings = true
-            } label: {
+            Button { rtmpViewModel.showSettings = true } label: {
                 Image(systemName: "gearshape.fill")
                     .font(.title2)
                     .foregroundColor(.white)
             }
+            .accessibilityLabel("송출 설정")
         }
         .padding(AppSpacing.md)
         .background(
@@ -148,11 +112,9 @@ struct RTMPStreamingView: View {
         )
     }
 
-    // MARK: - Stats View
-
     private var statsView: some View {
         HStack(spacing: AppSpacing.lg) {
-            StatItem(label: "FPS", value: String(format: "%.1f", rtmpViewModel.currentFps))
+            StatItem(label: "초당 프레임", value: String(format: "%.1f", rtmpViewModel.currentFps))
             StatItem(label: "rtmp.frames".localized, value: "\(rtmpViewModel.framesSent)")
             StatItem(label: "rtmp.time".localized, value: formatTime(rtmpViewModel.connectionTime))
             StatItem(label: "rtmp.data".localized, value: formatBytes(rtmpViewModel.bytesSent))
@@ -163,11 +125,8 @@ struct RTMPStreamingView: View {
         .padding(.horizontal, AppSpacing.lg)
     }
 
-    // MARK: - Controls
-
     private var controlsView: some View {
         VStack(spacing: AppSpacing.md) {
-            // Platform selector
             if !rtmpViewModel.isStreaming {
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: AppSpacing.sm) {
@@ -184,27 +143,22 @@ struct RTMPStreamingView: View {
                 }
             }
 
-            // URL and Stream Key inputs (when not streaming)
             if !rtmpViewModel.isStreaming && !rtmpViewModel.isConnecting {
                 VStack(spacing: AppSpacing.sm) {
-                    // RTMP URL
                     HStack {
-                        Image(systemName: "link")
-                            .foregroundColor(.white.opacity(0.6))
+                        Image(systemName: "link").foregroundColor(.white.opacity(0.6))
                         TextField("rtmp.url.placeholder".localized, text: $rtmpViewModel.rtmpUrl)
                             .textFieldStyle(.plain)
                             .foregroundColor(.white)
-                            .autocapitalization(.none)
-                            .disableAutocorrection(true)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
                     }
                     .padding(AppSpacing.sm)
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(AppCornerRadius.sm)
 
-                    // Stream Key
                     HStack {
-                        Image(systemName: "key.fill")
-                            .foregroundColor(.white.opacity(0.6))
+                        Image(systemName: "key.fill").foregroundColor(.white.opacity(0.6))
                         SecureField("rtmp.key.placeholder".localized, text: $rtmpViewModel.streamKey)
                             .textFieldStyle(.plain)
                             .foregroundColor(.white)
@@ -212,11 +166,18 @@ struct RTMPStreamingView: View {
                     .padding(AppSpacing.sm)
                     .background(Color.white.opacity(0.1))
                     .cornerRadius(AppCornerRadius.sm)
+
+                    Label(
+                        rtmpViewModel.transportSecurityText,
+                        systemImage: rtmpViewModel.isEncryptedTransport ? "lock.fill" : "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .foregroundColor(rtmpViewModel.isEncryptedTransport ? .green : .orange)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, AppSpacing.lg)
             }
 
-            // Start/Stop button
             Button {
                 if rtmpViewModel.isStreaming {
                     rtmpViewModel.stopStreaming()
@@ -226,8 +187,7 @@ struct RTMPStreamingView: View {
             } label: {
                 HStack(spacing: AppSpacing.sm) {
                     if rtmpViewModel.isConnecting {
-                        ProgressView()
-                            .tint(.white)
+                        ProgressView().tint(.white)
                     } else {
                         Image(systemName: rtmpViewModel.isStreaming ? "stop.fill" : "video.fill")
                     }
@@ -240,7 +200,11 @@ struct RTMPStreamingView: View {
                 .foregroundColor(.white)
                 .cornerRadius(AppCornerRadius.md)
             }
-            .disabled(rtmpViewModel.isConnecting || (rtmpViewModel.rtmpUrl.isEmpty && !rtmpViewModel.isStreaming))
+            .disabled(
+                rtmpViewModel.isConnecting
+                    || (rtmpViewModel.rtmpUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        && !rtmpViewModel.isStreaming)
+            )
             .padding(.horizontal, AppSpacing.lg)
         }
         .padding(.vertical, AppSpacing.lg)
@@ -253,14 +217,13 @@ struct RTMPStreamingView: View {
         )
     }
 
-    // MARK: - Helper Methods
-
     private func startVideoStream() {
         Task {
+            print("[RTMPView][INFO] 안경 영상 스트림 시작 요청")
             await streamViewModel.handleStartStreaming()
         }
 
-        // Start feeding frames to RTMP when streaming
+        frameTimer?.invalidate()
         frameTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 24.0, repeats: true) { _ in
             Task { @MainActor in
                 if let frame = streamViewModel.currentVideoFrame {
@@ -274,10 +237,7 @@ struct RTMPStreamingView: View {
     private func stopAll() {
         frameTimer?.invalidate()
         frameTimer = nil
-
-        if rtmpViewModel.isStreaming {
-            rtmpViewModel.stopStreaming()
-        }
+        if rtmpViewModel.isStreaming { rtmpViewModel.stopStreaming() }
 
         Task {
             if streamViewModel.streamingStatus != .stopped {
@@ -287,28 +247,21 @@ struct RTMPStreamingView: View {
     }
 
     private func formatTime(_ seconds: TimeInterval) -> String {
-        let hours = Int(seconds) / 3600
-        let minutes = (Int(seconds) % 3600) / 60
-        let secs = Int(seconds) % 60
-
-        if hours > 0 {
-            return String(format: "%d:%02d:%02d", hours, minutes, secs)
-        } else {
-            return String(format: "%02d:%02d", minutes, secs)
-        }
+        let hours = Int(seconds) / 3_600
+        let minutes = (Int(seconds) % 3_600) / 60
+        let remainingSeconds = Int(seconds) % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, remainingSeconds)
+            : String(format: "%02d:%02d", minutes, remainingSeconds)
     }
 
     private func formatBytes(_ bytes: Int64) -> String {
-        let mb = Double(bytes) / (1024 * 1024)
-        if mb >= 1000 {
-            return String(format: "%.1f GB", mb / 1024)
-        } else {
-            return String(format: "%.1f MB", mb)
-        }
+        let megabytes = Double(bytes) / (1_024 * 1_024)
+        return megabytes >= 1_000
+            ? String(format: "%.1f GB", megabytes / 1_024)
+            : String(format: "%.1f MB", megabytes)
     }
 }
-
-// MARK: - Supporting Views
 
 struct StatItem: View {
     let label: String
@@ -316,12 +269,8 @@ struct StatItem: View {
 
     var body: some View {
         VStack(spacing: 2) {
-            Text(value)
-                .font(AppTypography.headline)
-                .foregroundColor(.white)
-            Text(label)
-                .font(AppTypography.caption)
-                .foregroundColor(.white.opacity(0.7))
+            Text(value).font(AppTypography.headline).foregroundColor(.white)
+            Text(label).font(AppTypography.caption).foregroundColor(.white.opacity(0.7))
         }
     }
 }
@@ -334,11 +283,8 @@ struct PlatformButton: View {
     var body: some View {
         Button(action: action) {
             VStack(spacing: 4) {
-                Image(systemName: platform.icon)
-                    .font(.system(size: 20))
-                Text(platform.displayName)
-                    .font(.caption2)
-                    .lineLimit(1)
+                Image(systemName: platform.icon).font(.system(size: 20))
+                Text(platform.displayName).font(.caption2).lineLimit(1)
             }
             .padding(.horizontal, AppSpacing.sm)
             .padding(.vertical, AppSpacing.sm)
@@ -363,15 +309,13 @@ struct BlinkingModifier: ViewModifier {
     }
 }
 
-// MARK: - RTMP Settings View
-
 struct RTMPSettingsView: View {
     @ObservedObject var viewModel: RTMPStreamingViewModel
     @Environment(\.dismiss) private var dismiss
 
-    let bitrateOptions = [
+    private let bitrateOptions = [
         (1_000_000, "1 Mbps"),
-        (2_000_000, "2 Mbps (rtmp.recommended".localized + ")"),
+        (2_000_000, "2 Mbps (권장)"),
         (3_000_000, "3 Mbps"),
         (4_000_000, "4 Mbps")
     ]
@@ -385,12 +329,10 @@ struct RTMPSettingsView: View {
                             viewModel.bitrate = option.0
                         } label: {
                             HStack {
-                                Text(option.1)
-                                    .foregroundColor(.primary)
+                                Text(option.1).foregroundColor(.primary)
                                 Spacer()
                                 if viewModel.bitrate == option.0 {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(.blue)
+                                    Image(systemName: "checkmark").foregroundColor(.blue)
                                 }
                             }
                         }
@@ -407,14 +349,11 @@ struct RTMPSettingsView: View {
                             viewModel.selectPlatform(platform)
                         } label: {
                             HStack {
-                                Image(systemName: platform.icon)
-                                    .frame(width: 24)
-                                Text(platform.displayName)
-                                    .foregroundColor(.primary)
+                                Image(systemName: platform.icon).frame(width: 24)
+                                Text(platform.displayName).foregroundColor(.primary)
                                 Spacer()
                                 if viewModel.selectedPlatform == platform {
-                                    Image(systemName: "checkmark")
-                                        .foregroundColor(.blue)
+                                    Image(systemName: "checkmark").foregroundColor(.blue)
                                 }
                             }
                         }
@@ -428,8 +367,10 @@ struct RTMPSettingsView: View {
                         Text("rtmp.settings.experimental".localized)
                             .font(AppTypography.headline)
                             .foregroundColor(.orange)
-
                         Text("rtmp.settings.experimental.description".localized)
+                            .font(AppTypography.caption)
+                            .foregroundColor(.secondary)
+                        Text("스트림 키는 현재 iPhone 전용 Keychain에 저장되며 로그에 출력되지 않습니다.")
                             .font(AppTypography.caption)
                             .foregroundColor(.secondary)
                     }
@@ -442,9 +383,7 @@ struct RTMPSettingsView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("done".localized) {
-                        dismiss()
-                    }
+                    Button("done".localized) { dismiss() }
                 }
             }
         }

@@ -1,13 +1,15 @@
 /*
- * Qwen-Omni-Realtime WebSocket Service
- * Provides real-time audio and video chat with AI
+ * Alibaba Qwen Omni 실시간 음성/영상 대화 서비스
+ *
+ * 예상된 사용자 종료와 실제 네트워크 장애를 구분해 불필요한
+ * "Socket is not connected" 팝업을 막고, 기기 화면 로그에 원인을 남긴다.
  */
 
+import AVFoundation
 import Foundation
 import UIKit
-import AVFoundation
 
-// MARK: - WebSocket Events
+// MARK: - WebSocket events
 
 enum OmniClientEvent: String {
     case sessionUpdate = "session.update"
@@ -34,43 +36,29 @@ enum OmniServerEvent: String {
     case error = "error"
 }
 
-// MARK: - Service Class
-
-class OmniRealtimeService: NSObject {
-
-    // WebSocket
+final class OmniRealtimeService: NSObject {
     private var webSocket: URLSessionWebSocketTask?
     private var urlSession: URLSession?
 
-    // Configuration
     private let apiKey: String
     private let model = "qwen3-omni-flash-realtime"
-    // 根据用户设置的区域动态获取 WebSocket URL（北京/新加坡）
-    private var baseURL: String {
-        return APIProviderManager.staticLiveAIWebsocketURL
-    }
+    private var baseURL: String { APIProviderManager.staticLiveAIWebsocketURL }
 
-    // Audio Engine (for recording)
     private var audioEngine: AVAudioEngine?
-
-    // Audio Playback Engine (separate engine for playback)
     private var playbackEngine: AVAudioEngine?
     private var playerNode: AVAudioPlayerNode?
-    // 使用 Float32 标准格式，兼容 iOS 18
-    private let playbackFormat = AVAudioFormat(standardFormatWithSampleRate: 24000, channels: 1)
+    private let playbackFormat = AVAudioFormat(standardFormatWithSampleRate: 24_000, channels: 1)
 
-    // Audio buffer management
     private var audioBuffer = Data()
     private var isCollectingAudio = false
     private var audioChunkCount = 0
-    private let minChunksBeforePlay = 2 // 首次收到2个片段后开始播放
+    private let minimumChunksBeforePlayback = 2
     private var hasStartedPlaying = false
     private var isPlaybackEngineRunning = false
 
-    // Callbacks
     var onTranscriptDelta: ((String) -> Void)?
     var onTranscriptDone: ((String) -> Void)?
-    var onUserTranscript: ((String) -> Void)? // 用户语音识别结果
+    var onUserTranscript: ((String) -> Void)?
     var onAudioDelta: ((Data) -> Void)?
     var onAudioDone: (() -> Void)?
     var onSpeechStarted: (() -> Void)?
@@ -79,115 +67,169 @@ class OmniRealtimeService: NSObject {
     var onConnected: (() -> Void)?
     var onFirstAudioSent: (() -> Void)?
 
-    // State
     private var isRecording = false
     private var hasAudioBeenSent = false
-    private var eventIdCounter = 0
+    private var eventIDCounter = 0
+    private var isIntentionalDisconnect = false
+    private var hasEstablishedSession = false
+    private var receiveLoopID = UUID()
 
     init(apiKey: String) {
         self.apiKey = apiKey
         super.init()
-        setupAudioEngine()
+        setupAudioEngines()
     }
 
-    // MARK: - Audio Engine Setup
+    // MARK: - Audio setup
 
-    private func setupAudioEngine() {
-        // Recording engine
+    private func setupAudioEngines() {
         audioEngine = AVAudioEngine()
-
-        // Playback engine (separate from recording)
         setupPlaybackEngine()
     }
 
     private func setupPlaybackEngine() {
-        playbackEngine = AVAudioEngine()
-        playerNode = AVAudioPlayerNode()
+        let engine = AVAudioEngine()
+        let node = AVAudioPlayerNode()
 
-        guard let playbackEngine = playbackEngine,
-              let playerNode = playerNode,
-              let playbackFormat = playbackFormat else {
-            print("❌ [Omni] 无法初始化播放引擎")
+        guard let playbackFormat else {
+            print("[Omni][ERROR] 24kHz mono 재생 포맷 생성 실패")
             return
         }
 
-        // Attach player node
-        playbackEngine.attach(playerNode)
+        engine.attach(node)
+        engine.connect(node, to: engine.mainMixerNode, format: playbackFormat)
+        engine.prepare()
 
-        // Connect player node to output with explicit format
-        playbackEngine.connect(playerNode, to: playbackEngine.mainMixerNode, format: playbackFormat)
-        playbackEngine.prepare()
-
-        print("✅ [Omni] 播放引擎初始化完成: Float32 @ 24kHz")
+        playbackEngine = engine
+        playerNode = node
+        isPlaybackEngineRunning = false
+        print("[Omni][AUDIO] 재생 엔진 초기화 sampleRate=24000 channels=1")
     }
 
-    private func startPlaybackEngine() {
-        guard let playbackEngine = playbackEngine, !isPlaybackEngineRunning else { return }
+    private func configureAudioSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(
+            .playAndRecord,
+            mode: .voiceChat,
+            options: [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker]
+        )
+        try session.setActive(true, options: [.notifyOthersOnDeactivation])
+
+        let inputs = session.currentRoute.inputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        let outputs = session.currentRoute.outputs.map { "\($0.portType.rawValue):\($0.portName)" }.joined(separator: ",")
+        print("[Omni][AUDIO] 세션 활성 category=\(session.category.rawValue) mode=\(session.mode.rawValue) input=[\(inputs)] output=[\(outputs)] sampleRate=\(session.sampleRate)")
+    }
+
+    @discardableResult
+    private func startPlaybackEngine() -> Bool {
+        if isPlaybackEngineRunning { return true }
+        if playbackEngine == nil || playerNode == nil {
+            setupPlaybackEngine()
+        }
+
+        guard let playbackEngine, let playerNode else {
+            print("[Omni][ERROR] 재생 엔진 또는 player node 없음")
+            return false
+        }
 
         do {
+            try configureAudioSession()
             try playbackEngine.start()
+            playerNode.play()
             isPlaybackEngineRunning = true
-            print("▶️ [Omni] 播放引擎已启动")
+            print("[Omni][AUDIO] 재생 엔진 시작 성공")
+            return true
         } catch {
-            print("❌ [Omni] 播放引擎启动失败: \(error)")
+            let nsError = error as NSError
+            print("[Omni][ERROR] 재생 엔진 시작 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) userInfo=\(nsError.userInfo)")
+            return false
         }
     }
 
     private func stopPlaybackEngine() {
-        guard let playbackEngine = playbackEngine, isPlaybackEngineRunning else { return }
-
-        // 重要：先重置 playerNode 以清除所有已调度但未播放的 buffer
         playerNode?.stop()
-        playerNode?.reset()  // 清除队列中的所有 buffer
-        playbackEngine.stop()
+        playerNode?.reset()
+        playbackEngine?.stop()
         isPlaybackEngineRunning = false
-        print("⏹️ [Omni] 播放引擎已停止并清除队列")
+        audioBuffer.removeAll(keepingCapacity: true)
+        audioChunkCount = 0
+        hasStartedPlaying = false
+        isCollectingAudio = false
+        print("[Omni][AUDIO] 재생 엔진 중지 및 큐 정리")
     }
 
-    // MARK: - WebSocket Connection
+    // MARK: - Connection
 
     func connect() {
-        let urlString = "\(baseURL)?model=\(model)"
-        print("🔌 [Omni] 准备连接 WebSocket: \(urlString)")
+        guard !apiKey.isEmpty else {
+            emitError("Live AI API Key가 설정되지 않았습니다")
+            return
+        }
 
+        if let webSocket, webSocket.state == .running {
+            print("[Omni][WARN] 이미 WebSocket이 실행 중이므로 연결 요청 무시")
+            return
+        }
+
+        isIntentionalDisconnect = false
+        hasEstablishedSession = false
+        receiveLoopID = UUID()
+
+        let urlString = "\(baseURL)?model=\(model)"
         guard let url = URL(string: urlString) else {
-            print("❌ [Omni] 无效的 URL")
-            onError?("Invalid URL")
+            emitError("Live AI 서버 주소가 올바르지 않습니다")
+            print("[Omni][ERROR] 잘못된 WebSocket URL baseURL=\(baseURL)")
             return
         }
 
         var request = URLRequest(url: url)
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.timeoutInterval = 15
 
-        let configuration = URLSessionConfiguration.default
-        urlSession = URLSession(configuration: configuration, delegate: self, delegateQueue: OperationQueue())
+        let configuration = URLSessionConfiguration.ephemeral
+        configuration.timeoutIntervalForRequest = 15
+        configuration.timeoutIntervalForResource = 0
+        configuration.urlCache = nil
+        configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
 
-        webSocket = urlSession?.webSocketTask(with: request)
-        webSocket?.resume()
+        let delegateQueue = OperationQueue()
+        delegateQueue.name = "com.turbometa.omni-websocket"
+        delegateQueue.maxConcurrentOperationCount = 1
+        urlSession = URLSession(configuration: configuration, delegate: self, delegateQueue: delegateQueue)
 
-        print("🔌 [Omni] WebSocket 任务已启动")
-        receiveMessage()
+        let task = urlSession?.webSocketTask(with: request)
+        task?.maximumMessageSize = 16 * 1024 * 1024
+        webSocket = task
+        task?.resume()
+
+        print("[Omni][INFO] WebSocket 연결 시작 host=\(url.host ?? "-") model=\(model) endpoint=\(APIProviderManager.staticAlibabaEndpoint.rawValue)")
+        receiveMessage(loopID: receiveLoopID)
     }
 
     func disconnect() {
-        print("🔌 [Omni] 断开 WebSocket 连接")
+        guard !isIntentionalDisconnect else { return }
+        isIntentionalDisconnect = true
+        hasEstablishedSession = false
+        receiveLoopID = UUID()
+
+        print("[Omni][INFO] 사용자가 Live AI 연결 종료 요청 socketState=\(String(describing: webSocket?.state))")
+        stopRecording()
+        stopPlaybackEngine()
+
         webSocket?.cancel(with: .goingAway, reason: nil)
         webSocket = nil
         urlSession?.invalidateAndCancel()
         urlSession = nil
-        stopRecording()
-        stopPlaybackEngine()
     }
 
-    // MARK: - Session Configuration
+    // MARK: - Session configuration
 
     private func configureSession() {
-        // 根据当前语言设置获取语音和提示词
         let voice = LanguageManager.staticTtsVoice
         let instructions = LiveAIModeManager.staticSystemPrompt
 
         let sessionConfig: [String: Any] = [
-            "event_id": generateEventId(),
+            "event_id": generateEventID(),
             "type": OmniClientEvent.sessionUpdate.rawValue,
             "session": [
                 "modalities": ["text", "audio"],
@@ -204,164 +246,175 @@ class OmniRealtimeService: NSObject {
             ]
         ]
 
-        sendEvent(sessionConfig)
+        print("[Omni][INFO] 한국어 세션 설정 전송 voice=\(voice) instructionLength=\(instructions.count)")
+        sendEvent(sessionConfig, eventType: OmniClientEvent.sessionUpdate.rawValue)
     }
 
-    // MARK: - Audio Recording
+    // MARK: - Recording
 
     func startRecording() {
-        guard !isRecording else {
+        guard !isRecording else { return }
+        guard hasEstablishedSession else {
+            print("[Omni][WARN] 세션 연결 전 녹음 시작 요청 무시")
             return
         }
 
         do {
-            print("🎤 [Omni] 开始录音")
-
-            // Stop engine if already running and remove any existing taps
             if let engine = audioEngine, engine.isRunning {
-                engine.stop()
                 engine.inputNode.removeTap(onBus: 0)
+                engine.stop()
             }
 
-            let audioSession = AVAudioSession.sharedInstance()
+            try configureAudioSession()
 
-            // Allow Bluetooth to use the glasses' microphone
-            try audioSession.setCategory(.playAndRecord, mode: .voiceChat, options: [.allowBluetooth, .allowBluetoothA2DP])
-            try audioSession.setActive(true)
-
+            if audioEngine == nil {
+                audioEngine = AVAudioEngine()
+            }
             guard let engine = audioEngine else {
-                print("❌ [Omni] 音频引擎未初始化")
+                emitError("마이크 오디오 엔진을 만들지 못했습니다")
                 return
             }
 
             let inputNode = engine.inputNode
             let inputFormat = inputNode.outputFormat(forBus: 0)
+            print("[Omni][AUDIO] 녹음 포맷 sampleRate=\(inputFormat.sampleRate) channels=\(inputFormat.channelCount) commonFormat=\(inputFormat.commonFormat.rawValue)")
 
-            // Convert to PCM16 24kHz mono
-            inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, time in
+            inputNode.installTap(onBus: 0, bufferSize: 4096, format: inputFormat) { [weak self] buffer, _ in
                 self?.processAudioBuffer(buffer)
             }
 
             engine.prepare()
             try engine.start()
-
             isRecording = true
-            print("✅ [Omni] 录音已启动")
-
+            print("[Omni][INFO] 마이크 녹음 시작")
         } catch {
-            print("❌ [Omni] 启动录音失败: \(error.localizedDescription)")
-            onError?("Failed to start recording: \(error.localizedDescription)")
+            let nsError = error as NSError
+            print("[Omni][ERROR] 녹음 시작 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) userInfo=\(nsError.userInfo)")
+            emitError("마이크를 시작하지 못했습니다. \(nsError.localizedDescription)")
         }
     }
 
     func stopRecording() {
-        guard isRecording else {
-            return
-        }
+        guard isRecording else { return }
 
-        print("🛑 [Omni] 停止录音")
         audioEngine?.inputNode.removeTap(onBus: 0)
         audioEngine?.stop()
         isRecording = false
         hasAudioBeenSent = false
+        print("[Omni][INFO] 마이크 녹음 중지")
     }
 
     private func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
-        // Convert Float32 audio to PCM16 format
         guard let floatChannelData = buffer.floatChannelData else {
+            print("[Omni][WARN] 녹음 버퍼 floatChannelData 없음")
             return
         }
 
         let frameLength = Int(buffer.frameLength)
-        let channel = floatChannelData.pointee
+        guard frameLength > 0 else { return }
 
-        // Convert Float32 (-1.0 to 1.0) to Int16 (-32768 to 32767)
+        let channel = floatChannelData.pointee
         var int16Data = [Int16](repeating: 0, count: frameLength)
-        for i in 0..<frameLength {
-            let sample = channel[i]
-            let clampedSample = max(-1.0, min(1.0, sample))
-            int16Data[i] = Int16(clampedSample * 32767.0)
+        for index in 0..<frameLength {
+            let sample = max(-1.0, min(1.0, channel[index]))
+            int16Data[index] = Int16(sample * 32_767.0)
         }
 
         let data = Data(bytes: int16Data, count: frameLength * MemoryLayout<Int16>.size)
-        let base64Audio = data.base64EncodedString()
+        sendAudioAppend(data.base64EncodedString())
 
-        sendAudioAppend(base64Audio)
-
-        // 通知第一次音频已发送
         if !hasAudioBeenSent {
             hasAudioBeenSent = true
-            print("✅ [Omni] 第一次音频已发送，启用语音触发模式")
+            print("[Omni][INFO] 첫 마이크 오디오 전송 bytes=\(data.count)")
             DispatchQueue.main.async { [weak self] in
                 self?.onFirstAudioSent?()
             }
         }
     }
 
-    // MARK: - Send Events
+    // MARK: - Send events
 
-    private func sendEvent(_ event: [String: Any]) {
+    private func sendEvent(_ event: [String: Any], eventType: String) {
         guard let jsonData = try? JSONSerialization.data(withJSONObject: event),
               let jsonString = String(data: jsonData, encoding: .utf8) else {
-            print("❌ [Omni] 无法序列化事件")
+            print("[Omni][ERROR] 이벤트 직렬화 실패 type=\(eventType)")
             return
         }
 
-        let message = URLSessionWebSocketTask.Message.string(jsonString)
-        webSocket?.send(message) { [weak self] error in
-            if let error = error {
-                print("❌ [Omni] 发送事件失败: \(error.localizedDescription)")
-                self?.onError?("Send error: \(error.localizedDescription)")
+        guard let webSocket, webSocket.state == .running else {
+            if !isIntentionalDisconnect {
+                print("[Omni][ERROR] WebSocket이 실행 중이 아니어서 전송 실패 type=\(eventType) state=\(String(describing: self.webSocket?.state))")
+            }
+            return
+        }
+
+        webSocket.send(.string(jsonString)) { [weak self] error in
+            guard let self, let error else { return }
+            let nsError = error as NSError
+            print("[Omni][ERROR] 이벤트 전송 실패 type=\(eventType) domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+
+            guard !self.isIntentionalDisconnect else { return }
+            DispatchQueue.main.async {
+                self.onError?("Live AI 전송 오류: \(nsError.localizedDescription)")
             }
         }
     }
 
     func sendAudioAppend(_ base64Audio: String) {
-        let event: [String: Any] = [
-            "event_id": generateEventId(),
+        sendEvent([
+            "event_id": generateEventID(),
             "type": OmniClientEvent.inputAudioBufferAppend.rawValue,
             "audio": base64Audio
-        ]
-        sendEvent(event)
+        ], eventType: OmniClientEvent.inputAudioBufferAppend.rawValue)
     }
 
     func sendImageAppend(_ image: UIImage) {
         guard let imageData = image.jpegData(compressionQuality: 0.6) else {
-            print("❌ [Omni] 无法压缩图片")
+            print("[Omni][ERROR] 이미지 JPEG 압축 실패")
             return
         }
-        let base64Image = imageData.base64EncodedString()
 
-        print("📸 [Omni] 发送图片: \(imageData.count) bytes")
-
-        let event: [String: Any] = [
-            "event_id": generateEventId(),
+        print("[Omni][INFO] 현재 안경 프레임 전송 imageBytes=\(imageData.count)")
+        sendEvent([
+            "event_id": generateEventID(),
             "type": OmniClientEvent.inputImageBufferAppend.rawValue,
-            "image": base64Image
-        ]
-        sendEvent(event)
+            "image": imageData.base64EncodedString()
+        ], eventType: OmniClientEvent.inputImageBufferAppend.rawValue)
     }
 
     func commitAudioBuffer() {
-        let event: [String: Any] = [
-            "event_id": generateEventId(),
+        sendEvent([
+            "event_id": generateEventID(),
             "type": OmniClientEvent.inputAudioBufferCommit.rawValue
-        ]
-        sendEvent(event)
+        ], eventType: OmniClientEvent.inputAudioBufferCommit.rawValue)
     }
 
-    // MARK: - Receive Messages
+    // MARK: - Receive loop
 
-    private func receiveMessage() {
-        webSocket?.receive { [weak self] result in
+    private func receiveMessage(loopID: UUID) {
+        guard let webSocket else { return }
+        webSocket.receive { [weak self] result in
+            guard let self else { return }
+            guard loopID == self.receiveLoopID else {
+                print("[Omni][INFO] 이전 수신 루프 콜백 무시")
+                return
+            }
+
             switch result {
             case .success(let message):
-                self?.handleMessage(message)
-                self?.receiveMessage() // Continue receiving
+                self.handleMessage(message)
+                self.receiveMessage(loopID: loopID)
 
             case .failure(let error):
-                print("❌ [Omni] 接收消息失败: \(error.localizedDescription)")
-                self?.onError?("Receive error: \(error.localizedDescription)")
+                let nsError = error as NSError
+                let state = self.webSocket?.state
+                let expected = self.isIntentionalDisconnect || state == .canceling || state == .completed
+                print("[Omni][\(expected ? "INFO" : "ERROR")] 수신 종료 expected=\(expected) socketState=\(String(describing: state)) domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+
+                guard !expected else { return }
+                DispatchQueue.main.async {
+                    self.onError?("Live AI 연결이 끊겼습니다. \(nsError.localizedDescription) (\(nsError.domain) \(nsError.code))")
+                }
             }
         }
     }
@@ -371,11 +424,13 @@ class OmniRealtimeService: NSObject {
         case .string(let text):
             handleServerEvent(text)
         case .data(let data):
-            if let text = String(data: data, encoding: .utf8) {
-                handleServerEvent(text)
+            guard let text = String(data: data, encoding: .utf8) else {
+                print("[Omni][ERROR] 바이너리 메시지를 UTF-8로 변환하지 못함 bytes=\(data.count)")
+                return
             }
+            handleServerEvent(text)
         @unknown default:
-            break
+            print("[Omni][WARN] 알 수 없는 WebSocket 메시지 유형")
         }
     }
 
@@ -383,6 +438,7 @@ class OmniRealtimeService: NSObject {
         guard let data = jsonString.data(using: .utf8),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let type = json["type"] as? String else {
+            print("[Omni][ERROR] 서버 이벤트 JSON 파싱 실패 bytes=\(jsonString.utf8.count)")
             return
         }
 
@@ -392,186 +448,208 @@ class OmniRealtimeService: NSObject {
             switch type {
             case OmniServerEvent.sessionCreated.rawValue,
                  OmniServerEvent.sessionUpdated.rawValue:
-                print("✅ [Omni] 会话已建立")
-                self.onConnected?()
+                let firstConnection = !self.hasEstablishedSession
+                self.hasEstablishedSession = true
+                print("[Omni][INFO] 세션 설정 완료 type=\(type) first=\(firstConnection)")
+                if firstConnection {
+                    self.onConnected?()
+                }
 
             case OmniServerEvent.inputAudioBufferSpeechStarted.rawValue:
-                print("🎤 [Omni] 检测到语音开始")
+                print("[Omni][INFO] 사용자 발화 시작 감지")
                 self.onSpeechStarted?()
 
             case OmniServerEvent.inputAudioBufferSpeechStopped.rawValue:
-                print("🛑 [Omni] 检测到语音停止")
+                print("[Omni][INFO] 사용자 발화 종료 감지")
                 self.onSpeechStopped?()
 
             case OmniServerEvent.responseAudioTranscriptDelta.rawValue:
                 if let delta = json["delta"] as? String {
-                    print("💬 [Omni] AI回复片段: \(delta)")
+                    // 대화 내용 자체는 개인정보일 수 있으므로 길이만 로그에 남긴다.
+                    print("[Omni][INFO] AI 자막 조각 수신 length=\(delta.count)")
                     self.onTranscriptDelta?(delta)
                 }
 
             case OmniServerEvent.responseAudioTranscriptDone.rawValue:
                 let text = json["text"] as? String ?? ""
-                if text.isEmpty {
-                    print("⚠️ [Omni] AI回复完成但done事件无text字段（使用累积的delta）")
-                } else {
-                    print("✅ [Omni] AI完整回复: \(text)")
-                }
-                // 总是调用回调，即使text为空，让ViewModel使用累积的片段
+                print("[Omni][INFO] AI 자막 완료 length=\(text.count)")
                 self.onTranscriptDone?(text)
 
             case OmniServerEvent.responseAudioDelta.rawValue:
-                if let base64Audio = json["delta"] as? String,
-                   let audioData = Data(base64Encoded: base64Audio) {
+                if let encodedAudio = json["delta"] as? String,
+                   let audioData = Data(base64Encoded: encodedAudio),
+                   !audioData.isEmpty {
                     self.onAudioDelta?(audioData)
-
-                    // Buffer audio chunks
-                    if !self.isCollectingAudio {
-                        self.isCollectingAudio = true
-                        self.audioBuffer = Data()
-                        self.audioChunkCount = 0
-                        self.hasStartedPlaying = false
-
-                        // 清除 playerNode 队列中可能残留的旧 buffer
-                        if self.isPlaybackEngineRunning {
-                            // 重要：reset 会断开 playerNode，需要完全重新初始化
-                            self.stopPlaybackEngine()
-                            self.setupPlaybackEngine()
-                            self.startPlaybackEngine()
-                            self.playerNode?.play()
-                            print("🔄 [Omni] 重新初始化播放引擎")
-                        }
-                    }
-
-                    self.audioChunkCount += 1
-
-                    // 流式播放策略：收集少量片段后开始流式调度
-                    if !self.hasStartedPlaying {
-                        // 首次播放前：先收集
-                        self.audioBuffer.append(audioData)
-
-                        if self.audioChunkCount >= self.minChunksBeforePlay {
-                            // 已收集足够片段，开始播放
-                            self.hasStartedPlaying = true
-                            self.playAudio(self.audioBuffer)
-                            self.audioBuffer = Data()
-                        }
-                    } else {
-                        // 已开始播放：直接调度每个片段，AVAudioPlayerNode 会自动排队
-                        self.playAudio(audioData)
-                    }
+                    self.handleAudioDelta(audioData)
                 }
 
             case OmniServerEvent.responseAudioDone.rawValue:
-                self.isCollectingAudio = false
-
-                // Play remaining buffered audio (if any)
-                if !self.audioBuffer.isEmpty {
-                    self.playAudio(self.audioBuffer)
-                    self.audioBuffer = Data()
-                }
-
-                self.audioChunkCount = 0
-                self.hasStartedPlaying = false
-                self.onAudioDone?()
+                self.finishAudioResponse()
 
             case OmniServerEvent.conversationItemInputAudioTranscriptionCompleted.rawValue:
-                // 用户语音识别完成
                 if let transcript = json["transcript"] as? String {
-                    print("👤 [Omni] 用户说: \(transcript)")
+                    print("[Omni][INFO] 사용자 음성 인식 완료 length=\(transcript.count)")
                     self.onUserTranscript?(transcript)
                 }
 
-            case OmniServerEvent.conversationItemCreated.rawValue:
-                // 可能包含其他类型的会话项
-                break
+            case OmniServerEvent.conversationItemCreated.rawValue,
+                 OmniServerEvent.inputAudioBufferCommitted.rawValue,
+                 OmniServerEvent.responseCreated.rawValue,
+                 OmniServerEvent.responseDone.rawValue:
+                print("[Omni][INFO] 서버 이벤트 type=\(type)")
 
             case OmniServerEvent.error.rawValue:
-                if let error = json["error"] as? [String: Any],
-                   let message = error["message"] as? String {
-                    print("❌ [Omni] 服务器错误: \(message)")
-                    self.onError?(message)
-                }
+                let errorDictionary = json["error"] as? [String: Any]
+                let code = errorDictionary?["code"].map(String.init(describing:)) ?? "-"
+                let message = errorDictionary?["message"] as? String ?? "설명 없는 서버 오류"
+                print("[Omni][ERROR] 서버 오류 code=\(code) message=\(message)")
+                self.onError?("Live AI 서버 오류: \(message) (코드 \(code))")
 
             default:
-                break
+                print("[Omni][INFO] 처리하지 않는 서버 이벤트 type=\(type)")
             }
         }
     }
 
-    // MARK: - Audio Playback (AVAudioEngine + AVAudioPlayerNode)
+    // MARK: - Audio playback
 
-    private func playAudio(_ audioData: Data) {
-        guard let playerNode = playerNode,
-              let playbackFormat = playbackFormat else {
-            return
-        }
+    private func handleAudioDelta(_ audioData: Data) {
+        if !isCollectingAudio {
+            isCollectingAudio = true
+            audioBuffer.removeAll(keepingCapacity: true)
+            audioChunkCount = 0
+            hasStartedPlaying = false
 
-        // Start playback engine if not running
-        if !isPlaybackEngineRunning {
-            startPlaybackEngine()
-            playerNode.play()
-        } else {
-            // 确保 playerNode 在运行
-            if !playerNode.isPlaying {
-                playerNode.play()
+            if isPlaybackEngineRunning {
+                stopPlaybackEngine()
+                setupPlaybackEngine()
             }
         }
 
-        // Convert PCM16 Data to Float32 AVAudioPCMBuffer
-        guard let pcmBuffer = createPCMBuffer(from: audioData, format: playbackFormat) else {
+        audioChunkCount += 1
+        if !hasStartedPlaying {
+            audioBuffer.append(audioData)
+            if audioChunkCount >= minimumChunksBeforePlayback {
+                hasStartedPlaying = true
+                playAudio(audioBuffer)
+                audioBuffer.removeAll(keepingCapacity: true)
+            }
+        } else {
+            playAudio(audioData)
+        }
+    }
+
+    private func finishAudioResponse() {
+        isCollectingAudio = false
+        if !audioBuffer.isEmpty {
+            playAudio(audioBuffer)
+            audioBuffer.removeAll(keepingCapacity: true)
+        }
+
+        print("[Omni][INFO] AI 오디오 응답 완료 chunks=\(audioChunkCount)")
+        audioChunkCount = 0
+        hasStartedPlaying = false
+        onAudioDone?()
+    }
+
+    private func playAudio(_ audioData: Data) {
+        guard !audioData.isEmpty,
+              let playbackFormat,
+              let pcmBuffer = createPCMBuffer(from: audioData, format: playbackFormat) else {
+            print("[Omni][WARN] AI 오디오 PCM 변환 실패 bytes=\(audioData.count)")
             return
         }
 
-        // Schedule buffer for playback
+        if !isPlaybackEngineRunning, !startPlaybackEngine() {
+            emitError("AI 음성 재생 장치를 시작하지 못했습니다")
+            return
+        }
+
+        guard let playerNode else { return }
+        if !playerNode.isPlaying {
+            playerNode.play()
+        }
         playerNode.scheduleBuffer(pcmBuffer)
     }
 
     private func createPCMBuffer(from data: Data, format: AVAudioFormat) -> AVAudioPCMBuffer? {
-        // 服务器发送的是 PCM16 格式，每帧 2 字节
-        let frameCount = data.count / 2
-        guard frameCount > 0 else { return nil }
-
-        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: AVAudioFrameCount(frameCount)),
+        let frameCount = data.count / MemoryLayout<Int16>.size
+        guard frameCount > 0,
+              let buffer = AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: AVAudioFrameCount(frameCount)
+              ),
               let channelData = buffer.floatChannelData else {
             return nil
         }
 
         buffer.frameLength = AVAudioFrameCount(frameCount)
-
-        // 将 PCM16 转换为 Float32（兼容 iOS 18+）
-        data.withUnsafeBytes { (bytes: UnsafeRawBufferPointer) in
+        data.withUnsafeBytes { bytes in
             guard let baseAddress = bytes.baseAddress else { return }
             let int16Pointer = baseAddress.assumingMemoryBound(to: Int16.self)
             let floatData = channelData[0]
-            for i in 0..<frameCount {
-                // Int16 范围 -32768 到 32767，转换为 -1.0 到 1.0
-                floatData[i] = Float(int16Pointer[i]) / 32768.0
+            for index in 0..<frameCount {
+                floatData[index] = Float(Int16(littleEndian: int16Pointer[index])) / 32_768.0
             }
         }
-
         return buffer
     }
 
     // MARK: - Helpers
 
-    private func generateEventId() -> String {
-        eventIdCounter += 1
-        return "event_\(eventIdCounter)_\(UUID().uuidString.prefix(8))"
+    private func generateEventID() -> String {
+        eventIDCounter += 1
+        return "event_\(eventIDCounter)_\(UUID().uuidString.prefix(8))"
+    }
+
+    private func emitError(_ message: String) {
+        print("[Omni][ERROR] \(message)")
+        DispatchQueue.main.async { [weak self] in
+            self?.onError?(message)
+        }
     }
 }
 
 // MARK: - URLSessionWebSocketDelegate
 
 extension OmniRealtimeService: URLSessionWebSocketDelegate {
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didOpenWithProtocol protocol: String?) {
-        print("✅ [Omni] WebSocket 连接已建立, protocol: \(`protocol` ?? "none")")
-        DispatchQueue.main.async {
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didOpenWithProtocol protocol: String?
+    ) {
+        print("[Omni][INFO] WebSocket 열림 protocol=\(`protocol` ?? "-")")
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.isIntentionalDisconnect else { return }
             self.configureSession()
         }
     }
 
-    func urlSession(_ session: URLSession, webSocketTask: URLSessionWebSocketTask, didCloseWith closeCode: URLSessionWebSocketTask.CloseCode, reason: Data?) {
-        let reasonString = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "unknown"
-        print("🔌 [Omni] WebSocket 已断开, closeCode: \(closeCode.rawValue), reason: \(reasonString)")
+    func urlSession(
+        _ session: URLSession,
+        webSocketTask: URLSessionWebSocketTask,
+        didCloseWith closeCode: URLSessionWebSocketTask.CloseCode,
+        reason: Data?
+    ) {
+        let reasonText = reason.flatMap { String(data: $0, encoding: .utf8) } ?? "-"
+        let expected = isIntentionalDisconnect || closeCode == .goingAway || closeCode == .normalClosure
+        print("[Omni][\(expected ? "INFO" : "ERROR")] WebSocket 닫힘 expected=\(expected) closeCode=\(closeCode.rawValue) reason=\(reasonText)")
+
+        guard !expected else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.onError?("Live AI 연결이 종료되었습니다. 코드 \(closeCode.rawValue), 사유: \(reasonText)")
+        }
+    }
+
+    func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        guard let error else { return }
+        let nsError = error as NSError
+        let expected = isIntentionalDisconnect || webSocket?.state == .canceling || webSocket?.state == .completed
+        print("[Omni][\(expected ? "INFO" : "ERROR")] URLSession 작업 종료 expected=\(expected) domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
+
+        guard !expected else { return }
+        DispatchQueue.main.async { [weak self] in
+            self?.onError?("Live AI 네트워크 오류: \(nsError.localizedDescription) (\(nsError.domain) \(nsError.code))")
+        }
     }
 }

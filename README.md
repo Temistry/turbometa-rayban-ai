@@ -1,835 +1,476 @@
-# TurboMeta - RayBan Meta 智能眼镜 AI 助手
+# TurboMeta
 
-<div align="center">
+Ray-Ban Meta 스마트 안경의 카메라와 마이크를 AI 서비스에 연결하는 iOS 개발 프로젝트입니다.
 
-<img src="./rayban.png" width="120" alt="TurboMeta Logo"/>
+이 브랜치는 다음 목표에 맞춰 정리되어 있습니다.
 
-**🌏 全球首个支持全中文AI的全模态 RayBan Meta 助手**
+- 앱 화면, 오류 안내, Siri 문구, AI 응답과 음성 출력을 한국어로 통일
+- iPhone 13 실기기에서 Xcode 없이도 원인을 추적할 수 있는 기기 내 개발자 로그 제공
+- Quick Vision, Live AI, 실시간 번역, OpenClaw, RTMP 송출 기능 통합
+- API Key와 스트림 키의 기기 전용 Keychain 저장
+- 네트워크 연결과 진단 로그에서 자격 증명 노출 최소화
 
-[![iOS](https://img.shields.io/badge/iOS-17.0%2B-blue.svg)](https://www.apple.com/ios/)
-[![Android](https://img.shields.io/badge/Android-8.0%2B-green.svg)](https://www.android.com/)
-[![Swift](https://img.shields.io/badge/Swift-5.0-orange.svg)](https://swift.org)
-[![Kotlin](https://img.shields.io/badge/Kotlin-1.9-purple.svg)](https://kotlinlang.org)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![请我喝咖啡](https://img.shields.io/badge/请我喝咖啡-☕-yellow?style=flat-square)](#-请我喝杯咖啡)
+> 이 저장소는 소스 코드 중심의 개발 프로젝트입니다. 공개 배포용 IPA를 제공하지 않으며, 실제 기기 설치에는 Apple 개발자 서명 또는 TestFlight 환경이 필요합니다.
 
-**🇺🇸 [English Version / README in English](./README_EN.md)** | 简体中文
+## 현재 상태
 
-</div>
+| 항목 | 상태 |
+|---|---|
+| 최소 iOS 버전 | iOS 17.0 |
+| 공유 Xcode Scheme | `TurboMeta` |
+| 기본 화면 언어 | 한국어 |
+| 기본 AI 출력 언어 | 한국어 |
+| 기본 시스템 TTS | `ko-KR` |
+| GitHub Actions | 정적 점검 및 iOS 시뮬레이터 빌드 |
+| Codemagic | 서명 없는 Release 컴파일, 내부 IPA, TestFlight 워크플로 |
+| 실기기 검증 | iPhone과 Ray-Ban Meta가 필요한 별도 검증 단계 |
 
----
+## 주요 기능
 
-> **声明**：本项目为开源项目，仅提供源代码供开发者学习和研究。本项目**不提供任何预编译安装包下载**，不提供任何绕过官方应用商店的安装方式，也不会回答任何与非官方分发、侧载安装相关的问题。iOS 用户请通过 Xcode 按照 Apple 标准开发流程在个人设备上编译运行。本项目严格遵守 [Apple Developer Program License Agreement](https://developer.apple.com/support/terms/) 的所有条款。
+### Quick Vision
 
-> 🌍 **For English speakers**: Please check [**README_EN.md**](./README_EN.md) for the English version of this documentation.
+안경 시점의 사진을 촬영해 **Google Gemini**로 분석하고 결과를 iOS 시스템 TTS `ko-KR` 음성으로 읽습니다. 별도의 Cloud TTS Key는 필요하지 않습니다.
 
----
+지원 모드:
 
-## 🎉 重磅更新 v2.0.0
+- 일반 장면 설명
+- 음식과 음료의 건강 정보 분석
+- 주변 환경과 장애물 설명
+- 글자 읽기
+- 한국어 번역
+- 사물과 장소 정보 설명
 
-<div align="center">
+처리 흐름은 다음과 같습니다.
 
-### 🔗 OpenClaw 集成 + Meta Ray-Ban Display 支持
+```text
+안경 스트림 시작
+→ 사진 촬영
+→ 스트림 중지
+→ 비전 API 분석
+→ 한국어 결과 표시
+→ 한국어 TTS 재생
+```
 
-**语音对话、拍照识别、OpenClaw AI 助手 - 你的眼镜，连接一切！**
+### Gemini Live AI
 
-✅ **iOS v2.0.0** | 📱 **Android v1.5.0**
+안경 카메라와 마이크를 이용한 실시간 멀티모달 대화 기능입니다. 일반 사용자 실행 경로는 **Google Gemini Live**로 고정되며, 설정 화면에서는 Google Gemini API Key 하나만 입력합니다. 기존 공급자 호환 코드는 이전 설치 데이터와 개발자 호환을 위해 내부에 남아 있을 수 있지만 일반 UI에는 노출하지 않습니다.
 
-☕ **喜欢这个项目？** [**请我喝杯咖啡**](#-请我喝杯咖啡) 支持开发！
+대화 기록은 한국어 환경 기준으로 저장되며, 음성 인식 결과와 대화 본문은 개발자 로그에 직접 출력하지 않습니다.
 
-</div>
+### 실시간 번역
 
-### 🆕 v2.0 新功能
+Gemini Live 세션을 통역 전용으로 구성해 음성을 실시간으로 인식하고 선택한 대상 언어로 번역합니다. 기본 대상 언어는 한국어입니다.
 
-- 🔗 **OpenClaw 集成**：将眼镜连接到 [OpenClaw](https://openclaw.ai) AI 助手，支持拍照发送、语音转录对话 👉 [使用教程](#-openclaw-集成)
-- 🕶️ **Meta Ray-Ban Display 支持**：新增对 Meta Ray-Ban Display 机型的支持（DAT SDK v0.5.0）
-- 🎙️ **阿里云实时语音识别**：OpenClaw 聊天支持 Fun-ASR 语音转文字
-- 🛡️ **稳定性提升**：修复多个内存泄漏和线程安全问题
+- iPhone 마이크 또는 Bluetooth 입력 선택
+- 번역 텍스트와 선택적 음성 출력
+- 선택적 안경 영상 프레임 보조 입력
+- Google Gemini API Key 하나 사용
+- 번역 기록 최대 50개 유지
 
-### 🎯 核心功能
+### 개인 지식 로그
 
-- 🔗 **OpenClaw AI 助手**：连接 OpenClaw Gateway，通过眼镜拍照与 AI 对话 👉 [查看配置教程](#-openclaw-集成)
-- 🎬 **RTMP 直播推流**：支持推流到任意 RTMP 平台，YouTube、Twitch、B站、抖音、TikTok、Facebook Live 等
-- 👁️ **Quick Vision 快速识图**：Siri 语音唤醒，无需解锁手机即可识别眼前物体
-- 🤖 **Live AI 实时对话**：通过眼镜摄像头和麦克风进行多模态实时 AI 对话
-- 🍽️ **LeanEat 营养分析**：拍照即可获得食物营养成分和健康评分
-- 🌐 **实时翻译**：18 种语言互译
+Quick Vision, Gemini Live AI, 실시간 번역의 질문과 답변을 기기 로컬 보호 저장소에 기록합니다.
 
-### 🌐 多语言 & 多平台
+- 사람이 읽는 Markdown과 기계 처리를 위한 JSONL을 함께 저장
+- API Key, Bearer Token, JWT, 긴 credential 문자열, Base64 payload를 저장 전에 마스킹
+- 이미지 원본, 오디오 원본, 위치 정보, 인증 정보는 저장하지 않음
+- 사용자 질문·답변 원문을 진단 콘솔에 출력하지 않음
 
-- 🌐 **中英文双语界面**：App 界面完整支持中文和英文切换
-- 🔌 **OpenRouter 支持**：接入 500+ AI 模型，包括 GPT-5、Claude 4.5、Gemini 3 等
-- 🎙️ **Google Gemini Live**：Live AI 支持 Google Gemini 实时语音对话（需海外网络）
-- 🌏 **阿里云多区域**：支持北京（中国大陆）和新加坡（国际）两个服务区域
-- 🔑 **独立 API Key 管理**：不同服务商和区域的 API Key 独立管理
+### Files 기반 Google Drive 폴더 동기화
 
----
+Google Drive API Key, OAuth client secret, refresh token, 별도 OAuth 인증 체계는 추가하지 않습니다. 사용자가 iOS Files 문서 선택기에서 Google Drive 폴더(또는 지원되는 다른 Files 제공자 폴더)를 선택하면 보안 범위 bookmark로 권한을 보관하고 아래 경로에 지식 로그를 동기화합니다.
 
-## 📱 Quick Vision 快速识图
+```text
+<선택한 폴더>/TurboMetaKnowledge/
+```
 
-<div align="center">
+북마크가 오래되었거나 Files 제공자가 권한을 회수하면 사용자가 폴더를 다시 선택해야 합니다.
 
-### 🚀 支持后台唤醒 + Siri 语音触发！
+### OpenClaw
 
-**无需解锁手机，一句话即可让 AI 识别眼前的一切**
+Ray-Ban Meta를 OpenClaw Gateway의 카메라 노드로 연결합니다.
 
-</div>
+허용된 원격 명령은 다음 항목으로 제한됩니다.
 
-由于 Meta DAT SDK 的限制，App 无法在后台直接访问眼镜摄像头。我们创新性地结合了 **Siri 快捷指令 + App Intent + 阿里云 TTS** 实现了这一功能：
+- `camera.snap`
+- `camera.list`
+- `device.status`
+- `device.info`
 
-- 📱 **Siri 语音唤醒**：对着 iPhone 说"嘿 Siri，TurboMeta 快速识图"
-- ⌚ **操作按钮触发**（iPhone 15 Pro+）：一键触发快速识图
-- 🔊 **语音播报结果**：使用阿里云 qwen3-tts-flash 高品质语音播报
-- 🎯 **全自动流程**：启动流 → 拍照 → 停止流 → AI 识别 → TTS 播报
+Gateway 토큰은 현재 기기 전용 Keychain에 저장됩니다. 토큰은 WebSocket URL에 붙이지 않고 서명된 연결 요청의 인증 데이터로 전달합니다.
 
-👉 [查看详细使用教程](#quick-vision-tutorial)
+#### 갈비스 연속 음성 대화
 
----
+홈의 **OpenClaw** 카드와 Siri의 갈비스 OpenClaw 호출은 모두 전용 갈비스 음성 대화 화면을 엽니다. 이 화면의 **채팅** 버튼으로 전체 답변 이력을 확인하고 텍스트 질문을 보낼 수 있습니다.
 
-## 🎨 界面预览
+앱이 foreground에 있고 사용자가 갈비스 대화 화면을 명시적으로 연 동안에는 첫 질문 이후에도 wake word 없이 **STT → OpenClaw → TTS → STT** 순환을 유지합니다. 무음이나 일시적 음성·오디오 오류는 제한된 backoff 후 마이크를 복구하고, Gateway 연결이 끊기면 재연결한 뒤 새 발화를 기다립니다. timeout이나 연결 오류가 난 질문은 중복 전송을 막기 위해 자동으로 다시 보내지 않으며, 특히 전달 여부가 불명확한 요청은 오류로 종료하고 사용자의 확인을 요구합니다. 앱이 background로 이동하거나 사용자가 종료 문구·종료 버튼을 사용하면 pending STT, OpenClaw 요청, TTS와 오디오 세션을 정리합니다.
 
-<table>
-  <tr>
-    <td align="center"><b>首页</b></td>
-    <td align="center"><b>对话记录</b></td>
-    <td align="center"><b>拍摄页面</b></td>
-    <td align="center"><b>设置页面</b></td>
-  </tr>
-  <tr>
-    <td><img src="./screenshots/首页.jpg" width="180"/></td>
-    <td><img src="./screenshots/对话记录.jpg" width="180"/></td>
-    <td><img src="./screenshots/camera.jpg" width="180"/></td>
-    <td><img src="./screenshots/设置页面.jpg" width="180"/></td>
-  </tr>
-</table>
+#### OpenClaw Quick Shot과 보호 갤러리
 
-## 🎬 视频演示
+홈 화면 최상단의 **사진**·**동영상** Quick Shot은 선택한 촬영 모드의 이름과 프롬프트를 촬영 시작 시점에 고정합니다. 모드는 앱에서 생성·편집·복제·삭제·정렬할 수 있고, 사진과 동영상의 기본/최근 모드를 각각 유지합니다.
 
-<a href="https://www.bilibili.com/video/BV1aTqSBHEqN" target="_blank">
-  <img src="https://img.shields.io/badge/Bilibili-演示视频-00A1D6?style=for-the-badge&logo=bilibili" alt="视频演示"/>
-</a>
+- DAT SDK 0.5.0의 세로 `.high` 720×1280은 유지하면서 15fps로 설정합니다. Bluetooth 한정 대역폭을 프레임 수보다 프레임당 세부 묘사에 우선하는 정책이며, 소비자용 Meta 카메라 앱의 12MP/3K 촬영 경로와는 다른 DAT 개발자 스트림입니다.
+- 사진은 DAT SDK가 제공한 JPEG 원본을 보호 저장합니다. SDK에는 12MP 사진 해상도 선택 API가 없으므로 가짜 업스케일을 하지 않으며, 원본이 Gateway의 4MiB 제한을 넘을 때만 분석 전송용 파생 JPEG를 별도로 만듭니다. 일반 OpenClaw 채팅의 카메라 버튼도 스트림 화면 캡처 대신 이 정지 사진 JPEG 경로를 사용합니다.
+- 동영상은 입력 720×1280·최대 15fps를 그대로 사용한 최대 10초 H.264 High Profile MP4 원본을 보호 저장하지만, OpenClaw에는 MP4를 업로드하지 않습니다. 시간축 대표 프레임 최대 6개의 자연 픽셀 크기를 보존한 2×3 contact sheet를 만들고, JPEG 4MiB 안에서 가장 높은 품질을 선택하며 **대표 프레임 기반 분석**임을 명시합니다.
+- 앱 갤러리는 보호된 Application Support 원본을 source of truth로 사용하고 세로 영상의 실제 비율과 원본 해상도·용량·실제 fps·추정 bitrate를 표시합니다. iPhone 사진 앱에는 `.addOnly` 권한으로 별도 복사하므로 기존 사진 보관함을 읽거나 열거하지 않습니다.
+- Photos 복사 실패나 OpenClaw 분석 실패가 앱 원본을 삭제하지 않습니다. 갤러리의 명시적 동영상 분석 재시도는 thumbnail이 아니라 보호 원본 MP4에서 contact sheet를 다시 만듭니다.
+- **촬영 위치 포함**은 기본적으로 꺼져 있습니다. 사용자가 켜고 iOS의 앱 사용 중 위치 권한을 허용한 경우에만 단발성 iPhone GPS snapshot을 사진 GPS EXIF, 동영상 QuickTime 위치 metadata, Photos asset과 OpenClaw 분석 문맥에 함께 적용합니다. 위치 권한 거부·제한·timeout은 촬영을 막지 않으며 좌표를 진단 로그나 문서에 남기지 않습니다.
+- 앱 갤러리 항목 삭제는 앱 원본·썸네일·색인만 삭제합니다. iPhone 사진 앱에 이미 복사된 항목은 삭제하지 않습니다.
+- 전송 결과가 불명확하면 자동 재전송하지 않고 **전달 여부 확인 필요**로 남깁니다. 사용자가 중복 가능성을 확인한 뒤 명시적으로 재시도할 때만 새 요청을 만듭니다.
 
-👉 <a href="https://www.bilibili.com/video/BV1aTqSBHEqN" target="_blank">在 Bilibili 观看</a>
+분석 완료 답변은 보호된 OpenClaw 채팅 기록, final 중복 방지, 로컬 알림 및 요약 TTS 경로를 재사용합니다. 앱이 suspend 또는 terminate되어 Gateway final을 처리하지 못하면 알림이나 낭독을 보장하지 않습니다.
 
-> 💡 如果这个项目对你有帮助，欢迎[请我喝杯咖啡](#-请我喝杯咖啡) ☕
+### RTMP 송출
 
-## 📥 获取源码
+안경 영상을 RTMP 또는 RTMPS 서버로 보낼 수 있습니다.
 
-> ⚠️ **声明**：本项目为开源项目，iOS 端仅提供源代码，用户需通过 Xcode 按照 Apple 标准开发流程在个人设备上编译运行。Android 用户可在 Releases 页面下载 APK。
+- YouTube Live
+- Twitch
+- TikTok
+- Facebook Live
+- Bilibili
+- Douyin
+- 사용자 지정 RTMP 서버
 
-### ⚠️ 重要：请先开启 Meta View App 的 DAT SDK 预览模式！
+스트림 키는 현재 기기 전용 Keychain에 저장됩니다. 가능한 경우 `rtmps://` 주소를 권장합니다. `rtmp://`는 전송 내용이 암호화되지 않습니다.
 
-使用 TurboMeta 前，**必须**在 Meta View App 中开启 DAT SDK 预览模式（此功能与 iOS 系统的开发者模式无关）：
+### 음식 영양 분석
 
-1. **将 RayBan Meta 眼镜固件更新到 20 版本以上**（DAT SDK 需要）
-2. **将 Meta View App 更新到最新版本**
-3. 打开手机上的 **Meta View App**（或 **Meta AI App**）
-4. 进入 **设置** → **应用信息**
-5. 找到 **版本号**
-6. **快速连续点击版本号 5 次**
-7. 会出现提示信息
+촬영한 음식 사진을 바탕으로 다음 항목을 한국어 JSON으로 분석합니다.
 
-> 不开启此模式，跳转 Meta View App 时会提示异常。此操作是 Meta Wearables DAT SDK 的要求，详见 Meta 官方文档。
+- 음식 이름과 예상 분량
+- 칼로리
+- 단백질, 지방, 탄수화물
+- 식이섬유와 당류
+- 건강 점수와 영양 조언
 
----
+분석 수치는 사진을 바탕으로 한 AI 추정치이며 의료 또는 영양 진단이 아닙니다.
 
-### 🍎 iOS — 从源码编译
+## 기기 내 개발자 로그
 
-> ✅ 支持中英文、OpenRouter、Gemini、RTMP 直播推流、OpenClaw 等功能
->
-> ⚠️ **本项目不提供预编译安装包（IPA）下载**，仅提供源码。请使用 Xcode 在个人设备上编译运行。
+`DEBUG` 빌드에는 전체 개발자 도구가 포함됩니다. 이 브랜치의 TestFlight 빌드는 제한된 `TESTFLIGHT_TTS_DIAGNOSTICS` 조건으로 보호된 진단 콘솔과 **OpenClaw로 TTS 진단** 경로만 포함하며, 일반 mock/debug 설정은 노출하지 않습니다.
 
-#### 步骤 1：注册 Meta Wearables 开发者
+개발자 로그 화면에서 다음 기능을 사용할 수 있습니다.
 
-1. 前往 [Meta Wearables Developer Center](https://wearables.developer.meta.com/)
-2. 注册并登录
-3. 点击 **Projects** → **Create Project**，创建一个新项目
-4. 进入项目的 **App configuration** 页面
-5. 在 **Application ID integration** → **iOS integration** 部分，复制 `MetaAppID` 和 `ClientToken`
-6. 打开 `CameraAccess/Info.plist`，在 `MWDAT` 字典中填入你的值：
+- 표준 출력과 표준 오류 실시간 확인
+- 전체, 오류, 경고 필터
+- 검색과 자동 스크롤
+- redaction이 적용된 진단 파일 생성·공유
+- 로그 전체 삭제
+- 읽지 않은 오류 개수 표시
+
+로그 정책:
+
+- 화면에는 최근 최대 2,000줄을 표시
+- 내부/TestFlight 진단은 재현 후 분석을 위해 앱의 보호된 Application Support에 제한된 순환 로그를 보관
+- Bearer 토큰, API Key, Gateway 토큰, URL 쿼리 자격 증명, UUID·MAC·액세서리 식별정보와 socket/certificate dump 자동 마스킹
+- 이미지와 오디오의 긴 Base64 payload 생략
+- 사용자 음성 transcript와 OpenClaw 답변 원문은 진단 로그에 기록하지 않음
+- 개발자는 진단 파일을 자동 수집하거나 원격 업로드하지 않음
+- OpenClaw 진단 전송과 파일 공유는 사용자가 범위를 확인하고 직접 실행해야 함
+
+진단은 기기·액세서리 상태를 디버깅 목적으로 기기 안에서 처리할 수 있습니다. 자동 마스킹은 보조 방어이므로 공유 전에는 사용자 대화, 서버 오류 문구, 호스트 이름 등 주변 정보가 남지 않았는지 직접 확인해야 합니다.
+
+OpenClaw 최종 답변 알림에는 Markdown·URL·코드를 제거한 최대 3문장·250자의 요약본만 넣습니다. 앱이 Gateway final을 실제 처리하고 실행 가능한 동안에는 같은 요약본을 현재 iPhone 미디어 출력(Ray-Ban 또는 iPhone)으로 직접 읽습니다. 일반 로컬 알림만으로 iOS의 시스템 **알림 읽어주기**를 강제할 수 없으며, 앱이 suspend 또는 terminate되어 final을 받지 못하면 알림 생성과 앱 직접 낭독도 시작할 수 없습니다.
+
+## 한국어 Siri 명령
+
+TurboMeta는 App Intents와 App Shortcuts를 사용합니다. 앱 실행 시 `updateAppShortcutParameters()`를 호출해 현재 한국어 문구를 시스템에 갱신합니다.
+
+대표 호출 예시:
+
+```text
+Siri야, TurboMeta 이거 뭐야
+Siri야, TurboMeta 주변 설명
+Siri야, TurboMeta 이거 읽어줘
+Siri야, TurboMeta 이거 번역해줘
+Siri야, TurboMeta 건강 분석
+Siri야, TurboMeta 실시간 대화
+Siri야, TurboMeta 대화 종료
+```
+
+App Shortcut은 앱 설치 후 시스템에 노출되며 별도의 사용자 제작 단축어 없이 실행할 수 있습니다. 다만 앱은 iPhone의 Siri 시스템 언어를 강제로 변경할 수 없습니다. 한국어 호출을 사용하려면 iOS의 Siri 언어를 한국어로 설정해야 합니다.
+
+Quick Vision과 Live AI는 안경 카메라와 앱 상태가 필요하므로 명령 실행 시 앱을 엽니다.
+
+## 지원 AI 서비스
+
+일반 사용자 AI 실행 경로는 Google Gemini 중심입니다.
+
+| 기능 | 기본 모델/구성 | 인증 |
+|---|---|---|
+| Quick Vision · 음식 분석 | `gemini-3.6-flash` | Google Gemini API Key |
+| Live AI | `gemini-3.1-flash-live-preview` | 같은 Google Gemini API Key |
+| 실시간 번역 | Gemini Live 통역 지시 | 같은 Google Gemini API Key |
+| Quick Vision 음성 출력 | iOS 시스템 TTS `ko-KR` | 별도 TTS Key 없음 |
+
+기존 Alibaba/OpenRouter 제공자 타입은 이전 설치 데이터와 개발자 호환을 위해 남아 있을 수 있지만, 일반 설정 화면과 기본 실행 경로에서는 사용하지 않습니다.
+
+## 개발 환경 준비
+
+### 필수 항목
+
+- macOS와 최신 안정 버전 Xcode
+- iOS 17 이상이 설치된 iPhone
+- Ray-Ban Meta 스마트 안경
+- Meta Wearables 개발자 프로젝트
+- Google Gemini API Key
+- 실제 기기 설치를 위한 Apple 개발자 서명 환경
+
+Windows에서 작업하는 경우 GitHub와 Codemagic을 이용해 원격 macOS 빌드를 수행할 수 있습니다. 다만 Bluetooth, 카메라, 오디오 경로와 Siri 동작은 결국 실제 iPhone에서 확인해야 합니다. 시뮬레이터가 안경을 갑자기 물리적으로 만들어 주지는 않습니다.
+
+### 저장소 받기
+
+```bash
+git clone https://github.com/Temistry/turbometa-rayban-ai.git
+cd turbometa-rayban-ai
+git checkout feature/testflight-signing-config
+```
+
+### Meta Wearables 설정
+
+1. Meta Wearables Developer Center에서 프로젝트를 생성합니다.
+2. iOS 앱 설정에서 Application ID와 Client Token을 발급합니다.
+3. Xcode의 Target Build Settings에 다음 User-Defined Setting을 추가합니다.
+
+```text
+META_APP_ID=<발급받은 Application ID>
+CLIENT_TOKEN=<발급받은 Client Token>
+```
+
+`CameraAccess/Info.plist`는 값을 직접 저장하지 않고 다음 빌드 변수를 참조합니다.
 
 ```xml
-<key>MWDAT</key>
-<dict>
-    <key>AppLinkURLScheme</key>
-    <string>turbometa://</string>
-    <key>MetaAppID</key>
-    <string>你的MetaAppID</string>
-    <key>ClientToken</key>
-    <string>你的ClientToken</string>
-    <key>TeamID</key>
-    <string>$(DEVELOPMENT_TEAM)</string>
-</dict>
+<key>MetaAppID</key>
+<string>$(META_APP_ID)</string>
+<key>ClientToken</key>
+<string>$(CLIENT_TOKEN)</string>
 ```
 
-#### 步骤 2：编译运行
+실제 비밀값을 `Info.plist`, 소스 코드, README 또는 커밋 기록에 넣지 마세요.
 
-1. 使用 **Xcode 15.0+** 打开 `CameraAccess.xcodeproj`
-2. 在 Xcode → Signing & Capabilities 中选择你的 Apple ID 和 Team
-3. 连接 iPhone，点击 Run 编译运行
-4. 打开 TurboMeta，在设置中配置你的阿里云 API Key 👉 [查看配置教程](#api-key-config)
+### Xcode 빌드
 
-### 📱 Android
+1. `CameraAccess.xcodeproj`를 엽니다.
+2. Scheme으로 `TurboMeta`를 선택합니다.
+3. Signing & Capabilities에서 자신의 Team을 선택합니다.
+4. iPhone을 연결하고 Run을 실행합니다.
+5. 앱에서 Ray-Ban Meta 연결 권한을 승인합니다.
+6. 설정 화면에서 **Google Gemini API Key**를 등록합니다. 일반 사용자는 공급자·서비스 지역·모델을 따로 선택하지 않습니다.
 
-> ⚠️ Android 版本目前停留在 v1.5.0，暂未包含 v2.0 的 OpenClaw 集成和 Meta Ray-Ban Display 支持。
-
-👉 [**前往下载 APK**](https://github.com/Turbo1123/turbometa-rayban-ai/releases)
-
-**安装步骤：**
-1. 下载 APK 文件
-2. 在设置中开启"允许安装未知来源应用"
-3. 打开 APK 进行安装
-4. 授予权限（蓝牙、麦克风）
-5. 在设置中配置 API Key 👉 [查看配置教程](#api-key-config)
-
----
-
-### 🔋 Ray-Ban Meta 电池升级 & 维修服务 <sup>`📢 广告`</sup>
-
-> 🇨🇳 **中国用户专属福利**
-
-很多国内朋友通过海淘购买了 Ray-Ban Meta 智能眼镜，但遇到了一些烦恼：
-
-- 😤 **一代电池续航太短** - 用不了多久就没电，体验大打折扣
-- 😰 **国内没有官方售后** - 坏了不知道找谁修，只能吃灰
-- 💸 **寄回美国维修成本高** - 运费贵、周期长、还不一定能修好
-
-**现在有解决方案了！** 一位专业维修 Ray-Ban Meta 的师傅可以帮你：
-
-✅ **Gen1 → Gen2 电池升级** - 续航时间翻倍，告别电量焦虑
-✅ **专业维修服务** - 解决各种硬件问题，让你的眼镜重获新生
-✅ **国内售后保障** - 再也不用担心坏了没人修
-
-#### 📊 续航对比：为什么要升级？
-
-| | Gen1 原装电池 | Gen2 升级电池 |
-|--|--------------|--------------|
-| **眼镜单次续航** | ~4 小时 | **~8 小时** ⚡ |
-
-> 💡 简单说：**一代换二代电池 = 续航直接翻倍**，同样的眼镜，两倍的体验！
-
-<table>
-  <tr>
-    <td><img src="./ad/电池更换计划.jpg" width="220"/></td>
-    <td><img src="./ad/更换后的图片.jpg" width="220"/></td>
-  </tr>
-</table>
-
-| 服务项目 | 价格 |
-|---------|------|
-| 电池升级原价 | ~~¥299~~ |
-| **Turbo 推荐价** | **¥249**（省 ¥50）|
-
-📱 **联系方式**：添加微信 `lifesux`，备注「**Turbo推荐**」即可享受优惠价
-
----
-
-### 🔌 Ray-Ban Meta 外挂电池 <sup>`📢 广告`</sup>
-
-> **随时随地，电力满满！**
-
-不想拆机换电池？试试 **Transnovo 外挂电池充电仓**：
-
-<img src="./ad/adbattery.png" width="400"/>
-
-- ⚡ **10000mAh 大容量** - 可为眼镜充满 2.5 次（Wayfarer/Skyler）
-- 🌡️ **极端温度适用** - -20°C ~ 50°C 正常工作
-- 📦 **一体化设计** - 充电仓 + 充电线，出门带一个就够
-
-| 价格 | 说明 |
-|-----|------|
-| ~~¥299~~ | 原价 |
-| **¥279** | Turbo 推荐价（省 ¥20）|
-
-👉 [**查看详情**](./ad/外挂电池.jpg) | 📱 微信咨询：`lifesux`，备注「**Turbo推荐**」
-
----
-
-## 📖 简介
-
-TurboMeta 是专为 RayBan Meta 智能眼镜打造的全模态AI助手，集成了阿里云通义千问多模态大模型，实现了：
-
-- 🎯 **实时AI对话**：通过眼镜摄像头和麦克风进行多模态实时交互
-- 🍎 **智能营养分析**：拍摄食物即可获得详细的营养成分和健康建议
-- 👁️ **图像识别**：智能识别眼前的物体、场景和文字
-- 🎥 **直播推流**：支持抖音、快手、小红书等平台的直播功能
-- 🌐 **完整中文支持**：全中文AI交互体验，完美适配中文用户
-
-这是全球第一个实现**完全中文化**的 RayBan Meta AI 助手，让中文用户也能享受到智能眼镜带来的便利。
-
-## ✨ 核心功能
-
-### 👁️ Quick Vision - 快速识图 <sup>`NEW`</sup>
-- **Siri 唤醒**：无需解锁手机，语音触发识别
-- **快捷指令集成**：支持 iOS 快捷指令自动化
-- **操作按钮支持**：iPhone 15 Pro 系列一键触发
-- **高品质 TTS**：阿里云 qwen3-tts-flash 语音播报
-- **智能识别**：基于 qwen3-vl-plus 多模态视觉理解
-
-### 🤖 Live AI - 实时对话
-- **多模态交互**：同时支持语音和视觉输入
-- **实时响应**：基于通义千问 Omni-Realtime 模型，低延迟语音对话
-- **场景理解**：AI 能看到你眼前的画面并提供相关建议
-- **口语化回复**：自然流畅的中文对话体验
-- **一键隐藏**：支持隐藏对话界面，专注于视觉体验
-
-### 🍽️ LeanEat - 智能营养分析
-- **食物识别**：拍照即可识别食物种类
-- **营养成分**：详细的热量、蛋白质、脂肪、碳水化合物等数据
-- **健康评分**：0-100分的健康评分系统
-- **营养建议**：AI提供的个性化营养建议
-- **美观界面**：精心设计的UI，清晰展示营养信息
-
-### 📸 实时拍照
-- **自动启动**：打开界面自动连接眼镜并开始预览
-- **多功能集成**：拍照后可选择营养分析或AI识别
-- **流畅体验**：实时视频流预览
-
-### 🎥 直播功能
-- **平台支持**：适配主流直播平台
-- **简洁界面**：专注于直播内容的纯净视图
-
-## 🛠️ 技术栈
-
-### iOS
-- **平台**：iOS 17.0+
-- **语言**：Swift 5.0 + SwiftUI
-- **SDK**：Meta Wearables DAT SDK v0.5.0
-- **架构**：MVVM + Combine
-- **音频**：AVAudioEngine + AVAudioPlayerNode
-
-### Android
-- **平台**：Android 8.0+ (API 26)
-- **语言**：Kotlin 1.9 + Jetpack Compose
-- **SDK**：Meta Wearables DAT SDK v0.4.0
-- **架构**：MVVM + StateFlow
-- **UI**：Material 3 Design
-
-### AI 模型
-- **通义千问 Omni-Realtime**：实时多模态对话
-- **通义千问 VL-Plus**：视觉理解和图像分析
-- **通义千问 TTS-Flash**：高品质中文语音合成
-
-## 📋 前置要求
-
-### 硬件要求
-- ✅ Ray-Ban Meta 智能眼镜 或 **Meta Ray-Ban Display**（新增支持）
-- ✅ iPhone（iOS 17.0 或更高版本）
-- ✅ 稳定的网络连接
-
-### 软件要求
-- ✅ Xcode 15.0 或更高版本
-- ✅ Meta View App（用于配对眼镜）
-- ✅ 阿里云账号（申请 API）
-
-### API 要求
-需要申请以下阿里云 API：
-1. **通义千问 Omni-Realtime API**：用于实时对话
-2. **通义千问 VL-Plus API**：用于图像识别和营养分析
-
-👉 [前往阿里云百炼申请 API](https://www.aliyun.com/product/bailian) | [百炼控制台](https://bailian.console.aliyun.com/)
-
-## 🚀 安装指南
-
-### 步骤 1：开启 Meta View App 的 DAT SDK 预览模式
-
-⚠️ **重要**：由于 Meta Wearables DAT SDK 当前处于 Preview 阶段，必须在 Meta View App 中开启预览模式（此操作与 iOS 系统的开发者模式无关）。
-
-1. 在 iPhone 上打开 **Meta View App**（或 **Meta AI App**）
-2. 进入 **设置** → **应用信息** 或 **关于**
-3. 找到 **版本号**
-4. **连续点击版本号 5 次**
-5. 会出现提示信息
-
-### 步骤 2：配置 API Key
-
-详细配置教程请参考 👉 [API Key 配置说明](#api-key-config)
-
-简要步骤：
-1. 前往 [阿里云百炼](https://www.aliyun.com/product/bailian) 注册账号
-2. 登录 [百炼控制台](https://bailian.console.aliyun.com/) → API-KEY 管理 → 创建 API Key
-3. 在 App「设置」→「API Key 管理」中输入你的 API Key
-
-### 步骤 3：编译项目
-
-1. 用 Xcode 打开 `CameraAccess.xcodeproj`
-2. 选择你的开发团队（Team）
-3. 修改 Bundle Identifier（如果需要）
-4. 连接你的 iPhone
-5. 点击 **Run** 或按 `Cmd + R`
-
-### 步骤 4：配对眼镜
-
-1. 打开 Meta View App
-2. 配对你的 RayBan Meta 眼镜
-3. 确保蓝牙已开启
-4. 返回 TurboMeta App，等待连接成功
-
-## 📱 使用指南
-
-### 首次使用
-
-1. 启动 TurboMeta App
-2. 确保 RayBan Meta 眼镜已配对并开启
-3. 等待设备连接（顶部会显示连接状态）
-4. 选择你想使用的功能
-
-### Live AI 实时对话
-
-1. 点击首页的 **Live AI** 卡片
-2. 等待连接成功（右上角显示绿点）
-3. 开始说话，AI 会实时回复
-4. AI 可以看到你眼前的画面
-5. 点击 👁️ 按钮可以隐藏对话记录
-
-**使用技巧**：
-- 说话清晰，保持适当距离
-- 可以问"你看到了什么？"让 AI 描述画面
-- AI 会用简练的中文回答
-
-### LeanEat 营养分析
-
-1. 点击首页的 **LeanEat** 卡片
-2. 对准食物，点击拍照按钮 📷
-3. 在照片预览中点击 **营养分析**
-4. 等待 AI 分析完成
-5. 查看营养成分、健康评分和建议
-
-**使用场景**：
-- 餐前拍照，了解营养成分
-- 健身减脂时记录每日摄入
-- 学习食物的营养知识
-
-### 直播功能
-
-1. 点击首页的 **直播** 卡片
-2. 等待视频流启动
-3. 进行直播内容创作
-4. 点击停止按钮结束直播
-
----
-
-<a id="quick-vision-tutorial"></a>
-
-## 👁️ Quick Vision 快速识图使用教程
-
-Quick Vision 让你可以通过 Siri 或快捷指令，在不解锁手机的情况下快速识别眼前的物体。
-
-### 📋 前置准备
-
-1. ✅ 确保已安装 TurboMeta App 并配置好 API Key
-2. ✅ 确保 RayBan Meta 眼镜已配对并开启
-3. ✅ 首次使用需要打开一次 TurboMeta App 完成初始化
-
-### 🔧 设置快捷指令
-
-#### 方式一：Siri 语音触发
-
-1. 打开 iPhone 的 **快捷指令** App
-2. 点击右上角 **+** 创建新快捷指令
-3. 点击 **添加操作**
-4. 搜索 **TurboMeta** 或 **Turbo Meta**
-5. 选择 **快速识图** 操作
-6. 点击顶部的快捷指令名称，重命名为你喜欢的名字（如"识图"、"看看这是什么"）
-7. 点击 **完成** 保存
-
-**使用方法**：
-- 说 "嘿 Siri，识图"（或你设置的快捷指令名称）
-- AI 会自动拍照、识别、并语音播报结果
-
-<details>
-<summary>📸 点击查看设置截图</summary>
-
-1. 在快捷指令 App 中搜索 TurboMeta
-2. 添加"快速识图"操作
-3. 重命名快捷指令
-
-</details>
-
-#### 方式二：iPhone 15 Pro 操作按钮
-
-如果你使用 iPhone 15 Pro / 15 Pro Max / 16 系列，可以将快速识图绑定到操作按钮：
-
-1. 打开 **设置** → **操作按钮**（或 **按钮** → **操作按钮**）
-2. 选择 **快捷指令**
-3. 选择你创建的 TurboMeta 快速识图快捷指令
-4. 完成设置
-
-**使用方法**：
-- 长按操作按钮即可触发快速识图
-- 无需解锁手机，戴着眼镜即可使用
-
-#### 方式三：锁屏小组件
-
-1. 长按锁屏界面进入编辑模式
-2. 点击 **自定义**
-3. 在锁屏小组件区域添加 **快捷指令**
-4. 选择 TurboMeta 快速识图快捷指令
-5. 点击完成
-
-**使用方法**：
-- 在锁屏界面直接点击小组件即可触发
-
-### 🎯 Quick Vision 工作流程
-
-```
-Siri/快捷指令触发
-      ↓
-  启动视频流
-      ↓
-  自动拍摄照片
-      ↓
-  停止视频流
-      ↓
-  AI 图像识别 (qwen3-vl-plus)
-      ↓
-  TTS 语音播报 (qwen3-tts-flash)
-```
-
-### 💡 使用技巧
-
-- **确保眼镜已开启**：触发前确保眼镜没有在充电盒中
-- **保持稳定**：拍照时尽量保持头部稳定
-- **光线充足**：在光线良好的环境下识别效果更好
-- **等待播报**：识别需要几秒钟，请耐心等待语音播报
-
-### ⚠️ 常见问题
-
-**Q: 为什么提示"眼镜未连接"？**
-- 确保眼镜已开启且与 Meta View App 配对
-- 确保已在 Meta View App 中开启 DAT SDK 预览模式
-- 尝试重新打开 TurboMeta App
-
-**Q: 为什么没有声音？**
-- 检查手机是否静音
-- 检查蓝牙音频输出设置
-- TTS 使用的是阿里云服务，需要网络连接
-
-**Q: 快捷指令中找不到 TurboMeta？**
-- 首次安装后需要打开一次 TurboMeta App
-- 尝试重启手机
-
----
-
-## ⚙️ 配置选项
-
-### API 配置
-
-在 `VisionAPIConfig.swift` 中配置：
-
-```swift
-struct VisionAPIConfig {
-    // 阿里云 API Key
-    static let apiKey = "sk-YOUR-API-KEY-HERE"
-
-    // API 基础 URL（通常不需要修改）
-    static let baseURL = "https://dashscope.aliyuncs.com"
-}
-```
-
-### 系统提示词
-
-可以在 `OmniRealtimeService.swift` 中自定义 AI 的回复风格：
-
-```swift
-"instructions": "你是RayBan Meta智能眼镜AI助手。回答要简练、口语化..."
-```
-
-## 🔧 常见问题
-
-### Q1: 眼镜连接不上怎么办？
-
-**解决方案**：
-1. 确保眼镜已在 Meta View App 中配对成功
-2. 检查蓝牙是否开启
-3. 重启 TurboMeta App
-4. 重启眼镜（放入眼镜盒充电仓）
-5. 确保已在 Meta View App 中开启 DAT SDK 预览模式
-
-### Q2: AI 没有回复或回复很慢？
-
-**解决方案**：
-1. 检查网络连接是否稳定
-2. 确认 API Key 是否正确配置
-3. 查看阿里云 API 额度是否充足
-4. 检查控制台日志排查错误
-
-### Q3: 营养分析结果不准确？
-
-**解决方案**：
-1. 确保食物拍摄清晰
-2. 尽量在良好光线下拍摄
-3. 食物尽量完整展示在画面中
-4. AI 分析仅供参考，不能替代专业营养师
-
-### Q4: Xcode 编译失败或无法在设备上运行？
-
-**解决方案**：
-1. 确认 iPhone 已在 Xcode 中注册为开发设备
-2. 检查 Xcode → Signing & Capabilities 中的签名配置是否正确
-3. 在 Xcode 项目设置中修改 Bundle Identifier 以避免冲突
-4. 确保在 Xcode → Settings → Accounts 中已登录有效的 Apple ID
-
-### Q5: 语音识别不准确？
-
-**解决方案**：
-1. 确保环境相对安静
-2. 说话清晰，语速适中
-3. 麦克风不要被遮挡
-4. 当前主要优化了中文，其他语言可能不太准确
-
-## 🔗 OpenClaw 集成
-
-TurboMeta 支持连接 [OpenClaw](https://openclaw.ai) — 一个开源的本地 AI 助手。通过 OpenClaw，你可以用眼镜拍照并让 AI 分析，还可以通过语音转录与 AI 对话。
-
-### 功能
-
-- 📷 **拍照发送**：一键抓取眼镜画面发送给 OpenClaw AI
-- 🎙️ **语音转录**：通过阿里云实时语音识别，边说边转文字，自动发送给 AI
-- ⌨️ **文字聊天**：直接输入文字与 AI 对话
-- 🔄 **自动连接**：配置保存后，每次打开自动连接 Gateway
-
-> ⚠️ 由于 Meta DAT SDK 的限制，眼镜摄像头无法在后台访问。使用 OpenClaw 拍照功能时，需要在 App 前台操作。
-
-### 配置步骤
-
-#### 1. 安装并启动 OpenClaw
+서명 없이 컴파일만 확인할 때는 다음 명령을 사용할 수 있습니다.
 
 ```bash
-# 安装 OpenClaw
-curl -fsSL https://openclaw.ai/install.sh | bash
-
-# 启动 Gateway
-openclaw gateway install
+xcodebuild \
+  -project CameraAccess.xcodeproj \
+  -scheme TurboMeta \
+  -configuration Debug \
+  -destination 'generic/platform=iOS Simulator' \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO \
+  clean build
 ```
 
-#### 2. 配置 Gateway 允许局域网访问
+## Google Gemini API Key 설정
 
-编辑 `~/.openclaw/openclaw.json`，将 Gateway 绑定到局域网：
+1. [Google AI Studio](https://aistudio.google.com/apikey)에서 Gemini API Key를 발급합니다.
+2. 앱의 `내 정보` 탭에서 **Google Gemini API Key**를 선택합니다.
+3. Key를 입력하고 저장합니다.
 
-```json
-{
-  "gateway": {
-    "bind": "lan"
-  }
-}
+예시가 필요할 때는 실제 형식과 구별되는 placeholder만 사용합니다.
+
+```text
+<YOUR_API_KEY>
 ```
 
-重启 Gateway 使配置生效：
+**절대로 API Key를 소스 코드, `Info.plist`, `.env`, JSON, README, 작업 로그, 테스트 출력 또는 커밋에 넣지 마세요.** 실제 값뿐 아니라 접두사·접미사·해시·Base64 원문 등 식별 가능한 형태도 기록하지 않습니다.
+
+저장 정책:
+
+- 사용자 입력 API Key와 연동 토큰은 iOS Keychain 사용
+- 접근 등급은 `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+- iCloud Keychain이나 새 기기로 자동 이전하지 않음
+- `UserDefaults`와 일반 파일에 평문 저장하지 않음
+
+Meta Wearables 설정은 Xcode 또는 CI의 빌드 변수로 주입합니다.
+
+```text
+META_APP_ID=<YOUR_META_APP_ID>
+CLIENT_TOKEN=<YOUR_CLIENT_TOKEN>
+```
+
+기기에 저장된 Key는 탈옥, 디버깅 권한 탈취, 악성 프로파일, 메모리 분석까지 막아 주는 절대 방패가 아닙니다. 공개 서비스에서는 서버가 발급하는 짧은 수명의 토큰을 사용하는 구조가 더 안전합니다.
+
+## OpenClaw 연결
+
+앱의 `내 정보 > OpenClaw`에서 다음 값을 설정합니다.
+
+```text
+호스트: 192.168.0.10
+포트: 18789
+Gateway 토큰: <발급받은 토큰>
+```
+
+또는 공개 서버에 암호화된 주소를 지정할 수 있습니다.
+
+```text
+wss://gateway.example.com
+```
+
+보안 규칙:
+
+- `ws://`는 엄격히 확인된 루프백, 사설 IP, `.local` 호스트에서만 허용
+- 공인망 호스트는 `wss://` 필수
+- 호스트 입력란의 사용자 이름, 비밀번호, 쿼리 문자열, 프래그먼트 거부
+- 수신 명령은 코드의 허용 목록으로 제한
+- 첨부 이미지는 최대 크기 제한 적용
+
+사설망 `ws://`도 암호화되지 않습니다. 신뢰할 수 없는 Wi-Fi에서는 사용하지 마세요.
+
+### Nord Meshnet 원격 연결
+
+공유기 포트포워딩이나 공인 인터넷 노출 없이 외부에서 OpenClaw를 사용하려면, Windows PC와 iPhone을 **사용자가 승인한 Nord Meshnet 피어**로 연결한 뒤 앱 설정에서 **Nord Meshnet** 연결 모드를 직접 선택합니다.
+
+- Meshnet 모드는 `100.64.0.0/10` 범위의 **정확한 IPv4 피어 주소**에만 `ws://`를 허용합니다. 주소 범위만으로 자동 신뢰하지 않으며, 기본 보안 연결 모드에서는 같은 주소도 `wss://`가 필요합니다.
+- 일반 사무실 LAN 주소, 호스트명, 공인 주소에는 Meshnet 모드를 사용하지 마세요. 외부·미확인 주소에는 계속 `wss://`를 사용해야 합니다.
+- Windows PC의 Gateway는 루프백 기본 구성을 유지할 수 있으면 Meshnet 전용 프록시/리스너로만 노출합니다. 직접 바인딩이 필요하면 Windows Firewall 인바운드 규칙을 Meshnet 인터페이스와 승인한 iPhone 피어 하나로 제한합니다.
+- Gateway 토큰, 서명된 기기 연결, OpenClaw 페어링 승인은 Meshnet을 사용해도 필수입니다. 토큰을 URL에 넣거나, 공인 WAN에 바인딩하거나, Nord traffic routing·광범위한 로컬 네트워크 권한을 이 용도로 활성화하지 마세요.
+- 두 기기의 Meshnet 연결과 Gateway/방화벽 구성을 마친 뒤에는 같은 Meshnet 경로와 iPhone 셀룰러 경로를 각각 실기기에서 확인합니다. 주소·피어 이름·토큰·원시 handshake·원시 로그는 작업 기록이나 지원 요청에 공유하지 마세요.
+
+Meshnet `ws://` 경로가 iOS App Transport Security 정책에서 실기기에 실패하면 전체 ATS 예외를 추가하지 않습니다. 대신 PC의 Meshnet 전용 `wss://` 프록시를 사용하세요.
+
+## 정적 점검
+
+한국어와 기본 보안 설정을 검사하려면 다음 명령을 실행합니다.
 
 ```bash
-openclaw gateway restart
+python3 Scripts/audit_localization_security.py
 ```
 
-#### 3. 允许眼镜拍照命令
+검사 항목:
 
-`camera.snap` 默认不在允许列表中，需要手动添加。编辑 `~/.openclaw/openclaw.json`：
+- 저장소에 포함된 API Key, GitHub 토큰, 개인 키 형태 탐지
+- 광범위한 ATS 예외 탐지
+- Keychain 기기 전용 접근 정책 확인
+- OpenClaw 평문 연결 제한 확인
+- 내부 빌드 로그 조건 확인
+- 한국어 리소스에 남은 중국어 문자열 탐지
+- SwiftUI 화면의 외국어 하드코딩 후보 탐지
+- 민감정보 관련 로그 문장 검토 목록 생성
 
-```json
-{
-  "gateway": {
-    "bind": "lan",
-    "nodes": {
-      "allowCommands": ["camera.snap", "camera.clip", "camera.list", "device.status", "device.info"]
-    }
-  }
-}
+결과는 `audit-report.txt`에 저장됩니다. 이 스크립트는 정적 휴리스틱 검사이며 전문 침투 테스트나 공급망 감사의 대체물이 아닙니다.
+
+## CI와 원격 빌드
+
+### GitHub Actions
+
+`.github/workflows/ios-validate.yml`은 다음 순서로 실행됩니다.
+
+1. 한국어 및 보안 정적 점검
+2. Swift Package 의존성 해석
+3. `TurboMeta` Scheme의 iOS 시뮬레이터 빌드
+4. 빌드 로그와 감사 결과 업로드
+
+### Codemagic
+
+`codemagic.yaml`에는 세 개의 워크플로가 있습니다.
+
+| 워크플로 | 목적 |
+|---|---|
+| `ios-compile-check` | Apple 서명 없이 Release 컴파일 검사 |
+| `ios-feature-build` | 기능 브랜치 내부 IPA 빌드 |
+| `ios-testflight` | `main` 브랜치 TestFlight IPA 빌드 |
+
+Codemagic의 `turbometa_secrets` 그룹에 다음 변수를 등록합니다.
+
+```text
+META_APP_ID
+CLIENT_TOKEN
 ```
 
-#### 4. 在 App 中连接
+내부 IPA와 TestFlight 빌드는 `INTERNAL_BUILD` 컴파일 조건을 사용하므로 기기 내 개발자 로그 버튼이 포함됩니다. 일반 Release 빌드에는 해당 조건을 넣지 않아야 합니다.
 
-1. 打开 TurboMeta → 设置 → OpenClaw
-2. 输入 Gateway 地址（如 `192.168.1.100`）和端口（默认 `18789`）
-3. 输入 Gateway Token（在 OpenClaw Dashboard URL 中可以找到）
-4. 点击连接
+## 보안 설계와 남은 위험
 
-首次连接时，Gateway 会要求设备配对。在终端执行：
+### 적용된 보호
 
-```bash
-openclaw devices list    # 查看待配对设备
-openclaw devices approve # 批准配对
+- API Key, OpenClaw 토큰, RTMP 스트림 키의 기기 전용 Keychain 저장
+- ATS 전체 허용 미사용
+- 공개 OpenClaw Gateway의 `wss://` 강제
+- URL 자격 증명과 쿼리 입력 거부
+- OpenClaw 원격 명령 허용 목록
+- 로그 자격 증명과 Base64 payload 마스킹
+- Quick Vision·Live AI·번역 지식 로그를 Markdown + JSONL 텍스트로만 저장
+- 이미지·음성 원본·위치·인증정보를 지식 로그에서 제외
+- 사용자가 선택한 Files 폴더만 security-scoped bookmark로 동기화
+- Google Drive API/OAuth secret·refresh token을 추가하지 않음
+- 사용자 발화와 AI 대화 본문을 네트워크 진단 로그에서 제외
+- `URLSessionConfiguration.ephemeral` 사용
+- 예상된 WebSocket 종료와 실제 연결 장애 구분
+- 내부 빌드에서만 기기 내 로그 콘솔 노출
+
+### 남은 위험
+
+- 클라이언트 앱에 장기 API Key를 저장하는 구조 자체는 역공학과 탈취 위험이 남습니다.
+- Gemini 원시 WebSocket API는 연결 URL 쿼리에 Key가 필요합니다. 앱 로그에는 출력하지 않지만, 운영 환경에서는 서버 발급 단기 토큰 구조가 더 안전합니다.
+- 사설망의 `ws://`와 일부 플랫폼의 `rtmp://`는 평문 전송입니다.
+- 사용자가 공유한 진단 로그에는 호스트 이름과 오류 문맥이 포함될 수 있습니다.
+- AI 서비스로 전송한 사진, 음성, 번역 내용은 각 제공자의 데이터 처리 정책을 따릅니다.
+- 의존 패키지와 공급망은 별도의 정기 감사가 필요합니다.
+
+## 실기기 검증 체크리스트
+
+CI 성공은 컴파일 가능성을 확인할 뿐, 실제 안경과 iPhone의 모든 동작을 증명하지 않습니다. 내부 TestFlight 빌드에서 다음 항목을 확인합니다.
+
+- Ray-Ban Meta 등록과 재연결
+- 안경 카메라 영상 수신과 카메라 권한
+- 사진 촬영 후 Gemini Quick Vision 분석
+- iOS `ko-KR` 시스템 TTS가 iPhone 또는 Bluetooth 출력으로 재생되는지
+- Gemini Live AI 마이크 입력과 한국어 응답
+- Gemini Live 실시간 번역의 기본 대상 언어가 한국어인지
+- Siri 한국어 호출 문구 인식
+- Markdown + JSONL 로컬 지식 로그 생성과 credential 마스킹
+- Files 문서 선택기, security-scoped bookmark 복원, Google Drive 폴더 동기화
+- OpenClaw의 사설망과 WSS 연결
+- RTMP 또는 RTMPS 송출
+- 연결 해제 시 불필요한 `Socket is not connected` 오류가 나타나지 않는지
+- 개발자 로그의 오류 상세와 자격 증명 마스킹
+- 장시간 사용 시 발열, 배터리, 메모리 사용량
+
+## 프로젝트 구조
+
+```text
+CameraAccess/
+├── Intents/                 Siri App Intents와 App Shortcuts
+├── Managers/                언어, AI 제공자, 기능 모드 관리
+├── Models/                  대화, 번역, 영양 분석 데이터 모델
+├── Services/                Gemini, 지식 로그, Live AI, 번역, RTMP, OpenClaw
+├── Utils/                   Keychain과 권한 유틸리티
+├── ViewModels/              화면 상태와 서비스 연결
+├── Views/                   SwiftUI 화면, 통합 설정, 개발자 로그 콘솔
+├── Info.plist               권한 문구와 Meta DAT 설정
+└── TurboMetaApp.swift       앱 진입점과 한국어 Shortcut 갱신
+
+Scripts/
+└── audit_localization_security.py
+
+.github/workflows/
+└── ios-validate.yml
+
+codemagic.yaml
 ```
 
-#### 5. 外网访问（可选）
+## 기여 방법
 
-如果需要在外网访问 Gateway，推荐使用 [Tailscale](https://tailscale.com/)：
+1. `main`에서 기능 브랜치를 만듭니다.
+2. 사용자 화면 문구는 한국어 리소스 또는 한국어 문자열로 작성합니다.
+3. API Key, 토큰, 음성 원문, 이미지 Base64를 로그에 남기지 않습니다.
+4. 정적 점검과 시뮬레이터 빌드를 통과시킵니다.
+5. 실제 기기에서 변경 기능과 오디오 경로를 확인합니다.
+6. Pull Request에 검증 기기, iOS 버전, 안경 펌웨어, 재현 절차를 기록합니다.
 
-1. 在运行 Gateway 的电脑和手机上都安装 Tailscale
-2. 两台设备登录同一个 Tailscale 账号
-3. 在 App 中使用 Tailscale 分配的 IP 地址连接（如 `100.x.x.x:18789`）
+## 라이선스
 
-Tailscale 会自动建立加密的点对点连接，无需开放公网端口。
+이 프로젝트는 `LICENSE`에 명시된 MIT License를 따릅니다.
 
----
-
-## 🔒 隐私和安全
-
-- ✅ 所有音视频数据仅用于 AI 处理
-- ✅ 不会存储或上传用户隐私数据
-- ✅ API 通信使用 HTTPS 加密
-- ✅ 图片和语音仅在会话期间保留
-- ✅ 遵循行业标准的数据处理最佳实践
-
-## 🗺️ 开发路线图
-
-### ✅ 已完成
-- [x] Live AI 实时对话
-- [x] LeanEat 营养分析
-- [x] 图像识别
-- [x] RTMP 直播推流
-- [x] 中英文双语支持
-- [x] 对话记录保存
-- [x] Android 版本发布
-- [x] Quick Vision 快速识图 + Siri 快捷指令
-- [x] 实时翻译（18 种语言）
-- [x] **OpenClaw 集成** 🆕
-- [x] **Meta Ray-Ban Display 支持** 🆕
-- [x] **DAT SDK v0.5.0 升级** 🆕
-- [x] **阿里云实时语音识别（Fun-ASR）** 🆕
-
-### 🚧 进行中
-- [ ] OpenClaw Node 模式（AI 主动调用眼镜拍照）
-- [ ] Android v2.0 更新
-- [ ] 性能优化
-
-### 📅 计划中
-- [ ] WordLearn 单词学习
-- [ ] 云端同步对话记录
-- [ ] 离线模式
-- [ ] Apple Watch 配套应用
-
-## 🤝 贡献
-
-欢迎贡献代码、报告 Bug 或提出新功能建议！
-
-1. Fork 本项目
-2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
-3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
-4. 推送到分支 (`git push origin feature/AmazingFeature`)
-5. 开启 Pull Request
-
-## 📄 许可证
-
-本项目基于 Meta Platforms, Inc. 的原始代码修改而来，遵循原项目的许可证。
-
-部分代码版权归 Meta Platforms, Inc. 及其关联公司所有。
-
-请参阅 [LICENSE](LICENSE) 文件了解详细信息。
-
-## 🙏 致谢
-
-- **Meta Platforms, Inc.** - 提供 DAT SDK 和原始示例代码
-- **阿里云通义千问团队** - 提供强大的多模态 AI 能力
-- **RayBan** - 出色的智能眼镜硬件
-
-## 🚀 如何开源此项目
-
-### 1. 创建 GitHub 仓库
-
-```bash
-# 在 GitHub 网站上创建新仓库
-# 然后在项目目录执行：
-git init
-git add .
-git commit -m "Initial commit: TurboMeta - RayBan Meta AI Assistant"
-git branch -M main
-git remote add origin https://github.com/你的用户名/仓库名.git
-git push -u origin main
-```
-
-### 2. 保护敏感信息
-
-✅ **已完成的安全措施**：
-- API Key 不再硬编码在代码中
-- 使用 iOS Keychain 安全存储用户的 API Key
-- 用户需在 App 内「设置」中自行配置
-
-⚠️ **发布前检查**：
-```bash
-# 搜索可能残留的敏感信息
-grep -r "sk-" .
-grep -r "API" . | grep -i "key"
-```
-
-### 3. 添加 .gitignore 文件
-
-在项目根目录创建 `.gitignore` 文件：
-
-```gitignore
-# Xcode
-build/
-*.pbxuser
-*.mode1v3
-*.mode2v3
-*.perspectivev3
-xcuserdata/
-*.xccheckout
-*.moved-aside
-DerivedData/
-*.hmap
-*.xcuserstate
-*.xcworkspace
-
-# API Keys (额外保护)
-**/*APIKey*.swift
-**/APIKeys.swift
-**/*Secret*.swift
-
-# macOS
-.DS_Store
-```
-
-### 4. 选择开源协议
-
-本项目基于 Meta DAT SDK 示例代码，遵循原项目许可证。你可以：
-- 保持与 Meta 相同的许可证
-- 为你的代码部分选择 MIT、Apache 2.0 等许可证
-- 在 LICENSE 文件中注明原始代码来源
-
-<a id="api-key-config"></a>
-### 5. 用户配置说明
-
-⚠️ **重要提示**：使用本项目的用户需要配置阿里云 API Key：
-
-#### 第一步：注册阿里云账号
-前往 [阿里云百炼](https://www.aliyun.com/product/bailian) 注册账号
-
-#### 第二步：获取 API Key
-1. 登录 [百炼控制台](https://bailian.console.aliyun.com/)
-2. 在左侧菜单找到「**API-KEY 管理**」
-3. 点击「**创建 API Key**」生成密钥
-4. 复制生成的 API Key
-
-#### ：在 App 中配置
-1. 打开 TurboMeta App
-2. 进入「**设置**」→「**API Key 管理**」
-3. 粘贴你的 API Key 并保存
-
-> 🔒 **安全说明**：API Key 在 iOS 上存储于 Keychain，在 Android 上使用 EncryptedSharedPreferences 加密存储，不会泄露
-
-## 🌟 如果这个项目对你有帮助
-
-- ⭐️ 给项目点个 Star
-- 🐛 报告 Bug 或提出建议
-- 🔀 Fork 并贡献代码
-- 📢 分享给更多人
-
-## ☕ 请我喝杯咖啡
-
-如果这个项目对你有帮助，欢迎请我喝杯咖啡！
-
-<div align="center">
-<img src="./screenshots/请我喝咖啡.png" width="200" alt="微信支付"/>
-
-**微信支付**
-</div>
-
----
-
-<div align="center">
-
-**让智能眼镜说中文 🇨🇳**
-
-Made with ❤️ for RayBan Meta Users
-
-</div>
+Meta, Ray-Ban, Apple, Alibaba Cloud, Google, OpenRouter, OpenClaw와 기타 제품명은 각 소유자의 상표입니다. 이 프로젝트는 해당 회사들의 공식 제품이 아닙니다.

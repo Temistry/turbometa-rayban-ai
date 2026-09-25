@@ -1,17 +1,6 @@
 /*
- * Copyright (c) Meta Platforms, Inc. and affiliates.
- * All rights reserved.
- *
- * This source code is licensed under the license found in the
- * LICENSE file in the root directory of this source tree.
+ * 영상 스트림 시작 전 안내 화면
  */
-
-//
-// NonStreamView.swift
-//
-// Default screen to show getting started tips after app connection
-// Initiates streaming
-//
 
 import MWDATCore
 import SwiftUI
@@ -29,7 +18,8 @@ struct NonStreamView: View {
         HStack {
           Spacer()
           Menu {
-            Button("Disconnect", role: .destructive) {
+            Button("안경 연결 해제", role: .destructive) {
+              print("[NonStream][INFO] 사용자가 안경 연결 해제 요청")
               wearablesVM.disconnectGlasses()
             }
             .disabled(wearablesVM.registrationState != .registered)
@@ -40,6 +30,7 @@ struct NonStreamView: View {
               .foregroundColor(.white)
               .frame(width: 24, height: 24)
           }
+          .accessibilityLabel("안경 설정")
         }
 
         Spacer()
@@ -52,11 +43,11 @@ struct NonStreamView: View {
             .aspectRatio(contentMode: .fit)
             .frame(width: 120)
 
-          Text("Stream Your Glasses Camera")
+          Text("안경 카메라 스트림")
             .font(.system(size: 20, weight: .semibold))
             .foregroundColor(.white)
 
-          Text("Tap the Start streaming button to stream video from your glasses or use the camera button to take a photo from your glasses.")
+          Text("스트림 시작 버튼을 누르면 Ray-Ban Meta 안경이 보고 있는 영상을 표시합니다. 카메라 버튼으로 사진도 촬영할 수 있습니다.")
             .font(.system(size: 15))
             .multilineTextAlignment(.center)
             .foregroundColor(.white)
@@ -72,7 +63,7 @@ struct NonStreamView: View {
             .foregroundColor(.white.opacity(0.7))
             .frame(width: 16, height: 16)
 
-          Text("Waiting for an active device")
+          Text("활성 안경을 기다리는 중")
             .font(.system(size: 14))
             .foregroundColor(.white.opacity(0.7))
         }
@@ -80,16 +71,17 @@ struct NonStreamView: View {
         .opacity(viewModel.hasActiveDevice ? 0 : 1)
 
         CustomButton(
-          title: "Start streaming",
+          title: "스트림 시작",
           style: .primary,
           isDisabled: !viewModel.hasActiveDevice
         ) {
           Task {
+            print("[NonStream][INFO] 사용자가 영상 스트림 시작 요청 hasDevice=\(viewModel.hasActiveDevice)")
             await viewModel.handleStartStreaming()
           }
         }
       }
-      .padding(.all, 24)
+      .padding(24)
     }
     .sheet(isPresented: $wearablesVM.showGettingStartedSheet) {
       if #available(iOS 16.0, *) {
@@ -109,39 +101,39 @@ struct GettingStartedSheetView: View {
 
   var body: some View {
     VStack(spacing: 24) {
-      Text("Getting started")
+      Text("사용 시작")
         .font(.system(size: 18, weight: .semibold))
         .foregroundColor(.primary)
 
       VStack(spacing: 12) {
         TipItemView(
           resource: .videoIcon,
-          text: "First, Camera Access needs permission to use your glasses camera."
+          text: "먼저 TurboMeta가 안경 카메라를 사용할 수 있도록 권한을 승인합니다."
         )
         TipItemView(
           resource: .tapIcon,
-          text: "Capture photos by tapping the camera button."
+          text: "카메라 버튼을 누르면 안경 시점의 사진을 촬영합니다."
         )
         TipItemView(
           resource: .smartGlassesIcon,
-          text: "The capture LED lets others know when you're capturing content or going live."
+          text: "촬영 또는 라이브 중에는 안경의 촬영 표시등이 켜져 주변 사람에게 알립니다."
         )
       }
       .padding(.bottom, 16)
 
       CustomButton(
-        title: "Continue",
+        title: "계속",
         style: .primary,
         isDisabled: false
       ) {
         dismiss()
       }
     }
-    .padding(.all, 24)
+    .padding(24)
     .background(
-      GeometryReader { geo -> Color in
+      GeometryReader { geometry -> Color in
         DispatchQueue.main.async {
-          height = geo.size.height
+          height = geometry.size.height
         }
         return Color.clear
       }

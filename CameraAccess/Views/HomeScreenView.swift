@@ -6,13 +6,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-//
-// HomeScreenView.swift
-//
-// Welcome screen that guides users through the DAT SDK registration process.
-// This view is displayed when the app is not yet registered.
-//
-
 import MWDATCore
 import SwiftUI
 
@@ -22,7 +15,6 @@ struct HomeScreenView: View {
 
   var body: some View {
     ZStack {
-      // Gradient background
       LinearGradient(
         colors: [
           AppColors.primary.opacity(0.15),
@@ -37,7 +29,6 @@ struct HomeScreenView: View {
       VStack(spacing: AppSpacing.xl) {
         Spacer()
 
-        // TurboMeta Logo
         VStack(spacing: AppSpacing.md) {
           Image(.cameraAccessIcon)
             .resizable()
@@ -49,52 +40,51 @@ struct HomeScreenView: View {
             .font(AppTypography.largeTitle)
             .foregroundColor(AppColors.textPrimary)
 
-          Text("Rayban Meta助手")
+          Text("Ray-Ban Meta 도우미")
             .font(AppTypography.callout)
             .foregroundColor(AppColors.textSecondary)
         }
 
-        // Features
         VStack(spacing: AppSpacing.md) {
           FeatureTipView(
             icon: "video.fill",
-            title: "实时视频",
-            text: "从眼镜视角直接录制视频，捕捉你的所见所闻"
+            title: "안경 시점 영상",
+            text: "안경으로 보고 있는 장면을 실시간으로 확인하고 촬영합니다"
           )
           FeatureTipView(
             icon: "brain.head.profile",
-            title: "AI 对话",
-            text: "实时 AI 助手，随时随地为你提供智能帮助"
+            title: "한국어 AI 대화",
+            text: "눈앞의 장면을 바탕으로 한국어 음성과 텍스트로 도움을 받습니다"
           )
           FeatureTipView(
             icon: "waveform",
-            title: "开放式音频",
-            text: "保持耳朵对周围世界的开放，同时接收通知"
+            title: "음성 명령",
+            text: "Siri와 단축어를 이용해 퀵비전과 실시간 대화를 실행합니다"
           )
         }
 
         Spacer()
 
-        // Connection Button
         VStack(spacing: AppSpacing.md) {
-          Text("将跳转到 Meta AI 应用确认连接")
+          Text("Meta AI 앱으로 이동해 안경 연결을 승인합니다")
             .font(AppTypography.footnote)
             .foregroundColor(AppColors.textSecondary)
             .multilineTextAlignment(.center)
             .padding(.horizontal, AppSpacing.lg)
 
           Button {
+            print("[Registration][INFO] Ray-Ban Meta 연결 요청")
             viewModel.connectGlasses()
           } label: {
             HStack(spacing: AppSpacing.sm) {
               if viewModel.registrationState == .registering {
                 ProgressView()
                   .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                Text("连接中...")
+                Text("연결 중...")
               } else {
                 Image(systemName: "eye.circle.fill")
                   .font(.title3)
-                Text("连接 Ray-Ban Meta")
+                Text("Ray-Ban Meta 연결")
               }
             }
             .font(AppTypography.headline)
@@ -118,7 +108,6 @@ struct HomeScreenView: View {
       }
       .padding(.vertical, AppSpacing.xl)
 
-      // Connection Success Toast
       if showConnectionSuccess {
         VStack {
           Spacer()
@@ -129,10 +118,10 @@ struct HomeScreenView: View {
               .foregroundColor(.green)
 
             VStack(alignment: .leading, spacing: AppSpacing.xs) {
-              Text("连接成功")
+              Text("연결 완료")
                 .font(AppTypography.headline)
                 .foregroundColor(.white)
-              Text("正在进入 TurboMeta...")
+              Text("TurboMeta를 시작합니다...")
                 .font(AppTypography.caption)
                 .foregroundColor(.white.opacity(0.9))
             }
@@ -149,12 +138,12 @@ struct HomeScreenView: View {
       }
     }
     .onChange(of: viewModel.registrationState) { _, newState in
+      print("[Registration][INFO] 등록 상태 변경 state=\(newState)")
       if newState == .registered {
         withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
           showConnectionSuccess = true
         }
 
-        // Auto dismiss after 1.5 seconds
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
           withAnimation {
             showConnectionSuccess = false
@@ -163,10 +152,7 @@ struct HomeScreenView: View {
       }
     }
   }
-
 }
-
-// MARK: - Feature Tip View
 
 struct FeatureTipView: View {
   let icon: String

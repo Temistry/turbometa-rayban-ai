@@ -6,14 +6,6 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-//
-// RegistrationView.swift
-//
-// Background view that handles callbacks from the Meta AI mobile app during
-// DAT SDK registration and permission flows. This invisible view processes deep links
-// that complete the OAuth authorization process initiated by the DAT SDK.
-//
-
 import MWDATCore
 import SwiftUI
 
@@ -22,25 +14,29 @@ struct RegistrationView: View {
 
   var body: some View {
     EmptyView()
-      // Handle callback URLs from the Meta mobile app
-      // This is essential for completing DAT SDK registration and permission flows
       .onOpenURL { url in
         guard
           let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-          // Check if this URL is related to DAT SDK workflows (contains metaWearablesAction query param)
           components.queryItems?.contains(where: { $0.name == "metaWearablesAction" }) == true
         else {
-          return // URL is not related to DAT SDK - ignore it
+          print("[Registration][INFO] DAT SDK와 무관한 URL 콜백 무시 scheme=\(url.scheme ?? "-") host=\(url.host ?? "-")")
+          return
         }
+
+        print("[Registration][INFO] Meta DAT SDK 콜백 수신 scheme=\(url.scheme ?? "-") queryItemCount=\(components.queryItems?.count ?? 0)")
+
         Task {
           do {
-            // Pass the callback URL to the DAT SDK for processing
-            // This handles registration completion and permission grant responses
             _ = try await Wearables.shared.handleUrl(url)
+            print("[Registration][INFO] Meta DAT SDK 콜백 처리 성공")
           } catch let error as RegistrationError {
+            print("[Registration][ERROR] 등록 오류 description=\(error.description)")
             viewModel.showError(error.description)
           } catch {
-            viewModel.showError("Unknown error: \(error.localizedDescription)")
+            let nsError = error as NSError
+            let message = "등록 처리 중 오류가 발생했습니다. \(error.localizedDescription)"
+            print("[Registration][ERROR] 알 수 없는 등록 오류 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) userInfo=\(nsError.userInfo)")
+            viewModel.showError(message)
           }
         }
       }

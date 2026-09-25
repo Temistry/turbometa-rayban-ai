@@ -21,7 +21,6 @@ struct MainAppView: View {
   let wearables: WearablesInterface
   @ObservedObject private var viewModel: WearablesViewModel
   @StateObject private var streamViewModel: StreamSessionViewModel
-  @StateObject private var quickVisionManager = QuickVisionManager.shared
   @State private var permissionsGranted = false
   @State private var hasCheckedPermissions = false
 
@@ -42,20 +41,7 @@ struct MainAppView: View {
         }
       } else {
         // 权限已检查，显示主界面
-        MainTabView(streamViewModel: streamViewModel, wearablesViewModel: viewModel)
-          .onAppear {
-            // 设置 QuickVisionManager 的 StreamViewModel 引用
-            quickVisionManager.setStreamViewModel(streamViewModel)
-
-            // 设置 OpenClaw Node 命令路由
-            let router = OpenClawCommandRouter(streamViewModel: streamViewModel)
-            OpenClawNodeService.shared.setCommandRouter(router)
-
-            // 如果之前启用了 OpenClaw，自动重连
-            if OpenClawNodeService.shared.isEnabled {
-              OpenClawNodeService.shared.connect()
-            }
-          }
+        MeetingModeView(streamViewModel: streamViewModel)
       }
     } else {
       // 未注册 - 显示注册/引导流程

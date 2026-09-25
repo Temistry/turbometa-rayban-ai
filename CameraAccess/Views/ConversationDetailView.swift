@@ -1,6 +1,5 @@
 /*
- * Conversation Detail View
- * 对话详情页面
+ * Live AI 대화 상세 화면
  */
 
 import SwiftUI
@@ -12,8 +11,7 @@ struct ConversationDetailView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                AppColors.secondaryBackground
-                    .ignoresSafeArea()
+                AppColors.secondaryBackground.ignoresSafeArea()
 
                 ScrollView {
                     LazyVStack(spacing: AppSpacing.md) {
@@ -25,36 +23,21 @@ struct ConversationDetailView: View {
                     .padding()
                 }
             }
-            .navigationTitle("对话详情")
+            .navigationTitle("대화 상세")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完成") {
-                        dismiss()
-                    }
+                    Button("완료") { dismiss() }
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                // Conversation info
-                VStack(spacing: AppSpacing.sm) {
-                    HStack {
-                        Image(systemName: "clock")
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                        Text(conversation.formattedDate)
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textSecondary)
-
-                        Spacer()
-
-                        Image(systemName: "bubble.left.and.bubble.right")
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                        Text("\(conversation.messageCount) 条消息")
-                            .font(AppTypography.caption)
-                            .foregroundColor(AppColors.textSecondary)
-                    }
+                HStack {
+                    Label(conversation.formattedDate, systemImage: "clock")
+                    Spacer()
+                    Label("메시지 \(conversation.messageCount)개", systemImage: "bubble.left.and.bubble.right")
                 }
+                .font(AppTypography.caption)
+                .foregroundColor(AppColors.textSecondary)
                 .padding(AppSpacing.md)
                 .background(AppColors.tertiaryBackground.opacity(0.95))
             }

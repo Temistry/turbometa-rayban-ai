@@ -136,8 +136,7 @@ class ViewModelIntegrationTests: XCTestCase {
     XCTAssertTrue([.streaming, .waiting].contains(viewModel.streamingStatus))
 
     // Capture photo while streaming
-    viewModel.capturePhoto()
-    try await Task.sleep(nanoseconds: 10_000_000_000)
+    await viewModel.capturePhoto()
 
     // Verify photo captured while maintaining stream (allow for some timing flexibility)
     XCTAssertTrue(viewModel.capturedPhoto != nil)

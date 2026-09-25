@@ -1,6 +1,6 @@
 /*
  * Main Tab View
- * 主 Tab 导航视图
+ * 한국어 전용 하단 탭과 Google Gemini 단일 인증 경로를 구성한다.
  */
 
 import SwiftUI
@@ -10,42 +10,57 @@ struct MainTabView: View {
     @ObservedObject var wearablesViewModel: WearablesViewModel
 
     @State private var selectedTab = 0
+    @ObservedObject private var galvisLaunchCoordinator = GalvisLaunchCoordinator.shared
 
-    // Read API Key from secure storage
     private var apiKey: String {
-        APIKeyManager.shared.getAPIKey() ?? ""
+        APIKeyManager.shared.getGoogleAPIKey() ?? ""
     }
 
     var body: some View {
         TabView(selection: $selectedTab) {
-            // Home - Feature entry
-            TurboMetaHomeView(streamViewModel: streamViewModel, wearablesViewModel: wearablesViewModel, apiKey: apiKey)
-                .tabItem {
-                    Label("tab.home".localized, systemImage: "house.fill")
-                }
-                .tag(0)
+            TurboMetaHomeView(
+                streamViewModel: streamViewModel,
+                wearablesViewModel: wearablesViewModel,
+                apiKey: apiKey
+            )
+            .tabItem {
+                Label("tab.home".localized, systemImage: "house.fill")
+            }
+            .tag(0)
 
-            // Records
             RecordsView()
                 .tabItem {
                     Label("tab.records".localized, systemImage: "list.bullet.rectangle")
                 }
                 .tag(1)
 
-            // Gallery
             GalleryView()
                 .tabItem {
                     Label("tab.gallery".localized, systemImage: "photo.on.rectangle")
                 }
                 .tag(2)
 
-            // Settings
-            SettingsView(streamViewModel: streamViewModel, apiKey: apiKey)
+            UnifiedSettingsView(streamViewModel: streamViewModel)
                 .tabItem {
                     Label("tab.settings".localized, systemImage: "person.fill")
                 }
                 .tag(3)
         }
         .accentColor(AppColors.primary)
+        .fullScreenCover(
+            isPresented: $galvisLaunchCoordinator.isOpenClawChatPresented,
+            onDismiss: { galvisLaunchCoordinator.dismissOpenClawChat() }
+        ) {
+            OpenClawChatView(
+                streamViewModel: streamViewModel,
+                selectedMessageID: galvisLaunchCoordinator.selectedOpenClawMessageID
+            )
+        }
+        .fullScreenCover(
+            isPresented: $galvisLaunchCoordinator.isOpenClawSessionPresented,
+            onDismiss: { galvisLaunchCoordinator.dismissOpenClawSession() }
+        ) {
+            GalvisOpenClawSessionView(streamViewModel: streamViewModel)
+        }
     }
 }
