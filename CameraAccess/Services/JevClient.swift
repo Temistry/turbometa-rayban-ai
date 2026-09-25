@@ -38,7 +38,6 @@ struct JevUtteranceDecision: Equatable {
     }
 }
 
-enum JevClientError: Error, Equatable {
 /// 상대 발언 1차 판단: 허점 분석을 할지와 종류.
 struct JevCatchDecision: Equatable {
     static let kinds = ["unsupported", "leap", "contradiction", "claim", "none"]
