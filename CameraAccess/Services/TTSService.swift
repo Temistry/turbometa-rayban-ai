@@ -8,6 +8,162 @@
 import AVFoundation
 import Foundation
 
+/// 귓속말을 들려줄 귀. 스테레오 출력(안경·에어팟 A2DP)일 때만 한쪽으로 보낼 수 있다.
+enum WhisperSide: String, CaseIterable, Identifiable {
+    case right
+    case left
+    case both
+
+    static let storageKey = "meeting.whisperSide"
+
+    var id: String { rawValue }
+    var titleKey: String { "settings.whisper.\(rawValue)" }
+
+    var pan: Float {
+        switch self {
+        case .right: return 1
+        case .left: return -1
+        case .both: return 0
+        }
+    }
+
+    static func resolve(stored: String?) -> WhisperSide {
+        stored.flatMap(WhisperSide.init(rawValue:)) ?? .right
+    }
+
+    static var current: WhisperSide {
+        resolve(stored: UserDefaults.standard.string(forKey: storageKey))
+    }
+}
+
+/// 합성 음성 버퍼를 받아 한쪽 채널로만 재생한다. 버퍼 순서를 지키려고 전용 직렬 큐에서 다룬다.
+final class PannedSpeechPlayer {
+    private let queue = DispatchQueue(label: "tts.panned-speech")
+    private let engine = AVAudioEngine()
+    private let player = AVAudioPlayerNode()
+    private var connectedFormat: AVAudioFormat?
+    private var token = UUID()
+    private var pending = 0
+    private var synthesisDone = false
+    private var started = false
+    private var pan: Float = 0
+    private var volume: Float = 1
+
+    /// 메인 스레드에서 호출된다.
+    var onStart: (() -> Void)?
+    /// 메인 스레드에서 호출된다. 참이면 끝까지 재생했다.
+    var onFinish: ((Bool) -> Void)?
+
+    init() {
+        engine.attach(player)
+    }
+
+    func begin(pan: Float, volume: Float) -> UUID {
+        let newToken = UUID()
+        queue.sync {
+            resetPlayback()
+            token = newToken
+            self.pan = pan
+            self.volume = volume
+        }
+        return newToken
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer, token: UUID) {
+        queue.async { [weak self] in
+            guard let self, token == self.token else { return }
+            guard buffer.frameLength > 0 else {
+                self.synthesisDone = true
+                if self.pending == 0 { self.complete(success: self.started) }
+                return
+            }
+            guard let floatBuffer = Self.floatBuffer(from: buffer) else {
+                self.complete(success: false)
+                return
+            }
+            if self.connectedFormat != floatBuffer.format {
+                self.engine.stop()
+                self.engine.disconnectNodeOutput(self.player)
+                self.engine.connect(self.player, to: self.engine.mainMixerNode, format: floatBuffer.format)
+                self.connectedFormat = floatBuffer.format
+            }
+            self.player.pan = self.pan
+            self.player.volume = self.volume
+            if !self.engine.isRunning {
+                do {
+                    self.engine.prepare()
+                    try self.engine.start()
+                } catch {
+                    DeveloperConsole.shared.log(.warning, category: "MeetingTTS", "panned engine failed code=\((error as NSError).code)")
+                    self.complete(success: false)
+                    return
+                }
+            }
+            self.pending += 1
+            self.player.scheduleBuffer(floatBuffer, completionCallbackType: .dataPlayedBack) { [weak self] _ in
+                self?.queue.async {
+                    guard let self, token == self.token else { return }
+                    self.pending -= 1
+                    if self.synthesisDone && self.pending == 0 { self.complete(success: true) }
+                }
+            }
+            if !self.player.isPlaying { self.player.play() }
+            if !self.started {
+                self.started = true
+                DispatchQueue.main.async { [weak self] in self?.onStart?() }
+            }
+        }
+    }
+
+    func stop() {
+        queue.async { [weak self] in
+            self?.token = UUID()
+            self?.resetPlayback()
+        }
+    }
+
+    /// 합성이 끝났다는 신호(마지막 빈 버퍼가 오지 않는 경우 대비).
+    func finishSynthesis(token: UUID) {
+        queue.async { [weak self] in
+            guard let self, token == self.token, !self.synthesisDone else { return }
+            self.synthesisDone = true
+            if self.pending == 0 { self.complete(success: self.started) }
+        }
+    }
+
+    private func complete(success: Bool) {
+        token = UUID()
+        resetPlayback()
+        DispatchQueue.main.async { [weak self] in self?.onFinish?(success) }
+    }
+
+    private func resetPlayback() {
+        player.stop()
+        if engine.isRunning { engine.stop() }
+        pending = 0
+        synthesisDone = false
+        started = false
+    }
+
+    private static func floatBuffer(from buffer: AVAudioPCMBuffer) -> AVAudioPCMBuffer? {
+        if buffer.format.commonFormat == .pcmFormatFloat32, !buffer.format.isInterleaved {
+            return buffer
+        }
+        guard let target = AVAudioFormat(standardFormatWithSampleRate: buffer.format.sampleRate,
+                                         channels: buffer.format.channelCount),
+              let converter = AVAudioConverter(from: buffer.format, to: target),
+              let output = AVAudioPCMBuffer(pcmFormat: target, frameCapacity: buffer.frameLength) else {
+            return nil
+        }
+        do {
+            try converter.convert(to: output, from: buffer)
+            return output
+        } catch {
+            return nil
+        }
+    }
+}
+
 @MainActor
 final class TTSService: NSObject, ObservableObject {
     enum PlaybackState: Equatable {
@@ -53,6 +209,17 @@ final class TTSService: NSObject, ObservableObject {
     private let synthesizer = AVSpeechSynthesizer()
     private var currentUtterance: AVSpeechUtterance?
     private var currentRequestID: UUID?
+    private let pannedPlayer = PannedSpeechPlayer()
+    private var pannedRequestID: UUID?
+    private var pannedUtterance: AVSpeechUtterance?
+    private var pannedToken: UUID?
+    /// 한쪽 귀 재생이 이 시간 안에 끝나지 않으면 강제로 끝낸다(귓속말이 막히지 않게).
+    static let pannedWatchdog: TimeInterval = 20
+
+    /// 한쪽 귀로 보낼 수 있는 스테레오 출력인지.
+    nonisolated static func supportsStereoPan(outputs: [AVAudioSession.Port]) -> Bool {
+        outputs.contains { $0 == .bluetoothA2DP || $0 == .headphones || $0 == .bluetoothLE }
+    }
 
     private override init() {
         super.init()
@@ -73,7 +240,7 @@ final class TTSService: NSObject, ObservableObject {
     /// 발화 요청을 queue에 넣고 UI와 세션 handoff에서 추적할 request ID를 반환한다.
     /// 회의 통역기 귓속말처럼 낮은 음량 재생이 필요할 때 volume을 지정한다.
     @discardableResult
-    func enqueue(_ text: String, volume: Float = 1.0, preserveRecordingSession: Bool = false) -> UUID? {
+    func enqueue(_ text: String, volume: Float = 1.0, preserveRecordingSession: Bool = false, pan: Float = 0) -> UUID? {
         let normalizedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedText.isEmpty else {
             print("[TTS][WARN] 빈 문자열 음성 요청 무시")
@@ -104,6 +271,12 @@ final class TTSService: NSObject, ObservableObject {
         utterance.volume = min(max(volume, 0), 1)
         utterance.pitchMultiplier = 1.0
 
+        let outputs = AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portType)
+        if pan != 0, preserveRecordingSession, Self.supportsStereoPan(outputs: outputs) {
+            startPannedSpeech(utterance, requestID: requestID, pan: pan)
+            return requestID
+        }
+
         currentRequestID = requestID
         currentUtterance = utterance
         playbackState = .queued(requestID)
@@ -117,7 +290,50 @@ final class TTSService: NSObject, ObservableObject {
         return requestID
     }
 
+    /// 합성 결과를 버퍼로 받아 한쪽 귀로만 재생한다. 상태 흐름은 일반 재생과 같다(대기 → 재생 → 완료/실패).
+    private func startPannedSpeech(_ utterance: AVSpeechUtterance, requestID: UUID, pan: Float) {
+        currentRequestID = requestID
+        currentUtterance = nil
+        pannedRequestID = requestID
+        playbackState = .queued(requestID)
+        scheduleStartTimeout(requestID: requestID)
+        print("[TTS][QUEUE] 한쪽 귀 재생 요청 request=\(logID(requestID)) pan=\(pan)")
+
+        let player = pannedPlayer
+        let token = player.begin(pan: pan, volume: utterance.volume)
+        pannedUtterance = utterance
+        pannedToken = token
+        player.onStart = { [weak self] in
+            guard let self, self.pannedRequestID == requestID else { return }
+            self.playbackState = .speaking(requestID)
+        }
+        player.onFinish = { [weak self] success in
+            guard let self, self.pannedRequestID == requestID else { return }
+            self.pannedRequestID = nil
+            self.currentRequestID = nil
+            self.playbackState = success ? .idle : .failed(requestID)
+            print("[TTS][INFO] 한쪽 귀 재생 \(success ? "완료" : "실패") request=\(self.logID(requestID))")
+        }
+        synthesizer.write(utterance) { buffer in
+            guard let pcm = buffer as? AVAudioPCMBuffer else { return }
+            player.append(pcm, token: token)
+        }
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(Self.pannedWatchdog * 1_000_000_000))
+            guard let self, self.pannedRequestID == requestID else { return }
+            print("[TTS][WARN] 한쪽 귀 재생 시간 초과, 강제 종료 request=\(self.logID(requestID))")
+            self.pannedRequestID = nil
+            self.currentRequestID = nil
+            self.pannedPlayer.stop()
+            self.playbackState = .idle
+        }
+    }
+
     func stop() {
+        if pannedRequestID != nil {
+            pannedRequestID = nil
+            pannedPlayer.stop()
+        }
         guard currentRequestID != nil || synthesizer.isSpeaking || synthesizer.isPaused else {
             playbackState = .idle
             return
@@ -145,6 +361,10 @@ final class TTSService: NSObject, ObservableObject {
                   self.playbackState == .queued(requestID) else { return }
             self.currentRequestID = nil
             self.currentUtterance = nil
+            if self.pannedRequestID == requestID {
+                self.pannedRequestID = nil
+                self.pannedPlayer.stop()
+            }
             self.playbackState = .failed(requestID)
             self.synthesizer.stopSpeaking(at: .immediate)
             print("[TTS][ERROR] iOS 한국어 음성 시작 timeout request=\(self.logID(requestID))")
@@ -230,6 +450,11 @@ extension TTSService: AVSpeechSynthesizerDelegate {
     ) {
         Task { @MainActor [weak self, weak utterance] in
             guard let self, let utterance else { return }
+            if self.pannedUtterance === utterance, let token = self.pannedToken {
+                self.pannedUtterance = nil
+                self.pannedPlayer.finishSynthesis(token: token)
+                return
+            }
             self.finishSpeech(utterance: utterance, outcome: "재생 완료")
         }
     }

@@ -142,6 +142,49 @@ final class MeetingGeminiService {
     }
 
     func factCheck(claim: String) async throws -> MeetingFactCheckResult {
+        let result = try await factCheckRaw(claim: claim)
+        return result
+    }
+
+    /// 상대의 새 발언에서 허점을 찾는다. 최대 2개, 확실하지 않으면 빈 목록.
+    func critique(statement: String, earlierOther: [String], mine: [String],
+                  hint: String, speakerKnown: Bool) async throws -> [ConversationCatch] {
+        let body = Self.critiqueRequestBody(statement: statement, earlierOther: earlierOther,
+                                            mine: mine, hint: hint, speakerKnown: speakerKnown)
+        let responseObject = try await post(body, timeout: 20, lane: "critique")
+        guard let raw = Self.parseText(responseObject) else {
+            DeveloperConsole.shared.log(.warning, category: "MeetingCatch", "unparseable \(Self.diagnosticMetadata(responseObject))")
+            throw MeetingGeminiError.invalidResponse
+        }
+        return ConversationCatchParser.parse(raw, speakerKnown: speakerKnown)
+    }
+
+    static func critiqueRequestBody(statement: String, earlierOther: [String], mine: [String],
+                                    hint: String, speakerKnown: Bool) -> [String: Any] {
+        let target = speakerKnown ? "상대" : "대화 참여자(화자 미확인)"
+        let prompt = """
+        당신은 대화를 날카롭게 검토하는 토론 코치다. 아래 '\(target)의 새 발언'에서만 다음을 찾는다.
+        - unsupported: 근거 없이 단정한다("다들", "무조건", "당연히" 등).
+        - leap: 논리 비약(성급한 일반화, 상관을 인과로 착각, 권위·다수에 기댐, 거짓 양자택일 등).
+        - contradiction: 같은 사람의 이전 발언과 충돌한다.
+        - claim: 웹에서 확인할 수 있는 수치·통계·사실 주장이다.
+        확실하지 않으면 찾지 않는다. 사소한 말버릇이나 의견 표현은 제외한다. 최대 2개.
+        quote는 새 발언에서 그대로 인용(40자 이내), point는 무엇이 문제인지 한국어 1문장(40자 이내),
+        ask는 착용자가 상대에게 정중하게 되물을 질문 1문장(35자 이내). contradiction이면 point에 이전 발언을 짧게 적는다.
+        출력은 JSON 하나만: {"catches":[{"kind":"unsupported|leap|contradiction|claim","quote":"","point":"","ask":"","confidence":0.0}]}
+        찾은 것이 없으면 {"catches":[]}.
+        \(target)의 이전 발언: \(earlierOther.isEmpty ? "(없음)" : earlierOther.joined(separator: " / "))
+        착용자의 최근 발언(참고용, 검토 대상 아님): \(mine.isEmpty ? "(없음)" : mine.joined(separator: " / "))
+        1차 판단: \(hint)
+        \(target)의 새 발언: \(statement)
+        """
+        return [
+            "contents": [["parts": [["text": prompt]]]],
+            "generationConfig": generationConfig(maxOutputTokens: 1024, json: true)
+        ]
+    }
+
+    private func factCheckRaw(claim: String) async throws -> MeetingFactCheckResult {
         let prompt = """
         아래 회의 발언 주장의 진위를 웹에서 조사한다. 요약은 한국어 1~2문장으로 +        '지지 근거 N건', '반박 근거 N건', '판단 불가' 중 하나로 시작한다.
         발언: \(claim)
@@ -409,11 +452,13 @@ final class GeminiUsageLedger {
     private let lock = NSLock()
     private var totals: [String: GeminiUsage] = [:]
     private var requests: [String: Int] = [:]
+    private var audioSeconds: [String: Double] = [:]
 
     func reset() {
         lock.lock()
         totals.removeAll()
         requests.removeAll()
+        audioSeconds.removeAll()
         lock.unlock()
     }
 
@@ -424,8 +469,20 @@ final class GeminiUsageLedger {
         lock.unlock()
     }
 
+    /// 오디오 길이로 과금되는 요청(화자 구분).
+    func recordAudio(lane: String, seconds: Double) {
+        lock.lock()
+        audioSeconds[lane, default: 0] += seconds
+        requests[lane, default: 0] += 1
+        lock.unlock()
+    }
+
     static func estimatedCost(_ usage: GeminiUsage) -> Double {
         (Double(usage.input) * inputPricePerMillion + Double(usage.output) * outputPricePerMillion) / 1_000_000
+    }
+
+    static func estimatedAudioCost(seconds: Double) -> Double {
+        seconds / 60 * SpeakerDiarizationService.pricePerMinute
     }
 
     /// 예: "requests=42 in=51200 out=8300(thoughts=5100) cost≈$0.0695 lanes=scene:30,whisper:10,fact:2"
@@ -433,13 +490,14 @@ final class GeminiUsageLedger {
         lock.lock()
         let totals = self.totals
         let requests = self.requests
+        let audio = self.audioSeconds.values.reduce(0, +)
         lock.unlock()
 
         var all = GeminiUsage()
         for usage in totals.values { all += usage }
         let count = requests.values.reduce(0, +)
         let lanes = requests.keys.sorted().map { "\($0):\(requests[$0] ?? 0)" }.joined(separator: ",")
-        let cost = String(format: "%.4f", Self.estimatedCost(all))
-        return "requests=\(count) in=\(all.input) out=\(all.output)(thoughts=\(all.thoughts)) cost≈$\(cost) lanes=\(lanes.isEmpty ? "-" : lanes)"
+        let cost = String(format: "%.4f", Self.estimatedCost(all) + Self.estimatedAudioCost(seconds: audio))
+        return "requests=\(count) in=\(all.input) out=\(all.output)(thoughts=\(all.thoughts)) audio=\(Int(audio))s cost≈$\(cost) lanes=\(lanes.isEmpty ? "-" : lanes)"
     }
 }

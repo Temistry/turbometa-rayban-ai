@@ -106,6 +106,7 @@ jobs:
             -only-testing:CameraAccessTests/MeetingArchiveTests \
             -only-testing:CameraAccessTests/MeetingLexiconTests \
             -only-testing:CameraAccessTests/WatchPayloadTests \
+            -only-testing:CameraAccessTests/ConversationCatchTests \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
             'SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG MEETING_LOGIC_TESTS' \
             2>&1 | tee meeting-tests.log

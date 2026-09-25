@@ -72,10 +72,15 @@ struct MeetingStatusView: View {
                         .foregroundStyle(.yellow)
                 }
 
-                VStack(alignment: .leading, spacing: 5) {
-                    ForEach(Array(link.recent.suffix(3).enumerated().reversed()), id: \.offset) { _, text in
-                        Text(text)
+                if link.catches.isEmpty {
+                    if link.state == "listening" {
+                        Text("짚을 점을 찾는 중")
                             .font(.footnote)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    ForEach(link.catches, id: \.self) { entry in
+                        CatchCard(entry: entry)
                     }
                 }
 
@@ -109,5 +114,49 @@ struct MeetingStatusView: View {
     static func elapsedText(since date: Date) -> String {
         let total = max(0, Int(Date().timeIntervalSince(date)))
         return String(format: "%02d:%02d:%02d", total / 3600, (total % 3600) / 60, total % 60)
+    }
+}
+
+private struct CatchCard: View {
+    let entry: [String: String]
+
+    private var kind: String { entry[WatchMeetingStatus.catchKind] ?? "" }
+
+    private var tint: Color {
+        switch kind {
+        case "unsupported": return .orange
+        case "leap": return .purple
+        case "contradiction": return .red
+        case "claim": return .blue
+        default: return .gray
+        }
+    }
+
+    private var symbol: String {
+        switch kind {
+        case "unsupported": return "questionmark.bubble"
+        case "leap": return "arrow.up.right.circle"
+        case "contradiction": return "arrow.left.arrow.right.circle"
+        case "claim": return "magnifyingglass.circle"
+        default: return "exclamationmark.circle"
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(entry[WatchMeetingStatus.catchTitle] ?? "", systemImage: symbol)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(tint)
+            Text(entry[WatchMeetingStatus.catchPoint] ?? "")
+                .font(.footnote)
+            if let ask = entry[WatchMeetingStatus.catchAsk], !ask.isEmpty {
+                Text(ask)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(8)
+        .background(RoundedRectangle(cornerRadius: 10).fill(tint.opacity(0.15)))
     }
 }

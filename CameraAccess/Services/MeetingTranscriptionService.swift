@@ -154,6 +154,8 @@ final class MeetingTranscriptionService: ObservableObject {
     var onInputQuality: ((MeetingInputWindow?, Bool) -> Void)?
     /// 회의 시작 전에 설정한다. start() 이후 바꾸면 다음 세션 구성부터 적용된다.
     var micMode: MeetingMicMode = .phone
+    /// 화자 구분용 16kHz 조각 버퍼. 입력 탭 설치 시점의 값을 쓴다.
+    var diarizationSink: DiarizationAudioBuffer?
     /// 시각 보조가 뽑은 화면 용어. 인식 작업 시작 시 contextualStrings로 주입된다.
     var contextualTerms: [String] = []
     /// 설정되면 입력 오디오를 이 파일에 원본으로 기록한다.
@@ -384,10 +386,12 @@ final class MeetingTranscriptionService: ObservableObject {
 
         let audioFileBox = self.audioFileBox
         let inputMeter = self.inputMeter
+        let diarizationSink = self.diarizationSink
         inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak request] buffer, _ in
             request?.append(buffer)
             audioFileBox.write(buffer)
             inputMeter.add(buffer)
+            diarizationSink?.append(buffer)
         }
         hasInputTap = true
 

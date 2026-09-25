@@ -17,6 +17,8 @@ struct UnifiedSettingsView: View {
 
     @State private var showGoogleAPIKeySettings = false
     @State private var showJevAPIKeySettings = false
+    @State private var showVoiceEnrollment = false
+    @State private var isVoiceEnrolled = VoiceEnrollmentStore.isEnrolled
     @State private var showQuickVisionSettings = false
     @State private var showOpenClawSettings = false
     @State private var showKnowledgeFolderPicker = false
@@ -27,6 +29,14 @@ struct UnifiedSettingsView: View {
     @State private var hasJevAPIKey = false
     @AppStorage(MeetingSceneMode.storageKey) private var sceneModeRaw = ""
     @AppStorage(MeetingMicMode.storageKey) private var micModeRaw = MeetingMicMode.phone.rawValue
+    @AppStorage(WhisperSide.storageKey) private var whisperSideRaw = WhisperSide.right.rawValue
+
+    private var whisperSide: Binding<WhisperSide> {
+        Binding(
+            get: { WhisperSide.resolve(stored: whisperSideRaw) },
+            set: { whisperSideRaw = $0.rawValue }
+        )
+    }
 
     private var micMode: Binding<MeetingMicMode> {
         Binding(
@@ -74,6 +84,12 @@ struct UnifiedSettingsView: View {
             }
             .onChange(of: showJevAPIKeySettings) { isShowing in
                 if !isShowing { refreshAPIKeyStatus() }
+            }
+            .sheet(isPresented: $showVoiceEnrollment) {
+                VoiceEnrollmentView()
+            }
+            .onChange(of: showVoiceEnrollment) { isShowing in
+                if !isShowing { isVoiceEnrolled = VoiceEnrollmentStore.isEnrolled }
             }
             .sheet(isPresented: $showQuickVisionSettings) {
                 QuickVisionSettingsView()
@@ -248,6 +264,24 @@ struct UnifiedSettingsView: View {
                 valueColor: hasJevAPIKey ? .green : .red
             ) {
                 showJevAPIKeySettings = true
+            }
+
+            UnifiedSettingsRow(
+                icon: "person.wave.2",
+                iconColor: .teal,
+                title: "settings.voice".localized,
+                value: isVoiceEnrolled
+                    ? "settings.voice.enrolled".localized
+                    : "settings.voice.missing".localized,
+                valueColor: isVoiceEnrolled ? .green : .orange
+            ) {
+                showVoiceEnrollment = true
+            }
+
+            Picker("settings.whisper".localized, selection: whisperSide) {
+                ForEach(WhisperSide.allCases) { side in
+                    Text(side.titleKey.localized).tag(side)
+                }
             }
 
             Picker(selection: sceneMode) {

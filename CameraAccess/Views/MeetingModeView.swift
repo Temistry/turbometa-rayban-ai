@@ -51,7 +51,7 @@ struct MeetingModeView: View {
             }
         }
         .sheet(isPresented: $showFactSheet) {
-            MeetingFactSheet(cards: viewModel.factCards)
+            MeetingFactSheet(catches: viewModel.catches, cards: viewModel.factCards)
         }
         .sheet(isPresented: $showSettings) {
             NavigationView {
@@ -89,22 +89,22 @@ struct MeetingModeView: View {
             .accessibilityLabel("meeting.archive.title".localized)
             .padding(.trailing, 2)
 
-            if !viewModel.factCards.isEmpty {
+            if !viewModel.factCards.isEmpty || !viewModel.catches.isEmpty {
                 Button {
                     showFactSheet = true
                 } label: {
                     HStack(spacing: 4) {
-                        Image(systemName: "checkmark.seal")
-                        Text("\(viewModel.factCards.count)")
+                        Image(systemName: "exclamationmark.bubble")
+                        Text("\(viewModel.factCards.count + viewModel.catches.count)")
                             .monospacedDigit()
                     }
                     .font(.footnote.weight(.semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 5)
-                    .background(Capsule().fill(Color.blue.opacity(0.55)))
+                    .background(Capsule().fill(Color.orange.opacity(0.6)))
                 }
-                .accessibilityLabel("meeting.fact.badge".localized)
+                .accessibilityLabel("meeting.catch.title".localized)
             }
 
             Button {
@@ -407,12 +407,16 @@ private struct MeetingFactCardView: View {
 }
 
 private struct MeetingFactSheet: View {
+    let catches: [ConversationCatch]
     let cards: [MeetingInterpreterViewModel.FactCard]
 
     var body: some View {
         NavigationView {
             ScrollView {
                 LazyVStack(spacing: 10) {
+                    ForEach(catches) { item in
+                        MeetingCatchCardView(item: item)
+                    }
                     ForEach(cards) { card in
                         MeetingFactCardView(card: card)
                     }
@@ -420,10 +424,56 @@ private struct MeetingFactSheet: View {
                 .padding(16)
             }
             .background(Color.black.ignoresSafeArea())
-            .navigationTitle("meeting.fact.card".localized)
+            .navigationTitle("meeting.catch.title".localized)
             .navigationBarTitleDisplayMode(.inline)
         }
         .preferredColorScheme(.dark)
+    }
+}
+
+private struct MeetingCatchCardView: View {
+    let item: ConversationCatch
+
+    private var tint: Color {
+        switch item.kind {
+        case .unsupported: return .orange
+        case .leap: return .purple
+        case .contradiction: return .red
+        case .claim: return .blue
+        }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: item.kind.symbol)
+                Text(item.kind.titleKey.localized)
+                Spacer()
+                Text(item.timestamp, style: .time)
+                    .foregroundColor(.white.opacity(0.5))
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundColor(tint)
+
+            if !item.quote.isEmpty {
+                Text("“\(item.quote)”")
+                    .font(.subheadline)
+                    .italic()
+                    .foregroundColor(.white.opacity(0.9))
+            }
+            Text(item.point)
+                .font(.subheadline)
+                .foregroundColor(.white)
+            if !item.ask.isEmpty {
+                Label(item.ask, systemImage: "arrowshape.turn.up.left")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.75))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 12).fill(tint.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(tint.opacity(0.4)))
     }
 }
 

@@ -31,7 +31,7 @@ final class WatchBridgeService: NSObject, ObservableObject {
 
     func update(state: String, route: String, startedAt: Date?, latest: String,
                 recent: [String], whisperCount: Int, error: String, quotaPaused: Bool,
-                scene: String = "", micQuiet: Bool = false) {
+                scene: String = "", micQuiet: Bool = false, catches: [[String: String]] = []) {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
         let payload = WatchMeetingStatus.payload(
             state: state,
@@ -43,7 +43,8 @@ final class WatchBridgeService: NSObject, ObservableObject {
             error: error,
             quotaPaused: quotaPaused,
             scene: scene,
-            micQuiet: micQuiet
+            micQuiet: micQuiet,
+            catches: catches
         )
         send(payload)
     }

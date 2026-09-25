@@ -20,6 +20,12 @@ enum MeetingPolicy {
     static let explainQuotaPause: TimeInterval = 120
     /// Gemini 429 이후 근거 검색을 쉬는 시간(초).
     static let factQuotaPause: TimeInterval = 300
+    /// 화자 구분 조각 길이(초). 허점 알림은 이만큼 늦게 온다.
+    static let diarizationInterval: TimeInterval = 30
+    /// 이 확신도 이상인 허점만 귓속말한다. 나머지는 워치·알림·화면에만 남긴다.
+    static let catchWhisperConfidence = 0.7
+    /// 화자 구분·허점 분석 429 이후 쉬는 시간(초).
+    static let catchQuotaPause: TimeInterval = 120
 
     /// 자주 나오는 비즈니스·개발 용어와 약어. 전부 소문자로 저장한다.
     static let lexiconTerms: Set<String> = [
@@ -139,6 +145,11 @@ final class MeetingInterpreterViewModel: ObservableObject {
         didSet { if isInputQuiet != oldValue { syncWatch(force: true) } }
     }
     @Published private(set) var detailBubble: DetailBubble?
+    /// 상대 발언에서 잡아낸 허점(최신이 앞).
+    @Published private(set) var catches: [ConversationCatch] = []
+
+    /// 대화 중이면 목소리 등록을 막는다(같은 마이크·오디오 세션을 쓰기 때문).
+    static private(set) var isConversationActive = false
 
     let streamViewModel: StreamSessionViewModel
 
@@ -174,6 +185,20 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private var explainPausedUntil: Date?
     private var factPausedUntil: Date?
     private var detailTask: Task<Void, Never>?
+    private let diarizer = SpeakerDiarizationService()
+    private let diarizationBuffer = DiarizationAudioBuffer()
+    private let catchNotifier = CatchNotifier()
+    private var enrollmentSamples: [Int16]?
+    private var diarizationTask: Task<Void, Never>?
+    private var otherHistory: [String] = []
+    private var myHistory: [String] = []
+    private var catchPausedUntil: Date?
+    private var lastDiarizationSuccessAt = Date.distantPast
+
+    /// 화자 구분이 최근에 성공했으면 사실 확인은 상대 발언 기준(느린 흐름)으로만 한다.
+    private var isDiarizationActive: Bool {
+        Date().timeIntervalSince(lastDiarizationSuccessAt) < 90
+    }
 
     private var isExplainPaused: Bool {
         Date() < (explainPausedUntil ?? .distantPast)
@@ -277,6 +302,17 @@ final class MeetingInterpreterViewModel: ObservableObject {
         // 설정 변경이 앱 재실행 없이 다음 회의부터 적용되도록 시작할 때마다 구성한다.
         configureVisualAssist(for: MeetingSceneMode.current)
         GeminiUsageLedger.shared.reset()
+        enrollmentSamples = VoiceEnrollmentStore.load()
+        diarizationBuffer.reset()
+        transcription.diarizationSink = diarizationBuffer
+        catches.removeAll()
+        otherHistory.removeAll()
+        myHistory.removeAll()
+        catchPausedUntil = nil
+        lastDiarizationSuccessAt = .distantPast
+        catchNotifier.requestAuthorizationIfNeeded()
+        Self.isConversationActive = true
+        DeveloperConsole.shared.log(.info, category: "MeetingDiarize", "enrolled=\(enrollmentSamples != nil)")
         transcription.micMode = MeetingMicMode.current
         isInputQuiet = false
 
@@ -301,6 +337,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 inputRouteName = transcription.inputRouteName
                 runState = .listening
                 visualAssist?.start()
+                startDiarizationLoop()
                 syncWatch(force: true)
             } catch {
                 guard generation == self.generation, !Task.isCancelled else { return }
@@ -362,6 +399,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
         detailBubble = nil
         syncWatch(force: true)
         DeveloperConsole.shared.log(.info, category: "MeetingCost", GeminiUsageLedger.shared.summary())
+        diarizationTask?.cancel()
+        diarizationTask = nil
+        Self.isConversationActive = false
         let assistToStop = visualAssist
         Task {
             await pendingStart?.value
@@ -446,7 +486,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
             jevReady = true
             DeveloperConsole.shared.log(.info, category: "MeetingDecision", "explain=\(decision.needsExplanation) confidence=\(decision.explanationConfidence) lane=\(decision.lane.rawValue)")
 
-            if decision.lane == .factcheck {
+            if decision.lane == .factcheck, !isDiarizationActive {
                 beginFactCheck(claim: text, lineID: lineID)
             }
 
@@ -564,7 +604,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 )
             }
             isSpeakingWhisper = true
-            if let requestID = tts.enqueue(explanation.text, volume: 0.35, preserveRecordingSession: true) {
+            if let requestID = tts.enqueue(explanation.text, volume: 0.35, preserveRecordingSession: true,
+                                           pan: WhisperSide.current.pan) {
                 activeWhisperRequestID = requestID
             } else {
                 activeTerm = nil
@@ -684,7 +725,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
         guard let requestID = tts.enqueue(
             text,
             volume: 0.35,
-            preserveRecordingSession: runState == .listening
+            preserveRecordingSession: runState == .listening,
+            pan: WhisperSide.current.pan
         ) else { return }
         activeWhisperRequestID = requestID
         sawWhisperPlayback = true
@@ -747,7 +789,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 if lines.count > 200 { lines.removeFirst(lines.count - 200) }
                 isSpeakingWhisper = true
                 sawWhisperPlayback = false
-                if let requestID = tts.enqueue(text, volume: 0.35, preserveRecordingSession: runState == .listening) {
+                if let requestID = tts.enqueue(text, volume: 0.35, preserveRecordingSession: runState == .listening,
+                                               pan: WhisperSide.current.pan) {
                     activeWhisperRequestID = requestID
                 } else {
                     finishWhisper(state: .failed)
@@ -826,6 +869,103 @@ final class MeetingInterpreterViewModel: ObservableObject {
         print("[Meeting][ERROR] 판단 서비스 중지 code=\(code)")
     }
 
+    // MARK: - 느린 흐름: 화자 구분 → 상대 발언 허점
+
+    private func startDiarizationLoop() {
+        diarizationTask?.cancel()
+        let generation = self.generation
+        diarizationTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(MeetingPolicy.diarizationInterval * 1_000_000_000))
+                guard let self, !Task.isCancelled, generation == self.generation else { return }
+                guard self.runState == .listening, self.failure == nil else { continue }
+                let chunk = self.diarizationBuffer.drain()
+                if Date() < (self.catchPausedUntil ?? .distantPast) { continue }
+                let speech = DiarizationAudio.speechSeconds(chunk)
+                guard speech >= DiarizationAudio.minimumSpeechSeconds else {
+                    DeveloperConsole.shared.log(.info, category: "MeetingDiarize", "skipped speechSec=\(String(format: "%.1f", speech))")
+                    continue
+                }
+                await self.processChunk(chunk, generation: generation)
+            }
+        }
+    }
+
+    private func processChunk(_ chunk: [Int16], generation: UUID) async {
+        do {
+            let turns = try await diarizer.diarize(chunk: chunk, enrollment: enrollmentSamples)
+            guard generation == self.generation, runState == .listening else { return }
+            lastDiarizationSuccessAt = Date()
+            let speakerKnown = turns.contains { $0.role != .unknown }
+            let mine = turns.filter { $0.role == .me }.map(\.text)
+            let others = turns.filter { $0.role != .me }.map(\.text)
+            DeveloperConsole.shared.log(.info, category: "MeetingDiarize", "turns=\(turns.count) me=\(mine.count) other=\(others.count) speakerKnown=\(speakerKnown)")
+            myHistory.append(contentsOf: mine)
+            if myHistory.count > 8 { myHistory.removeFirst(myHistory.count - 8) }
+
+            let statement = others.joined(separator: " ").trimmingCharacters(in: .whitespacesAndNewlines)
+            guard statement.count >= 8 else { return }
+            let earlier = otherHistory
+            otherHistory.append(statement)
+            if otherHistory.count > 12 { otherHistory.removeFirst(otherHistory.count - 12) }
+
+            let decision = try await jev.evaluateCatch(
+                statement: statement,
+                earlier: earlier.suffix(3).joined(separator: " / "),
+                speakerKnown: speakerKnown
+            )
+            guard generation == self.generation, runState == .listening else { return }
+            jevReady = true
+            DeveloperConsole.shared.log(.info, category: "MeetingCatch", "jev kind=\(decision.kind) confidence=\(decision.confidence)")
+            guard decision.shouldAnalyze else { return }
+
+            let found = try await gemini.critique(
+                statement: statement,
+                earlierOther: Array(earlier.suffix(8)),
+                mine: Array(myHistory.suffix(4)),
+                hint: decision.kind,
+                speakerKnown: speakerKnown
+            )
+            guard generation == self.generation, runState == .listening else { return }
+            DeveloperConsole.shared.log(.info, category: "MeetingCatch", "found=\(found.count) kinds=\(found.map(\.kind.rawValue).joined(separator: ","))")
+            for item in found { deliverCatch(item) }
+        } catch let error as JevClientError {
+            guard generation == self.generation else { return }
+            failStopJev(code: error.code, message: error.message)
+        } catch {
+            guard generation == self.generation else { return }
+            let nsError = error as NSError
+            DeveloperConsole.shared.log(.warning, category: "MeetingCatch", "chunk failed domain=\(nsError.domain) code=\(nsError.code)")
+            let quota = (error as? DiarizationError) == Optional(DiarizationError.http(429))
+                || (error as? MeetingGeminiError) == Optional(MeetingGeminiError.http(429))
+            if quota {
+                catchPausedUntil = Date().addingTimeInterval(MeetingPolicy.catchQuotaPause)
+                syncWatch(force: true)
+            }
+        }
+    }
+
+    private func deliverCatch(_ item: ConversationCatch) {
+        catches.insert(item, at: 0)
+        if catches.count > 50 { catches.removeLast(catches.count - 50) }
+        catchNotifier.post(item)
+        if item.kind == .claim, !item.quote.isEmpty {
+            beginFactCheck(claim: item.quote, lineID: liveLineID ?? lines.last?.id ?? UUID())
+        }
+        if item.confidence >= MeetingPolicy.catchWhisperConfidence,
+           !isSpeakingWhisper, !isPreparingWhisper, !isDescribingPhoto {
+            isSpeakingWhisper = true
+            sawWhisperPlayback = false
+            if let requestID = tts.enqueue(item.whisperText, volume: 0.35, preserveRecordingSession: true,
+                                           pan: WhisperSide.current.pan) {
+                activeWhisperRequestID = requestID
+            } else {
+                isSpeakingWhisper = false
+            }
+        }
+        syncWatch(force: true)
+    }
+
     private func failMicrophone(_ message: String) {
         stop()
         failure = .microphone(message)
@@ -840,15 +980,26 @@ final class MeetingInterpreterViewModel: ObservableObject {
             state: runState == .listening ? "listening" : "idle",
             route: inputRouteName,
             startedAt: archiveStartedAt,
-            latest: lines.last?.text ?? "",
-            recent: Array(lines.suffix(5).map(\.text)),
+            // 워치는 전사문을 띄우지 않고 잡아낸 항목만 보여 준다.
+            latest: "",
+            recent: [],
             whisperCount: lines.filter { $0.whisper?.text.isEmpty == false }.count,
             error: failureText,
-            quotaPaused: isExplainPaused || Date() < (factPausedUntil ?? .distantPast),
+            quotaPaused: isExplainPaused || Date() < (factPausedUntil ?? .distantPast)
+                || Date() < (catchPausedUntil ?? .distantPast),
             scene: isDescribingPhoto
                 ? WatchMeetingStatus.sceneWorking
                 : (photoError == nil ? "" : WatchMeetingStatus.sceneFailed),
-            micQuiet: runState == .listening && isInputQuiet
+            micQuiet: runState == .listening && isInputQuiet,
+            catches: catches.prefix(5).map {
+                WatchMeetingStatus.catchEntry(
+                    id: $0.id.uuidString,
+                    kind: $0.kind.rawValue,
+                    title: $0.kind.titleKey.localized,
+                    point: $0.point,
+                    ask: $0.ask
+                )
+            }
         )
     }
 

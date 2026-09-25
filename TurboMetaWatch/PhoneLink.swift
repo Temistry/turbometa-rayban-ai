@@ -25,6 +25,9 @@ final class PhoneLink: NSObject, ObservableObject {
     @Published var quotaPaused = false
     @Published var scene = ""
     @Published var micQuiet = false
+    /// 잡아낸 허점(최신이 앞). WatchMeetingStatus.catchEntry 형식.
+    @Published var catches: [[String: String]] = []
+    private var hasReceivedCatches = false
     @Published var captureFeedback: CaptureFeedback = .idle
 
     private var feedbackToken = UUID()
@@ -50,6 +53,16 @@ final class PhoneLink: NSObject, ObservableObject {
         if let value = context[WatchMeetingStatus.quotaPaused] as? Bool { quotaPaused = value }
         if let value = context[WatchMeetingStatus.scene] as? String { scene = value }
         if let value = context[WatchMeetingStatus.micQuiet] as? Bool { micQuiet = value }
+        if let value = context[WatchMeetingStatus.catches] as? [[String: String]] {
+            let previousFirst = catches.first?[WatchMeetingStatus.catchID]
+            let newFirst = value.first?[WatchMeetingStatus.catchID]
+            // 화면을 보고 있을 때 새 항목이 오면 진동. 첫 수신(앱 열 때 복원)에는 울리지 않는다.
+            if hasReceivedCatches, let newFirst, newFirst != previousFirst {
+                WKInterfaceDevice.current().play(.notification)
+            }
+            hasReceivedCatches = true
+            catches = value
+        }
     }
 
     /// 폰에 촬영을 요청한다. 폰은 앱의 촬영 버튼과 같은 동작(촬영→설명→귓속말)을 한다.

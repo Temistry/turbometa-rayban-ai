@@ -39,6 +39,26 @@ struct JevUtteranceDecision: Equatable {
 }
 
 enum JevClientError: Error, Equatable {
+/// 상대 발언 1차 판단: 허점 분석을 할지와 종류.
+struct JevCatchDecision: Equatable {
+    static let kinds = ["unsupported", "leap", "contradiction", "claim", "none"]
+    /// 이 확신도 이상일 때만 Gemini 분석을 요청한다.
+    static let analyzeThreshold = 0.55
+
+    let kind: String
+    let confidence: Double
+
+    var shouldAnalyze: Bool {
+        kind != "none" && confidence >= Self.analyzeThreshold
+    }
+
+    static func make(answers: [String: JevAnswer]) -> JevCatchDecision? {
+        guard let answer = answers["catch"], kinds.contains(answer.value) else { return nil }
+        return JevCatchDecision(kind: answer.value, confidence: answer.confidence)
+    }
+}
+
+enum JevClientError: Error, Equatable {
     case missingAPIKey
     case keyLocked
     case transport(String)
@@ -155,6 +175,39 @@ final class JevClient {
     }
 
     func evaluate(state: String, questions: [String: Any]) async throws -> [String: JevAnswer] {
+        try await evaluateRaw(state: state, questions: questions)
+    }
+
+    /// 상대 발언에 짚을 허점이 있는지 판단한다.
+    func evaluateCatch(statement: String, earlier: String, speakerKnown: Bool) async throws -> JevCatchDecision {
+        let who = speakerKnown ? "상대" : "대화 참여자"
+        var state = "사용자는 상대의 양해를 받고 대화를 분석 중이다. \(who)의 발언에서 따져 볼 허점을 찾는다.\n"
+        if !earlier.isEmpty {
+            state += "\(who)의 이전 발언: \(earlier)\n"
+        }
+        state += "\(who)의 새 발언: \(statement)"
+
+        let questions: [String: Any] = [
+            "catch": [
+                "type": "choice",
+                "instructions": "새 발언에서 가장 따져 볼 만한 점은 무엇인가? 없으면 none이다.",
+                "criteria": [
+                    "unsupported": "근거 없이 단정한다",
+                    "leap": "논리가 비약한다(성급한 일반화, 상관과 인과 혼동, 권위·다수 호소 등)",
+                    "contradiction": "이전 발언과 충돌한다",
+                    "claim": "확인이 필요한 수치·통계·사실을 주장한다",
+                    "none": "짚을 점이 없다(인사, 질문, 동의, 일반적인 의견)"
+                ]
+            ]
+        ]
+        let answers = try await evaluateRaw(state: state, questions: questions)
+        guard let decision = JevCatchDecision.make(answers: answers) else {
+            throw JevClientError.invalidResponse
+        }
+        return decision
+    }
+
+    private func evaluateRaw(state: String, questions: [String: Any]) async throws -> [String: JevAnswer] {
         let apiKey = try Self.loadAPIKey()
 
         var request = URLRequest(url: endpoint)

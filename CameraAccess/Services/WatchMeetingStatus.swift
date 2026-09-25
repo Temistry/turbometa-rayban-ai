@@ -17,10 +17,22 @@ enum WatchMeetingStatus {
     static let sceneFailed = "failed"
     /// 최근 30초 동안 마이크에 거의 소리가 들어오지 않음.
     static let micQuiet = "micQuiet"
+    /// 잡아낸 허점(최신이 앞, 최대 5개). 각 항목은 catchEntry 형식.
+    static let catches = "catches"
+    static let catchID = "id"
+    static let catchKind = "kind"
+    static let catchTitle = "title"
+    static let catchPoint = "point"
+    static let catchAsk = "ask"
+
+    static func catchEntry(id: String, kind: String, title: String, point: String, ask: String) -> [String: String] {
+        [catchID: id, catchKind: kind, catchTitle: title, catchPoint: point, catchAsk: ask]
+    }
 
     static func payload(state: String, route: String, startedAt: Date?, latest: String,
                         recent: [String], whisperCount: Int, error: String,
-                        quotaPaused: Bool, scene: String = "", micQuiet: Bool = false) -> [String: Any] {
+                        quotaPaused: Bool, scene: String = "", micQuiet: Bool = false,
+                        catches: [[String: String]] = []) -> [String: Any] {
         var payload: [String: Any] = [
             Self.state: state,
             Self.route: route,
@@ -30,7 +42,8 @@ enum WatchMeetingStatus {
             Self.error: error,
             Self.quotaPaused: quotaPaused,
             Self.scene: scene,
-            Self.micQuiet: micQuiet
+            Self.micQuiet: micQuiet,
+            Self.catches: catches
         ]
         if let startedAt {
             payload[Self.startedAt] = startedAt.timeIntervalSince1970

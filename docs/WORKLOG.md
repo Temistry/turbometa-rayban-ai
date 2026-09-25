@@ -566,6 +566,31 @@
 - [ ] 같은 회의를 폰/안경 모드로 각각 녹음해 MeetingMic 로그로 비교
 - [ ] 폰 모드에서 안경 스피커 귓속말이 폰 마이크로 되들어가 전사되는지 확인
 
+## 2026-09-25 · 방향 전환 1단계: 대화 허점 잡기 + 화자 구분 + 오른쪽 귓속말
+
+### 결정
+- 앱 방향: 상대 양해 후 대화 시작 버튼 → 상대 발언의 근거 없는 단정·논리 비약·앞뒤 모순·사실 주장 + 전문용어를 잡아 귓속말/워치/알림.
+- 두 흐름: 빠른 길(기존 실시간 인식 → Jev → 전문용어 귓속말), 느린 길(30초 조각 → Gemini 3.5 Transcribe 화자 구분 → 상대 발언 → Jev evaluateCatch → Gemini critique).
+- Transcribe(문서 확인): Interactions API POST /v1beta/interactions, 오디오 인라인 base64(audio/wav), transcription_config.mode = verbatim + diarization_mode speaker + timestamp_granularities word. 이름표 spk_N은 요청마다 새로 붙음. custom_vocabulary와 화자 구분 동시 사용 불가.
+- 내 목소리 등록: 설정에서 문장 1개 5.5초 녹음(말소리 2.5초 이상), 16kHz PCM으로 앱 지원 폴더에 저장. 매 조각 앞에 견본+0.6초 무음을 붙여 보내고 견본 구간 단어의 최다 이름표를 "나"로 판정. 미등록 시 화자 미확인으로 전체 분석.
+- 사실 확인: 화자 구분이 90초 내 성공 중이면 느린 길(상대 발언)만 사용, 아니면 기존 실시간 경로 유지.
+- 알림: 잡을 때마다 iPhone 로컬 알림(폰 잠금 시 워치로 전달). 앱 사용 중에는 배너 없음(기존 알림 델리게이트가 다른 카테고리 억제). 귓속말은 확신도 0.7 이상만, "종류. 되물을 질문" 형식.
+- 워치: 전사문 제거, 잡은 항목 카드(최신 5개)만 표시, 새 항목 도착 시 진동.
+- 오른쪽 귓속말: 설정 "귓속말 방향: 오른쪽(기본)/왼쪽/양쪽". 스테레오 출력(A2DP·헤드폰)이고 녹음 유지 재생일 때 AVSpeechSynthesizer.write → AVAudioPlayerNode pan. 통화(HFP) 출력은 모노라 양쪽. 마지막 빈 버퍼 미수신 대비로 합성 완료 델리게이트 + 20초 강제 종료.
+- 비용 추정: 화자 구분 약 $0.35/h(견본 포함), 분석 $0.2~0.3/h. MeetingCost 요약에 audio 초와 요금 포함.
+
+### 완료
+- [x] SpeakerDiarizationService(조각 버퍼·WAV·Transcribe 호출·응답 해석·나/상대 판정)
+- [x] ConversationCatchService(모델·결과 해석·알림), Jev evaluateCatch, Gemini critique
+- [x] VM 느린 흐름·전달·워치 페이로드, 워치 카드 UI, 앱 목록 시트에 허점 카드
+- [x] VoiceEnrollmentView + 설정(내 목소리, 귓속말 방향), 문구 ko/en
+- [x] ConversationCatchTests 13건, CI 목록 추가
+
+### 남음
+- [ ] 실기기: 목소리 등록 → 2인 대화에서 MeetingDiarize turns/me/other 로그 확인
+- [ ] 한쪽 귀 재생 실기기 확인(에어팟·안경), 빈 버퍼 수신 여부
+- [ ] 2단계 앱 화면 재설계
+
 ### 검증
 - 원격 빌드로만 컴파일 가능. 실패 시 GitHub job 로그의 error 필터로 재진단.
 
