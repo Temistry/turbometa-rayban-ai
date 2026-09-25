@@ -14,6 +14,7 @@ struct MeetingModeView: View {
     @State private var showArchive = false
     @State private var showFactSheet = false
     @State private var isFollowing = true
+    @State private var catchFilter: CatchKind?
 
     init(streamViewModel: StreamSessionViewModel) {
         _viewModel = StateObject(
@@ -26,6 +27,7 @@ struct MeetingModeView: View {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
                 topBar
+                filterBar
                 if viewModel.runState == .listening || !viewModel.lines.isEmpty {
                     captionArea
                 } else {
@@ -63,6 +65,20 @@ struct MeetingModeView: View {
                 MeetingArchiveListView()
             }
         }
+        .sheet(isPresented: summaryPresented) {
+            if let report = viewModel.summaryReport {
+                MeetingSummaryReportView(report: report) {
+                    viewModel.dismissSummary()
+                }
+            }
+        }
+    }
+
+    private var summaryPresented: Binding<Bool> {
+        Binding(
+            get: { viewModel.summaryReport != nil },
+            set: { if !$0 { viewModel.dismissSummary() } }
+        )
     }
 
     private var topBar: some View {
@@ -76,6 +92,20 @@ struct MeetingModeView: View {
             if viewModel.runState == .listening {
                 MeetingChip(text: viewModel.inputRouteName, color: .blue)
             }
+            if viewModel.runState == .listening, let startedAt = viewModel.conversationStartedAt {
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    MeetingChip(
+                        text: Self.elapsedText(Date().timeIntervalSince(startedAt)),
+                        color: .white
+                    )
+                }
+            }
+            MeetingChip(
+                text: viewModel.voiceEnrolled
+                    ? "meeting.voice.enrolled".localized
+                    : "meeting.voice.none".localized,
+                color: viewModel.voiceEnrolled ? .green : .gray
+            )
 
             Spacer()
 
@@ -121,6 +151,59 @@ struct MeetingModeView: View {
         .padding(.vertical, 10)
     }
 
+    private var catchCounts: [CatchKind: Int] {
+        Dictionary(grouping: viewModel.catches, by: \.kind).mapValues(\.count)
+    }
+
+    @ViewBuilder
+    private var filterBar: some View {
+        let counts = catchCounts
+        if !counts.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    filterChip(kind: nil, label: "meeting.filter.all".localized, count: viewModel.catches.count)
+                    ForEach(CatchKind.allCases.filter { counts[$0] != nil }, id: \.self) { kind in
+                        filterChip(kind: kind, label: kind.titleKey.localized, count: counts[kind] ?? 0)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 6)
+            }
+        }
+    }
+
+    private func filterChip(kind: CatchKind?, label: String, count: Int) -> some View {
+        let isActive = catchFilter == kind
+        let tint = kind?.color ?? .white
+        return Button {
+            withAnimation { catchFilter = kind }
+        } label: {
+            HStack(spacing: 5) {
+                Text(label)
+                Text("\(count)")
+                    .monospacedDigit()
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundColor(isActive ? .black : .white.opacity(0.85))
+            .padding(.horizontal, 11)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(isActive ? tint : Color.white.opacity(0.10)))
+            .overlay(Capsule().stroke(tint.opacity(isActive ? 0 : 0.25)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label) \(count)")
+    }
+
+    static func elapsedText(_ interval: TimeInterval) -> String {
+        let total = Int(max(0, interval))
+        let hours = total / 3600
+        let minutes = (total % 3600) / 60
+        let seconds = total % 60
+        return hours > 0
+            ? String(format: "%d:%02d:%02d", hours, minutes, seconds)
+            : String(format: "%02d:%02d", minutes, seconds)
+    }
+
     private var idleArea: some View {
         VStack(spacing: 20) {
             Spacer()
@@ -152,12 +235,12 @@ struct MeetingModeView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
-                        ForEach(viewModel.lines) { line in
-                            MeetingCaptionRow(line: line)
-                                .id(line.id)
+                        ForEach(visibleEntries) { entry in
+                            MeetingCaptionRow(line: entry.line, associated: entry.associated)
+                                .id(entry.id)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    viewModel.handleLineTap(line.id)
+                                    viewModel.handleLineTap(entry.line.id)
                                 }
                         }
                     }
@@ -173,18 +256,18 @@ struct MeetingModeView: View {
                     }
                 )
                 .onChange(of: viewModel.lines) { _, _ in
-                    guard isFollowing, let last = viewModel.lines.last else { return }
+                    guard isFollowing, let last = visibleEntries.last else { return }
                     withAnimation {
-                        proxy.scrollTo(last.id, anchor: .bottom)
+                        proxy.scrollTo(last.line.id, anchor: .bottom)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
                     if !isFollowing {
                         Button {
                             isFollowing = true
-                            if let last = viewModel.lines.last {
+                            if let last = visibleEntries.last {
                                 withAnimation {
-                                    proxy.scrollTo(last.id, anchor: .bottom)
+                                    proxy.scrollTo(last.line.id, anchor: .bottom)
                                 }
                             }
                         } label: {
@@ -208,6 +291,28 @@ struct MeetingModeView: View {
                     .disabled(viewModel.isStarting || viewModel.isStopping || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper)
                     .padding()
             }
+        }
+    }
+
+    private struct CaptionEntry: Identifiable {
+        let line: MeetingInterpreterViewModel.TranscriptLine
+        let associated: [ConversationCatch]
+        var id: UUID { line.id }
+    }
+
+    /// 전사문마다 겹치는 잡아낸 항목을 붙이고, 필터가 있으면 해당 종류만 남긴다.
+    private var visibleEntries: [CaptionEntry] {
+        let all = viewModel.lines.map { line in
+            CaptionEntry(
+                line: line,
+                associated: viewModel.catches.filter {
+                    CatchHighlighter.isAssociated(lineText: line.text, quote: $0.quote)
+                }
+            )
+        }
+        guard let catchFilter else { return all }
+        return all.filter { entry in
+            entry.associated.contains { $0.kind == catchFilter }
         }
     }
 
@@ -290,19 +395,59 @@ private struct MeetingChip: View {
 
 private struct MeetingCaptionRow: View {
     let line: MeetingInterpreterViewModel.TranscriptLine
+    let associated: [ConversationCatch]
 
-    private var bodyText: Text {
+    private struct Highlight {
+        let lower: Int
+        let upper: Int
+        let color: Color
+    }
+
+    /// 잡아낸 단어(종류색) + 전문용어(노랑). 겹치면 잡아낸 쪽을 우선한다.
+    private var highlights: [Highlight] {
+        var result: [Highlight] = []
+        var taken: [Range<Int>] = []
+        for item in associated {
+            for mark in CatchHighlighter.marks(in: line.text, quote: item.quote, kind: item.kind) {
+                guard !taken.contains(where: {
+                    mark.lowerOffset < $0.upperBound && mark.upperOffset > $0.lowerBound
+                }) else { continue }
+                taken.append(mark.lowerOffset..<mark.upperOffset)
+                result.append(Highlight(lower: mark.lowerOffset, upper: mark.upperOffset, color: item.kind.color))
+            }
+        }
         if let whisper = line.whisper,
            !whisper.term.isEmpty,
            let range = line.text.range(of: whisper.term, options: .caseInsensitive) {
-            return
-                Text(line.text[..<range.lowerBound])
-                + Text(whisper.term)
-                    .foregroundColor(.yellow)
-                    .underline(color: .yellow.opacity(0.7))
-                + Text(line.text[range.upperBound...])
+            let lower = line.text.distance(from: line.text.startIndex, to: range.lowerBound)
+            let upper = line.text.distance(from: line.text.startIndex, to: range.upperBound)
+            if !taken.contains(where: { lower < $0.upperBound && upper > $0.lowerBound }) {
+                result.append(Highlight(lower: lower, upper: upper, color: .yellow))
+            }
         }
-        return Text(line.text)
+        return result.sorted { $0.lower < $1.lower }
+    }
+
+    private var bodyText: Text {
+        let marks = highlights
+        guard !marks.isEmpty else { return Text(line.text) }
+        var result = Text("")
+        var cursor = line.text.startIndex
+        for mark in marks {
+            let lower = line.text.index(line.text.startIndex, offsetBy: mark.lower)
+            let upper = line.text.index(line.text.startIndex, offsetBy: mark.upper)
+            if cursor < lower {
+                result = result + Text(line.text[cursor..<lower])
+            }
+            result = result + Text(line.text[lower..<upper])
+                .foregroundColor(mark.color)
+                .underline(color: mark.color.opacity(0.65))
+            cursor = upper
+        }
+        if cursor < line.text.endIndex {
+            result = result + Text(line.text[cursor...])
+        }
+        return result
     }
 
     var body: some View {
@@ -334,8 +479,54 @@ private struct MeetingCaptionRow: View {
                     .foregroundColor(Color(red: 0.45, green: 0.66, blue: 1))
                 }
             }
+
+            ForEach(associated) { item in
+                MeetingInlineCatchRow(item: item)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+extension CatchKind {
+    var color: Color {
+        switch self {
+        case .unsupported: return .orange
+        case .leap: return .purple
+        case .contradiction: return .red
+        case .claim: return Color(red: 0.35, green: 0.6, blue: 1)
+        }
+    }
+}
+
+private struct MeetingInlineCatchRow: View {
+    let item: ConversationCatch
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Image(systemName: item.kind.symbol)
+                    .font(.caption2)
+                Text(item.kind.titleKey.localized)
+                    .font(.caption2.weight(.semibold))
+                Spacer()
+                Text(item.timestamp, style: .time)
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.4))
+            }
+            .foregroundColor(item.kind.color)
+            Text(item.point)
+                .font(.footnote)
+                .foregroundColor(.white.opacity(0.92))
+            if !item.ask.isEmpty {
+                Label(item.ask, systemImage: "arrowshape.turn.up.left")
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.6))
+            }
+        }
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 10).fill(item.kind.color.opacity(0.10)))
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(item.kind.color.opacity(0.35)))
     }
 }
 
@@ -434,15 +625,6 @@ private struct MeetingFactSheet: View {
 private struct MeetingCatchCardView: View {
     let item: ConversationCatch
 
-    private var tint: Color {
-        switch item.kind {
-        case .unsupported: return .orange
-        case .leap: return .purple
-        case .contradiction: return .red
-        case .claim: return .blue
-        }
-    }
-
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
@@ -453,7 +635,7 @@ private struct MeetingCatchCardView: View {
                     .foregroundColor(.white.opacity(0.5))
             }
             .font(.caption.weight(.semibold))
-            .foregroundColor(tint)
+            .foregroundColor(item.kind.color)
 
             if !item.quote.isEmpty {
                 Text("“\(item.quote)”")
@@ -472,8 +654,77 @@ private struct MeetingCatchCardView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12).fill(tint.opacity(0.12)))
-        .overlay(RoundedRectangle(cornerRadius: 12).stroke(tint.opacity(0.4)))
+        .background(RoundedRectangle(cornerRadius: 12).fill(item.kind.color.opacity(0.12)))
+        .overlay(RoundedRectangle(cornerRadius: 12).stroke(item.kind.color.opacity(0.4)))
+    }
+}
+
+private struct MeetingSummaryReportView: View {
+    let report: MeetingSummaryBuilder.Summary
+    var onDone: () -> Void
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 10) {
+                        stat(title: "meeting.summary.duration".localized,
+                             value: MeetingArchiveService.offsetText(report.duration))
+                        stat(title: "meeting.summary.lines".localized,
+                             value: "\(report.lineCount)")
+                        stat(title: "meeting.summary.catches".localized,
+                             value: "\(report.catches.count)")
+                        stat(title: "meeting.summary.cost".localized,
+                             value: String(format: "$%.4f", report.cost))
+                    }
+
+                    if report.catches.isEmpty {
+                        Text("meeting.catch.none".localized)
+                            .font(.footnote)
+                            .foregroundColor(.white.opacity(0.6))
+                            .frame(maxWidth: .infinity, alignment: .center)
+                            .padding(.vertical, 20)
+                    } else {
+                        ForEach(report.catches) { item in
+                            MeetingCatchCardView(item: item)
+                        }
+                    }
+                }
+                .padding(16)
+            }
+            .background(Color.black.ignoresSafeArea())
+            .navigationTitle("meeting.summary.title".localized)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("meeting.summary.done".localized, action: onDone)
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    ShareLink(item: MeetingSummaryBuilder.exportText(report)) {
+                        Image(systemName: "square.and.arrow.up")
+                    }
+                    .accessibilityLabel("meeting.summary.share".localized)
+                }
+            }
+        }
+        .preferredColorScheme(.dark)
+    }
+
+    private func stat(title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.5))
+            Text(value)
+                .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
+                .foregroundColor(.white)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(10)
+        .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.07)))
     }
 }
 

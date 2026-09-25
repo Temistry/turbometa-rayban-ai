@@ -18,11 +18,26 @@ struct ArchivedMeetingLine: Codable, Identifiable, Equatable {
     var category: String?
 }
 
+/// 보관된 잡아낸 항목. kind는 CatchKind.rawValue 문자열로 보관한다.
+struct ArchivedMeetingCatch: Codable, Identifiable, Equatable {
+    var id = UUID()
+    let kind: String
+    let quote: String
+    let point: String
+    let ask: String
+    let confidence: Double
+    /// 세션 시작 대비 초 단위 오프셋.
+    let offset: TimeInterval
+    let speakerKnown: Bool
+}
+
 struct ArchivedMeeting: Codable, Identifiable, Equatable {
     let id: UUID
     let startedAt: Date
     var endedAt: Date?
     var lines: [ArchivedMeetingLine]
+    /// 이전 버전 파일과 호환을 위해 선택값으로 둔다.
+    var catches: [ArchivedMeetingCatch]?
 }
 
 @MainActor
@@ -110,12 +125,31 @@ final class MeetingArchiveService: ObservableObject {
         formatter.dateStyle = .medium
         formatter.timeStyle = .short
 
-        var output = "TurboMeta 회의 녹취록\n"
+        var output = "TurboMeta 대화 녹취록\n"
         output += "시작: \(formatter.string(from: meeting.startedAt))\n"
         if let endedAt = meeting.endedAt {
             output += "종료: \(formatter.string(from: endedAt))\n"
         }
         output += "발화 \(meeting.lines.count)건\n"
+
+        if let catches = meeting.catches, !catches.isEmpty {
+            let counts = Dictionary(grouping: catches, by: \.kind).mapValues(\.count)
+            let parts = CatchKind.allCases.compactMap { kind -> String? in
+                guard let count = counts[kind.rawValue], count > 0 else { return nil }
+                return "\(kind.titleKey.localized) \(count)"
+            }
+            output += "잡아낸 것 \(catches.count)건 (\(parts.joined(separator: " · ")))\n"
+            for item in catches {
+                output += "\n[\(offsetText(item.offset))] \(CatchKind(rawValue: item.kind)?.titleKey.localized ?? item.kind)\n"
+                if !item.quote.isEmpty {
+                    output += "  인용: \(item.quote)\n"
+                }
+                output += "  내용: \(item.point)\n"
+                if !item.ask.isEmpty {
+                    output += "  되묻기: \(item.ask)\n"
+                }
+            }
+        }
 
         for line in meeting.lines {
             output += "\n[\(offsetText(line.offset))] \(line.text)\n"

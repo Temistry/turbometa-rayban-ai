@@ -500,4 +500,15 @@ final class GeminiUsageLedger {
         let cost = String(format: "%.4f", Self.estimatedCost(all) + Self.estimatedAudioCost(seconds: audio))
         return "requests=\(count) in=\(all.input) out=\(all.output)(thoughts=\(all.thoughts)) audio=\(Int(audio))s cost≈$\(cost) lanes=\(lanes.isEmpty ? "-" : lanes)"
     }
+
+    /// 대화 리포트에 넣는 예상 비용 합계(USD).
+    func totalEstimatedCost() -> Double {
+        lock.lock()
+        let totals = self.totals
+        let audio = audioSeconds.values.reduce(0, +)
+        lock.unlock()
+        var all = GeminiUsage()
+        for usage in totals.values { all += usage }
+        return Self.estimatedCost(all) + Self.estimatedAudioCost(seconds: audio)
+    }
 }

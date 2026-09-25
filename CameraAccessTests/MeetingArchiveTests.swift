@@ -33,6 +33,17 @@ final class MeetingArchiveTests: XCTestCase {
                     whisper: "본업 수익성을 보는 지표예요."
                 ),
                 ArchivedMeetingLine(offset: 150, text: "다음 안건으로 넘어가죠.", term: nil, whisper: nil)
+            ],
+            catches: [
+                ArchivedMeetingCatch(
+                    kind: "unsupported",
+                    quote: "다들 그렇게 해요",
+                    point: "근거 없이 다수에 기댄 주장",
+                    ask: "어떤 사례가 있나요?",
+                    confidence: 0.8,
+                    offset: 100,
+                    speakerKnown: true
+                )
             ]
         )
     }
@@ -48,6 +59,9 @@ final class MeetingArchiveTests: XCTestCase {
         XCTAssertEqual(loaded.first?.lines.first?.text, meeting.lines[0].text)
         XCTAssertEqual(loaded.first?.lines.first?.term, "EBITDA")
         XCTAssertEqual(loaded.first?.lines.first?.whisper, "본업 수익성을 보는 지표예요.")
+        XCTAssertEqual(loaded.first?.catches?.count, 1)
+        XCTAssertEqual(loaded.first?.catches?.first?.kind, "unsupported")
+        XCTAssertEqual(loaded.first?.catches?.first?.ask, "어떤 사례가 있나요?")
     }
 
     func testEmptyMeetingIsNotSaved() {
@@ -76,8 +90,10 @@ final class MeetingArchiveTests: XCTestCase {
         let meeting = sampleMeeting()
         let text = MeetingArchiveService.exportText(meeting)
 
-        XCTAssertTrue(text.contains("TurboMeta 회의 녹취록"))
+        XCTAssertTrue(text.contains("TurboMeta 대화 녹취록"))
         XCTAssertTrue(text.contains("발화 2건"))
+        XCTAssertTrue(text.contains("잡아낸 것 1건"))
+        XCTAssertTrue(text.contains("인용: 다들 그렇게 해요"))
         XCTAssertTrue(text.contains("[00:01:23] 이번 분기 EBITDA 기준을 맞춰야 합니다."))
         XCTAssertTrue(text.contains("└ 귓속말: EBITDA — 본업 수익성을 보는 지표예요."))
         XCTAssertTrue(text.contains("[00:02:30] 다음 안건으로 넘어가죠."))

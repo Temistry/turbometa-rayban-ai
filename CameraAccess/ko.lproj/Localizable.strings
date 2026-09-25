@@ -607,10 +607,10 @@
 "video.recorder.error.tooshort" = "동영상이 너무 짧습니다. 0.5초 이상 녹화해 주세요.";
 
 // Meeting Interpreter (회의 통역기)
-"meeting.title" = "회의 통역기";
-"meeting.subtitle" = "전문용어는 귓속말로, 주장 근거는 화면에";
-"meeting.start" = "통역 시작";
-"meeting.stop" = "통역 중지";
+"meeting.title" = "대화 분석";
+"meeting.subtitle" = "상대 발언의 허점을 잡고 전문용어는 귓속말로";
+"meeting.start" = "대화 시작";
+"meeting.stop" = "대화 종료";
 "meeting.status.listening" = "듣는 중";
 "meeting.status.idle" = "대기";
 "meeting.latest" = "최신";
@@ -656,6 +656,18 @@
 "voice.enroll.busy" = "대화 중에는 등록할 수 없어요";
 "voice.enroll.delete" = "삭제";
 "meeting.catch.title" = "잡아낸 것";
+"meeting.catch.none" = "잡아낸 것 없음";
+"meeting.catch.count" = "잡아낸 것 %d건";
+"meeting.filter.all" = "전체";
+"meeting.voice.enrolled" = "목소리 등록됨";
+"meeting.voice.none" = "목소리 미등록";
+"meeting.summary.title" = "대화 리포트";
+"meeting.summary.duration" = "대화 시간";
+"meeting.summary.lines" = "발화";
+"meeting.summary.catches" = "잡아낸 것";
+"meeting.summary.cost" = "예상 비용";
+"meeting.summary.done" = "완료";
+"meeting.summary.share" = "리포트 내보내기";
 "catch.kind.unsupported" = "근거 없는 단정";
 "catch.kind.leap" = "논리 비약";
 "catch.kind.contradiction" = "앞뒤 모순";
@@ -665,8 +677,8 @@
 "meeting.photo.busy" = "장면 확인 중";
 "meeting.photo.failed" = "장면을 확인하지 못했습니다. 다시 눌러 주세요.";
 "meeting.photo.voiceFailed" = "음성을 재생하지 못했습니다.";
-"meeting.archive.title" = "회의 서랍";
-"meeting.archive.empty" = "보관된 회의가 없습니다.";
+"meeting.archive.title" = "대화 서랍";
+"meeting.archive.empty" = "보관된 대화가 없습니다.";
 "meeting.archive.exportText" = "텍스트 내보내기";
 "meeting.archive.exportAll" = "전체 텍스트 내보내기";
 "meeting.archive.exportAudio" = "음성 내보내기";

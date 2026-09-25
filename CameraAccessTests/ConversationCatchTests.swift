@@ -153,6 +153,94 @@ final class ConversationCatchTests: XCTestCase {
         XCTAssertEqual(config["responseMimeType"] as? String, "application/json")
     }
 
+    // MARK: - 전사문 연결
+
+    func testHighlighterAssociatesByWordOverlap() {
+        let line = "이번엔 매출이 두 배 늘었다고 보셔도 됩니다"
+        XCTAssertTrue(CatchHighlighter.isAssociated(
+            lineText: line, quote: "매출이 두 배 늘었다고 보셔도"
+        ))
+        XCTAssertTrue(CatchHighlighter.isAssociated(
+            lineText: line, quote: "매출이 두 배 늘었다고"
+        ))
+        XCTAssertFalse(CatchHighlighter.isAssociated(
+            lineText: line, quote: "다음 분기 예산 안건으로 넘어가죠"
+        ))
+    }
+
+    func testHighlighterShortQuoteFallsBackToSubstring() {
+        XCTAssertTrue(CatchHighlighter.isAssociated(lineText: "EBITDA 기준", quote: "EBITDA"))
+        XCTAssertFalse(CatchHighlighter.isAssociated(lineText: "EBITDA 기준", quote: "EBITDA 마진"))
+    }
+
+    func testHighlighterMarksOverlapWordsInOrder() {
+        let marks = CatchHighlighter.marks(
+            in: "매출이 두 배 늘었다고 봐야죠",
+            quote: "매출이 두 배 늘었다고 봅니다",
+            kind: .claim
+        )
+        XCTAssertEqual(marks.map(\.kind), Array(repeating: .claim, count: marks.count))
+        XCTAssertEqual(marks.first?.word, "매출이")
+        XCTAssertTrue(marks.contains { $0.word == "늘었다고" })
+        // 오프셋은 정렬되어 있고 서로 겹치지 않는다.
+        let pairs = zip(marks, marks.dropFirst())
+        XCTAssertTrue(pairs.allSatisfy { $0.lowerOffset < $1.lowerOffset })
+    }
+
+    // MARK: - 대화 요약
+
+    private func catchItem(_ kind: CatchKind, minutesAgo: Double) -> ConversationCatch {
+        ConversationCatch(
+            kind: kind,
+            quote: "다들 그렇게 해요",
+            point: "근거 없이 다수에 기댄 주장",
+            ask: "어떤 사례가 있나요?",
+            confidence: 0.8,
+            timestamp: Date(timeIntervalSinceNow: -minutesAgo * 60),
+            speakerKnown: true
+        )
+    }
+
+    func testSummaryBuilderCountsAndSorts() {
+        let startedAt = Date(timeIntervalSinceNow: -600)
+        let summary = MeetingSummaryBuilder.build(
+            startedAt: startedAt,
+            endedAt: Date(),
+            lineCount: 12,
+            catches: [
+                catchItem(.leap, minutesAgo: 1),
+                catchItem(.unsupported, minutesAgo: 8),
+                catchItem(.leap, minutesAgo: 4)
+            ],
+            cost: 0.0312
+        )
+        XCTAssertEqual(summary.lineCount, 12)
+        XCTAssertEqual(summary.catches.count, 3)
+        XCTAssertEqual(summary.counts[.leap], 2)
+        XCTAssertEqual(summary.counts[.unsupported], 1)
+        XCTAssertEqual(summary.duration, 600, accuracy: 1)
+        // 오래된 것부터 정렬.
+        XCTAssertEqual(summary.catches.first?.kind, .unsupported)
+        XCTAssertEqual(summary.cost, 0.0312, accuracy: 0.000001)
+    }
+
+    func testSummaryExportIncludesStatsAndCatches() {
+        let startedAt = Date(timeIntervalSince1970: 1_790_000_000)
+        let summary = MeetingSummaryBuilder.build(
+            startedAt: startedAt,
+            endedAt: startedAt.addingTimeInterval(300),
+            lineCount: 5,
+            catches: [catchItem(.unsupported, minutesAgo: 0)],
+            cost: 0.02
+        )
+        let text = MeetingSummaryBuilder.exportText(summary)
+        XCTAssertTrue(text.contains("TurboMeta 대화 리포트"))
+        XCTAssertTrue(text.contains("대화 시간: 00:05:00"))
+        XCTAssertTrue(text.contains("발화 5건 · 잡아낸 것 1건"))
+        XCTAssertTrue(text.contains("인용: 다들 그렇게 해요"))
+        XCTAssertTrue(text.contains("되묻기: 어떤 사례가 있나요?"))
+    }
+
     // MARK: - 귓속말 방향
 
     func testWhisperSidePanAndDefault() {

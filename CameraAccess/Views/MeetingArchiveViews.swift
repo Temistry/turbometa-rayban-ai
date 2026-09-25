@@ -26,6 +26,11 @@ struct MeetingArchiveListView: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(Self.title(meeting.startedAt))
                                     .font(.subheadline.weight(.semibold))
+                                if let catches = meeting.catches, !catches.isEmpty {
+                                    Text("meeting.catch.count".localized(catches.count))
+                                        .font(.caption2)
+                                        .foregroundColor(.orange)
+                                }
                                 Text(meeting.lines.first?.text ?? "")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
@@ -76,6 +81,11 @@ struct MeetingArchiveDetailView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
+                if let catches = meeting.catches, !catches.isEmpty {
+                    ForEach(catches) { item in
+                        ArchivedCatchRow(item: item)
+                    }
+                }
                 ForEach(meeting.lines) { line in
                     VStack(alignment: .leading, spacing: 3) {
                         Text(MeetingArchiveService.offsetText(line.offset))
@@ -117,5 +127,45 @@ struct MeetingArchiveDetailView: View {
             }
             .accessibilityLabel("meeting.archive.delete".localized)
         }
+    }
+}
+
+private struct ArchivedCatchRow: View {
+    let item: ArchivedMeetingCatch
+
+    private var kind: CatchKind? { CatchKind(rawValue: item.kind) }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 5) {
+                Image(systemName: kind?.symbol ?? "exclamationmark.bubble")
+                    .font(.caption2)
+                Text(kind?.titleKey.localized ?? item.kind)
+                    .font(.caption2.weight(.semibold))
+                Spacer()
+                Text(MeetingArchiveService.offsetText(item.offset))
+                    .font(.caption2.monospaced())
+                    .foregroundColor(.secondary)
+            }
+            .foregroundColor(kind?.color ?? .orange)
+            if !item.quote.isEmpty {
+                Text(item.quote)
+                    .font(.footnote)
+                    .italic()
+                    .foregroundColor(.secondary)
+            }
+            Text(item.point)
+                .font(.footnote)
+            if !item.ask.isEmpty {
+                Text(item.ask)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill((kind?.color ?? .orange).opacity(0.10))
+        )
     }
 }

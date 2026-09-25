@@ -147,6 +147,12 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var detailBubble: DetailBubble?
     /// 상대 발언에서 잡아낸 허점(최신이 앞).
     @Published private(set) var catches: [ConversationCatch] = []
+    /// 대화 종료 후 뜨는 요약 리포트.
+    @Published private(set) var summaryReport: MeetingSummaryBuilder.Summary?
+    /// 이번 대화에서 내 목소리 견본이 등록돼 있는지.
+    @Published private(set) var voiceEnrolled = false
+    /// 대화 시작 시각(경과 시간 표시용).
+    @Published private(set) var conversationStartedAt: Date?
 
     /// 대화 중이면 목소리 등록을 막는다(같은 마이크·오디오 세션을 쓰기 때문).
     static private(set) var isConversationActive = false
@@ -284,6 +290,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         factPausedUntil = nil
         latestStable = ""
         detailBubble = nil
+        summaryReport = nil
 
         do {
             _ = try JevClient.loadAPIKey()
@@ -303,6 +310,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         configureVisualAssist(for: MeetingSceneMode.current)
         GeminiUsageLedger.shared.reset()
         enrollmentSamples = VoiceEnrollmentStore.load()
+        voiceEnrolled = enrollmentSamples != nil
         diarizationBuffer.reset()
         transcription.diarizationSink = diarizationBuffer
         catches.removeAll()
@@ -320,6 +328,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         let archiveID = UUID()
         self.archiveID = archiveID
         archiveStartedAt = Date()
+        conversationStartedAt = archiveStartedAt
         do {
             try archive.prepare(id: archiveID)
             transcription.recordingDestination = archive.audioURL(id: archiveID)
@@ -384,15 +393,38 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     category: line.whisper?.category.isEmpty == false ? line.whisper?.category : nil
                 )
             }
+            let archivedCatches = catches.reversed().map { item in
+                ArchivedMeetingCatch(
+                    kind: item.kind.rawValue,
+                    quote: item.quote,
+                    point: item.point,
+                    ask: item.ask,
+                    confidence: item.confidence,
+                    offset: item.timestamp.timeIntervalSince(archiveStartedAt),
+                    speakerKnown: item.speakerKnown
+                )
+            }
+            let summary = MeetingSummaryBuilder.build(
+                startedAt: archiveStartedAt,
+                endedAt: Date(),
+                lineCount: lines.count,
+                catches: catches,
+                cost: GeminiUsageLedger.shared.totalEstimatedCost()
+            )
             archive.save(ArchivedMeeting(
                 id: archiveID,
                 startedAt: archiveStartedAt,
                 endedAt: Date(),
-                lines: archivedLines
+                lines: archivedLines,
+                catches: archivedCatches
             ))
+            if summary.lineCount > 0 || !summary.catches.isEmpty {
+                summaryReport = summary
+            }
         }
         archiveID = nil
         archiveStartedAt = nil
+        conversationStartedAt = nil
         transcription.recordingDestination = nil
         detailTask?.cancel()
         detailTask = nil
@@ -655,6 +687,11 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 explainedTerms: Array(spokenTerms.sorted().prefix(100))
             )
         }
+    }
+
+    /// 요약 리포트 시트를 닫는다.
+    func dismissSummary() {
+        summaryReport = nil
     }
 
     /// 전사 줄을 터치하면 보관된 설명·근거 링크를 말풍선으로 보여주고 읽어 준다.

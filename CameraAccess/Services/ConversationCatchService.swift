@@ -116,3 +116,127 @@ final class CatchNotifier {
         }
     }
 }
+
+// MARK: - 전사문 연결
+
+/// 잡아낸 인용과 전사문을 잇는 순수 로직.
+/// 화자 구분(Gemini)과 전사(Apple Speech)는 엔진이 달라 문장이 어긋날 수 있어
+/// 완전 일치 대신 단어 겹침으로 연결하고, 겹친 단어에 색 밑줄을 놓는다.
+enum CatchHighlighter {
+    struct Mark: Equatable {
+        let kind: CatchKind
+        /// 강조할 단어.
+        let word: String
+        /// 전사문 시작점에서의 문자 오프셋.
+        let lowerOffset: Int
+        let upperOffset: Int
+    }
+
+    /// 구두점·조사 노이즈를 덜어낸 토큰. 한 글자짜리는 변별력이 없어 버린다.
+    static func tokens(_ text: String) -> [String] {
+        text.lowercased()
+            .components(separatedBy: CharacterSet.alphanumerics.inverted)
+            .filter { $0.count >= 2 }
+    }
+
+    /// 인용의 단어 중 전사문에 있는 비율로 연결 여부를 정한다.
+    static func isAssociated(lineText: String, quote: String, threshold: Double = 0.6) -> Bool {
+        let quoteTokens = tokens(quote)
+        guard quoteTokens.count >= 2 else {
+            return !quote.isEmpty && lineText.range(of: quote, options: [.caseInsensitive, .diacriticInsensitive]) != nil
+        }
+        let lineTokens = Set(tokens(lineText))
+        let hits = quoteTokens.filter { lineTokens.contains($0) }.count
+        return Double(hits) / Double(quoteTokens.count) >= threshold
+    }
+
+    /// 전사문 안에서 강조할 단어 위치를 찾는다(대소문자·발음 구분 무시, 겹침 제거).
+    static func marks(in lineText: String, quote: String, kind: CatchKind) -> [Mark] {
+        let lineTokens = Set(tokens(lineText))
+        let words = tokens(quote).filter { lineTokens.contains($0) }
+        var marks: [Mark] = []
+        var taken: [Range<Int>] = []
+        for word in words {
+            guard let range = lineText.range(
+                of: word, options: [.caseInsensitive, .diacriticInsensitive]
+            ) else { continue }
+            let lower = lineText.distance(from: lineText.startIndex, to: range.lowerBound)
+            let upper = lineText.distance(from: lineText.startIndex, to: range.upperBound)
+            guard !taken.contains(where: { lower < $0.upperBound && upper > $0.lowerBound }) else { continue }
+            taken.append(lower..<upper)
+            marks.append(Mark(kind: kind, word: word, lowerOffset: lower, upperOffset: upper))
+        }
+        return marks.sorted { $0.lowerOffset < $1.lowerOffset }
+    }
+}
+
+// MARK: - 대화 요약
+
+/// 대화가 끝났을 때 한 번 만드는 요약 리포트(순수 로직, 단위 테스트 대상).
+enum MeetingSummaryBuilder {
+    struct Summary: Identifiable, Equatable {
+        let id = UUID()
+        let startedAt: Date
+        let endedAt: Date
+        let lineCount: Int
+        let catches: [ConversationCatch]
+        /// Gemini 예상 비용(USD).
+        let cost: Double
+
+        var duration: TimeInterval { max(0, endedAt.timeIntervalSince(startedAt)) }
+        var counts: [CatchKind: Int] {
+            Dictionary(grouping: catches, by: \.kind).mapValues(\.count)
+        }
+    }
+
+    static func build(
+        startedAt: Date,
+        endedAt: Date,
+        lineCount: Int,
+        catches: [ConversationCatch],
+        cost: Double
+    ) -> Summary {
+        Summary(
+            startedAt: startedAt,
+            endedAt: endedAt,
+            lineCount: lineCount,
+            catches: catches.sorted { $0.timestamp < $1.timestamp },
+            cost: max(0, cost)
+        )
+    }
+
+    /// 요약을 공용 텍스트로 내보낸다.
+    nonisolated static func exportText(_ summary: Summary) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ko_KR")
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .short
+
+        var output = "TurboMeta 대화 리포트\n"
+        output += "기간: \(formatter.string(from: summary.startedAt)) ~ \(formatter.string(from: summary.endedAt))\n"
+        output += "대화 시간: \(MeetingArchiveService.offsetText(summary.duration))\n"
+        output += "발화 \(summary.lineCount)건 · 잡아낸 것 \(summary.catches.count)건 · 예상 비용 \(String(format: "$%.4f", summary.cost))\n"
+
+        let counts = summary.counts
+        let parts = CatchKind.allCases.compactMap { kind -> String? in
+            guard let count = counts[kind], count > 0 else { return nil }
+            return "\(kind.titleKey.localized) \(count)"
+        }
+        if !parts.isEmpty {
+            output += "종류: \(parts.joined(separator: " · "))\n"
+        }
+
+        for item in summary.catches {
+            let offset = item.timestamp.timeIntervalSince(summary.startedAt)
+            output += "\n[\(MeetingArchiveService.offsetText(max(0, offset)))] \(item.kind.titleKey.localized)\n"
+            if !item.quote.isEmpty {
+                output += "  인용: \(item.quote)\n"
+            }
+            output += "  내용: \(item.point)\n"
+            if !item.ask.isEmpty {
+                output += "  되묻기: \(item.ask)\n"
+            }
+        }
+        return output
+    }
+}

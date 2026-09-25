@@ -616,10 +616,10 @@
 "video.recorder.error.tooshort" = "The video is too short. Record at least 0.5 seconds.";
 
 // Meeting Interpreter
-"meeting.title" = "Meeting Interpreter";
-"meeting.subtitle" = "Jargon whispered in your ear, claims verified on screen";
-"meeting.start" = "Start interpreting";
-"meeting.stop" = "Stop interpreting";
+"meeting.title" = "Conversation Analysis";
+"meeting.subtitle" = "Catch weak claims, whisper jargon";
+"meeting.start" = "Start conversation";
+"meeting.stop" = "End conversation";
 "meeting.status.listening" = "Listening";
 "meeting.status.idle" = "Standby";
 "meeting.latest" = "Latest";
@@ -665,6 +665,18 @@
 "voice.enroll.busy" = "Can't register during a conversation";
 "voice.enroll.delete" = "Delete";
 "meeting.catch.title" = "Catches";
+"meeting.catch.none" = "No catches";
+"meeting.catch.count" = "%d catches";
+"meeting.filter.all" = "All";
+"meeting.voice.enrolled" = "Voice enrolled";
+"meeting.voice.none" = "No voice sample";
+"meeting.summary.title" = "Conversation Report";
+"meeting.summary.duration" = "Duration";
+"meeting.summary.lines" = "Lines";
+"meeting.summary.catches" = "Catches";
+"meeting.summary.cost" = "Est. cost";
+"meeting.summary.done" = "Done";
+"meeting.summary.share" = "Export report";
 "catch.kind.unsupported" = "Unsupported claim";
 "catch.kind.leap" = "Logical leap";
 "catch.kind.contradiction" = "Contradiction";
@@ -674,8 +686,8 @@
 "meeting.photo.busy" = "Checking scene";
 "meeting.photo.failed" = "Could not explain the scene. Tap to retry.";
 "meeting.photo.voiceFailed" = "Could not play the explanation.";
-"meeting.archive.title" = "Meeting Drawer";
-"meeting.archive.empty" = "No archived meetings yet.";
+"meeting.archive.title" = "Conversation Drawer";
+"meeting.archive.empty" = "No archived conversations yet.";
 "meeting.archive.exportText" = "Export Text";
 "meeting.archive.exportAll" = "Export All Text";
 "meeting.archive.exportAudio" = "Export Audio";
