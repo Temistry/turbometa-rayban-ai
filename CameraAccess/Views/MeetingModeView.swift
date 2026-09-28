@@ -43,17 +43,26 @@ struct MeetingModeView: View {
                 }
             }
         }
-        .overlay(alignment: .bottom) {
+        .sheet(isPresented: Binding(
+            get: { viewModel.detailBubble != nil },
+            set: { if !$0 { viewModel.closeDetail() } }
+        )) {
             if let bubble = viewModel.detailBubble {
+                ScrollView {
                 MeetingDetailBubble(bubble: bubble) {
                     viewModel.closeDetail()
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 158)
+                .padding(16)
+                }
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+                .preferredColorScheme(.dark)
             }
         }
         .sheet(isPresented: $showFactSheet) {
             MeetingFactSheet(catches: viewModel.catches, cards: viewModel.factCards)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showSettings) {
             NavigationView {
@@ -72,6 +81,12 @@ struct MeetingModeView: View {
                 }
             }
         }
+        .onChange(of: viewModel.runState) { _, state in
+            if state == .listening {
+                catchFilter = nil
+                isFollowing = true
+            }
+        }
     }
 
     private var summaryPresented: Binding<Bool> {
@@ -82,6 +97,27 @@ struct MeetingModeView: View {
     }
 
     private var topBar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+        HStack(spacing: 8) {
+            Text("meeting.title".localized)
+                .font(.title3.weight(.semibold))
+                .foregroundColor(.white)
+            Spacer()
+            Button { showArchive = true } label: {
+                Image(systemName: "archivebox")
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("meeting.archive.title".localized)
+            Button { showSettings = true } label: {
+                Image(systemName: "gearshape")
+                    .frame(width: 44, height: 44)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("settings.title".localized)
+        }
+        .foregroundColor(.white.opacity(0.8))
+        ScrollView(.horizontal, showsIndicators: false) {
         HStack(spacing: 8) {
             MeetingChip(
                 text: viewModel.runState == .listening
@@ -107,18 +143,6 @@ struct MeetingModeView: View {
                 color: viewModel.voiceEnrolled ? .green : .gray
             )
 
-            Spacer()
-
-            Button {
-                showArchive = true
-            } label: {
-                Image(systemName: "archivebox")
-                    .font(.body)
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            .accessibilityLabel("meeting.archive.title".localized)
-            .padding(.trailing, 2)
-
             if !viewModel.factCards.isEmpty || !viewModel.catches.isEmpty {
                 Button {
                     showFactSheet = true
@@ -137,15 +161,8 @@ struct MeetingModeView: View {
                 .accessibilityLabel("meeting.catch.title".localized)
             }
 
-            Button {
-                showSettings = true
-            } label: {
-                Image(systemName: "gearshape")
-                    .font(.body)
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            .accessibilityLabel("settings.title".localized)
-            .padding(.trailing, 2)
+        }
+        }
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -235,13 +252,21 @@ struct MeetingModeView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 14) {
+                        if let catchFilter {
+                            ForEach(viewModel.catches.filter { $0.kind == catchFilter }) { item in
+                                MeetingCatchCardView(item: item)
+                            }
+                        } else {
                         ForEach(visibleEntries) { entry in
+                            Button {
+                                viewModel.handleLineTap(entry.line.id)
+                            } label: {
                             MeetingCaptionRow(line: entry.line, associated: entry.associated)
+                            }
+                                .buttonStyle(.plain)
                                 .id(entry.id)
-                                .contentShape(Rectangle())
-                                .onTapGesture {
-                                    viewModel.handleLineTap(entry.line.id)
-                                }
+                                .accessibilityHint("meeting.detail.openHint".localized)
+                        }
                         }
                     }
                     .padding(.horizontal, 18)
@@ -256,13 +281,13 @@ struct MeetingModeView: View {
                     }
                 )
                 .onChange(of: viewModel.lines) { _, _ in
-                    guard isFollowing, let last = visibleEntries.last else { return }
+                    guard catchFilter == nil, isFollowing, let last = visibleEntries.last else { return }
                     withAnimation {
                         proxy.scrollTo(last.line.id, anchor: .bottom)
                     }
                 }
                 .overlay(alignment: .bottomTrailing) {
-                    if !isFollowing {
+                    if !isFollowing && catchFilter == nil {
                         Button {
                             isFollowing = true
                             if let last = visibleEntries.last {
@@ -300,19 +325,15 @@ struct MeetingModeView: View {
         var id: UUID { line.id }
     }
 
-    /// 전사문마다 겹치는 잡아낸 항목을 붙이고, 필터가 있으면 해당 종류만 남긴다.
+    /// 전체 전사문마다 겹치는 잡아낸 항목을 붙인다. 종류 필터는 카드 자체에 적용한다.
     private var visibleEntries: [CaptionEntry] {
-        let all = viewModel.lines.map { line in
+        viewModel.lines.map { line in
             CaptionEntry(
                 line: line,
                 associated: viewModel.catches.filter {
                     CatchHighlighter.isAssociated(lineText: line.text, quote: $0.quote)
                 }
             )
-        }
-        guard let catchFilter else { return all }
-        return all.filter { entry in
-            entry.associated.contains { $0.kind == catchFilter }
         }
     }
 
@@ -451,9 +472,13 @@ private struct MeetingCaptionRow: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(line.timestamp, style: .time)
+                .font(.caption.monospacedDigit())
+                .foregroundColor(.white.opacity(0.55))
             bodyText
-                .font(.system(size: 15.5))
+                .font(.body)
+                .lineSpacing(5)
                 .foregroundColor(.white.opacity(0.92))
                 .fixedSize(horizontal: false, vertical: true)
 
@@ -485,6 +510,7 @@ private struct MeetingCaptionRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 8)
     }
 }
 
@@ -577,8 +603,11 @@ private struct MeetingFactCardView: View {
                                     .font(.caption2)
                                 Text(link.title)
                                     .font(.caption)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                Spacer(minLength: 8)
+                                Image(systemName: "arrow.up.right")
                             }
+                            .frame(minHeight: 44)
                             .foregroundColor(Color(red: 0.45, green: 0.66, blue: 1))
                         }
                     }
@@ -713,7 +742,7 @@ private struct MeetingSummaryReportView: View {
     private func stat(title: String, value: String) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(title)
-                .font(.caption2)
+                    .font(.caption2)
                 .foregroundColor(.white.opacity(0.5))
             Text(value)
                 .font(.subheadline.weight(.semibold))
@@ -778,12 +807,13 @@ private struct MeetingDetailBubble: View {
                 Text(bubble.query)
                     .font(.caption)
                     .foregroundColor(.white.opacity(0.55))
-                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark.circle.fill")
                         .font(.body)
                         .foregroundColor(.white.opacity(0.5))
+                        .frame(width: 44, height: 44)
                 }
                 .accessibilityLabel("meeting.detail.close".localized)
             }
@@ -813,8 +843,11 @@ private struct MeetingDetailBubble: View {
                                     .font(.caption2)
                                 Text(link.title)
                                     .font(.caption)
-                                    .lineLimit(1)
+                                    .lineLimit(2)
+                                Spacer(minLength: 8)
+                                Image(systemName: "arrow.up.right")
                             }
+                            .frame(minHeight: 44)
                             .foregroundColor(Color(red: 0.45, green: 0.66, blue: 1))
                         }
                     }

@@ -695,3 +695,4 @@
 "meeting.detail.loading" = "Preparing explanation";
 "meeting.detail.failed" = "Could not generate an explanation. Try again.";
 "meeting.detail.close" = "Close";
+"meeting.detail.openHint" = "Open explanation and sources and hear a whisper";
