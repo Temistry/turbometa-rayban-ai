@@ -5,6 +5,185 @@
 import MWDATCore
 import SwiftUI
 
+struct GoogleAPIKeySettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var apiKey = ""
+    @State private var showSaveSuccess = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    SecureField("settings.apikey.placeholder".localized, text: $apiKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Google Gemini API Key")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("settings.apikey.google.help".localized)
+                        Link(
+                            "settings.apikey.get".localized,
+                            destination: URL(string: "https://aistudio.google.com/apikey")!
+                        )
+                        .font(.caption)
+                    }
+                }
+
+                Section {
+                    Button("save".localized) { saveAPIKey() }
+                        .frame(maxWidth: .infinity)
+                        .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if APIKeyManager.shared.hasGoogleAPIKey() {
+                        Button("settings.apikey.delete".localized, role: .destructive) {
+                            deleteAPIKey()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+
+                Section {
+                    Text("API Key는 현재 iPhone의 기기 전용 Keychain에 저장됩니다.")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                } header: {
+                    Text("보안")
+                }
+            }
+            .navigationTitle("settings.apikey.manage".localized)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("done".localized) { dismiss() }
+                }
+            }
+            .alert("settings.apikey.saved".localized, isPresented: $showSaveSuccess) {
+                Button("ok".localized) { dismiss() }
+            } message: {
+                Text("settings.apikey.saved.message".localized)
+            }
+            .alert("error".localized, isPresented: $showError) {
+                Button("ok".localized) {}
+            } message: {
+                Text(errorMessage)
+            }
+            .onAppear {
+                apiKey = APIKeyManager.shared.getGoogleAPIKey() ?? ""
+            }
+        }
+    }
+
+    private func saveAPIKey() {
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "settings.apikey.empty".localized
+            showError = true
+            return
+        }
+
+        if APIKeyManager.shared.saveGoogleAPIKey(apiKey) {
+            showSaveSuccess = true
+        } else {
+            errorMessage = "settings.apikey.savefailed".localized
+            showError = true
+        }
+    }
+
+    private func deleteAPIKey() {
+        if APIKeyManager.shared.deleteGoogleAPIKey() {
+            apiKey = ""
+            dismiss()
+        } else {
+            errorMessage = "settings.apikey.deletefailed".localized
+            showError = true
+        }
+    }
+}
+
+struct JevAPIKeySettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var apiKey = ""
+    @State private var showSaveSuccess = false
+    @State private var showError = false
+    @State private var errorMessage = ""
+
+    var body: some View {
+        NavigationView {
+            Form {
+                Section {
+                    SecureField("settings.apikey.placeholder".localized, text: $apiKey)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("TypeSafe Jev API Key")
+                } footer: {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("settings.apikey.jev.help".localized)
+                        Link(
+                            "settings.apikey.jev.get".localized,
+                            destination: URL(string: "https://typesafe.ai")!
+                        )
+                        .font(.caption)
+                    }
+                }
+
+                Section {
+                    Button("save".localized) { saveAPIKey() }
+                        .frame(maxWidth: .infinity)
+                        .disabled(apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+
+                    if APIKeyManager.shared.hasJevAPIKey() {
+                        Button("settings.apikey.delete".localized, role: .destructive) {
+                            deleteAPIKey()
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                }
+            }
+            .navigationTitle("settings.jevkey.title".localized)
+            .alert("save".localized, isPresented: $showSaveSuccess) {
+                Button("ok".localized) { dismiss() }
+            } message: {
+                Text("settings.apikey.saved.message".localized)
+            }
+            .alert("error".localized, isPresented: $showError) {
+                Button("ok".localized) {}
+            } message: {
+                Text(errorMessage)
+            }
+            .onAppear {
+                apiKey = APIKeyManager.shared.getJevAPIKey() ?? ""
+            }
+        }
+    }
+
+    private func saveAPIKey() {
+        guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            errorMessage = "settings.apikey.empty".localized
+            showError = true
+            return
+        }
+
+        if APIKeyManager.shared.saveJevAPIKey(apiKey) {
+            showSaveSuccess = true
+        } else {
+            errorMessage = "settings.apikey.savefailed".localized
+            showError = true
+        }
+    }
+
+    private func deleteAPIKey() {
+        if APIKeyManager.shared.deleteJevAPIKey() {
+            apiKey = ""
+            dismiss()
+        } else {
+            errorMessage = "settings.apikey.deletefailed".localized
+            showError = true
+        }
+    }
+}
+
 struct UnifiedSettingsView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
     #if DEBUG
