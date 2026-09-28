@@ -1,16 +1,16 @@
 /*
  * 일반 AI 이미지 인식 서비스
- * QuickVisionService의 검증된 요청/오류/로그 경로를 재사용한다.
+ * GeminiImageService의 검증된 요청/오류/로그 경로를 재사용한다.
  */
 
 import Foundation
 import UIKit
 
 struct VisionAPIService {
-    private let quickVisionService: QuickVisionService
+    private let imageService: GeminiImageService
 
     init(apiKey: String, baseURL: String? = nil, model: String? = nil) {
-        self.quickVisionService = QuickVisionService(
+        self.imageService = GeminiImageService(
             apiKey: apiKey,
             baseURL: baseURL ?? VisionAPIConfig.baseURL,
             model: model ?? VisionAPIConfig.model
@@ -33,7 +33,7 @@ struct VisionAPIService {
     ) async throws -> String {
         print("[Vision][INFO] 일반 이미지 인식 시작 promptLength=\(prompt.count)")
         do {
-            let result = try await quickVisionService.analyzeImage(
+            let result = try await imageService.analyzeImage(
                 image,
                 customPrompt: prompt,
                 mediaResolution: mediaResolution,

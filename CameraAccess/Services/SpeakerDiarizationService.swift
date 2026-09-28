@@ -79,6 +79,7 @@ final class DiarizationAudioBuffer {
 
     private let lock = NSLock()
     private var samples: [Int16] = []
+    private var origin: Date?
     private var converter: AVAudioConverter?
     private var converterInputFormat: AVAudioFormat?
     private let outputFormat = AVAudioFormat(
@@ -93,25 +94,35 @@ final class DiarizationAudioBuffer {
         let converted = convert(buffer)
         guard !converted.isEmpty else { return }
         lock.lock()
+        if samples.isEmpty {
+            origin = Date().addingTimeInterval(-Double(converted.count) / Double(DiarizationAudio.sampleRate))
+        }
         samples.append(contentsOf: converted)
         if samples.count > Self.maxSamples {
+            origin = origin?.addingTimeInterval(Double(samples.count - Self.maxSamples) / Double(DiarizationAudio.sampleRate))
             samples.removeFirst(samples.count - Self.maxSamples)
         }
         lock.unlock()
     }
 
     func drain() -> [Int16] {
+        drainTimed().samples
+    }
+
+    func drainTimed() -> (samples: [Int16], origin: Date) {
         lock.lock()
         defer {
             samples.removeAll(keepingCapacity: true)
+            origin = nil
             lock.unlock()
         }
-        return samples
+        return (samples, origin ?? Date())
     }
 
     func reset() {
         lock.lock()
         samples.removeAll()
+        origin = nil
         lock.unlock()
     }
 
@@ -195,6 +206,7 @@ struct DiarizedTurn: Equatable {
     var text: String
     /// 대화 조각 시작 기준 초.
     let start: TimeInterval
+    var words: [DiarizedWord] = []
 }
 
 enum DiarizationParser {
@@ -229,7 +241,7 @@ enum DiarizationParser {
 
     /// 견본 구간(enrollmentEnd 이전)에서 가장 많이 나온 이름표를 "나"로 정하고,
     /// 견본 단어는 버린 뒤 같은 화자의 연속 단어를 한 발언으로 묶는다.
-    static func turns(words: [DiarizedWord], enrollmentEnd: TimeInterval?) -> [DiarizedTurn] {
+    static func turns(words: [DiarizedWord], enrollmentEnd: TimeInterval?, conversationOffset: TimeInterval? = nil) -> [DiarizedTurn] {
         var meLabel: String?
         var conversation = words
         if let enrollmentEnd {
@@ -241,16 +253,18 @@ enum DiarizationParser {
             }
             conversation = words.filter { $0.start >= enrollmentEnd }
         }
-        let origin = enrollmentEnd ?? 0
+        let origin = conversationOffset ?? enrollmentEnd ?? 0
 
         var turns: [DiarizedTurn] = []
         for word in conversation {
             let role: DiarizedRole = meLabel == nil ? .unknown : (word.speaker == meLabel ? .me : .other)
             if var last = turns.last, last.speaker == word.speaker {
                 last.text += " " + word.text
+                last.words.append(DiarizedWord(text: word.text, speaker: word.speaker, start: max(0, word.start - origin)))
                 turns[turns.count - 1] = last
             } else {
-                turns.append(DiarizedTurn(role: role, speaker: word.speaker, text: word.text, start: max(0, word.start - origin)))
+                turns.append(DiarizedTurn(role: role, speaker: word.speaker, text: word.text, start: max(0, word.start - origin),
+                    words: [DiarizedWord(text: word.text, speaker: word.speaker, start: max(0, word.start - origin))]))
             }
         }
         return turns
@@ -329,7 +343,8 @@ final class SpeakerDiarizationService {
         var object = try Self.decode(data)
         object = try await waitUntilCompleted(object, apiKey: apiKey)
         let words = DiarizationParser.words(from: object)
-        return DiarizationParser.turns(words: words, enrollmentEnd: composite.enrollmentEnd)
+        let offset: TimeInterval? = enrollment.flatMap { $0.isEmpty ? nil : Double($0.count) / Double(DiarizationAudio.sampleRate) + DiarizationAudio.enrollmentGap }
+        return DiarizationParser.turns(words: words, enrollmentEnd: composite.enrollmentEnd, conversationOffset: offset)
     }
 
     /// 응답이 아직 처리 중이면 완료될 때까지 짧게 조회한다.

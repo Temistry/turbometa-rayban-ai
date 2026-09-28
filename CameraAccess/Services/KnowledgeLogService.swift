@@ -323,39 +323,6 @@ final class KnowledgeLogService: ObservableObject {
         print("[KnowledgeLog][INFO] 외부 지식 로그 폴더 연결 해제")
     }
 
-    func appendQuickVision(_ record: QuickVisionRecord, model: String) {
-        guard record.status.isTerminal else { return }
-
-        let answer: String
-        switch record.status {
-        case .succeeded:
-            answer = record.result
-        case .failed, .rejected:
-            answer = record.errorMessage ?? "퀵비전 인식에 실패했습니다"
-        case .pending:
-            return
-        }
-
-        var metadata = record.metadata
-        metadata["mode"] = record.mode.rawValue
-        metadata["status"] = record.status.rawValue
-        metadata["capture_source"] = record.captureSource
-        if let errorCode = record.errorCode {
-            metadata["error_code"] = errorCode
-        }
-
-        let event = KnowledgeLogEvent(
-            id: record.id,
-            timestamp: record.timestamp,
-            source: .quickVision,
-            question: quickVisionQuestion(for: record),
-            answer: answer,
-            model: model,
-            tags: ["퀵비전", record.mode.rawValue, record.status.rawValue],
-            metadata: metadata
-        )
-        append(event)
-    }
 
     func appendConversation(_ record: ConversationRecord) {
         var pendingQuestion: ConversationMessage?
@@ -487,17 +454,6 @@ final class KnowledgeLogService: ObservableObject {
         }
     }
 
-    private func quickVisionQuestion(for record: QuickVisionRecord) -> String {
-        switch record.mode {
-        case .standard: return "이게 뭐야?"
-        case .health: return "이 음식이나 음료는 건강한가?"
-        case .blind: return "주변 환경과 위험 요소를 설명해줘."
-        case .reading: return "보이는 글자를 읽어줘."
-        case .translate: return "보이는 글자를 한국어로 번역해줘."
-        case .encyclopedia: return "이 대상에 대해 알려줘."
-        case .custom: return record.prompt
-        }
-    }
 
     private nonisolated static func copy(
         _ snapshots: [KnowledgeLogSnapshot],

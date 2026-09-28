@@ -7,9 +7,6 @@ import SwiftUI
 
 struct UnifiedSettingsView: View {
     @ObservedObject var streamViewModel: StreamSessionViewModel
-    @ObservedObject private var quickVisionModeManager = QuickVisionModeManager.shared
-    @ObservedObject private var openClawService = OpenClawNodeService.shared
-    @ObservedObject private var locationService = OpenClawCaptureLocationService.shared
     #if DEBUG
     @ObservedObject private var developerConsole = DeveloperConsole.shared
     #endif
@@ -19,8 +16,6 @@ struct UnifiedSettingsView: View {
     @State private var showJevAPIKeySettings = false
     @State private var showVoiceEnrollment = false
     @State private var isVoiceEnrolled = VoiceEnrollmentStore.isEnrolled
-    @State private var showQuickVisionSettings = false
-    @State private var showOpenClawSettings = false
     @State private var showKnowledgeFolderPicker = false
     @State private var showKnowledgeError = false
     @State private var knowledgeErrorMessage = ""
@@ -29,6 +24,7 @@ struct UnifiedSettingsView: View {
     @State private var hasJevAPIKey = false
     @AppStorage(MeetingSceneMode.storageKey) private var sceneModeRaw = ""
     @AppStorage(MeetingMicMode.storageKey) private var micModeRaw = MeetingMicMode.phone.rawValue
+    @AppStorage("meeting.voiceProcessingMode") private var voiceProcessing = "auto"
     @AppStorage(WhisperSide.storageKey) private var whisperSideRaw = WhisperSide.right.rawValue
 
     private var whisperSide: Binding<WhisperSide> {
@@ -66,7 +62,6 @@ struct UnifiedSettingsView: View {
                 googleAISection
                 jevSection
                 knowledgeLogSection
-                integrationSection
                 #if DEBUG
                 developerSection
                 #endif
@@ -90,12 +85,6 @@ struct UnifiedSettingsView: View {
             }
             .onChange(of: showVoiceEnrollment) { isShowing in
                 if !isShowing { isVoiceEnrolled = VoiceEnrollmentStore.isEnrolled }
-            }
-            .sheet(isPresented: $showQuickVisionSettings) {
-                QuickVisionSettingsView()
-            }
-            .sheet(isPresented: $showOpenClawSettings) {
-                OpenClawSettingsView()
             }
             .sheet(isPresented: $showKnowledgeFolderPicker) {
                 KnowledgeLogFolderPicker { url in
@@ -169,7 +158,7 @@ struct UnifiedSettingsView: View {
         } header: {
             Text("언어")
         } footer: {
-            Text("화면, Gemini 응답, Siri 문구와 퀵비전 음성 출력을 한국어로 사용합니다.")
+            Text("전사와 귓속말에 한국어를 사용합니다.")
         }
     }
 
@@ -187,25 +176,15 @@ struct UnifiedSettingsView: View {
                 showGoogleAPIKeySettings = true
             }
 
-            UnifiedInfoRow(title: "퀵비전 모델", value: GeminiModelCatalog.quickVision)
+            UnifiedInfoRow(title: "전사 모델", value: SpeakerDiarizationService.model)
 
             UnifiedInfoRow(
                 title: "settings.quality".localized,
                 value: "settings.quality.maximum".localized
             )
 
-            UnifiedSettingsRow(
-                icon: "eye.circle.fill",
-                iconColor: AppColors.quickVision,
-                title: "quickvision.settings".localized,
-                value: quickVisionModeManager.currentMode.displayName
-            ) {
-                showQuickVisionSettings = true
-            }
         } header: {
             Text("Google Gemini")
-        } footer: {
-            Text("퀵비전과 음식 분석은 같은 Google Gemini 인증 설정을 사용합니다. 퀵비전 낭독은 iOS 한국어 시스템 음성을 사용합니다.")
         }
     }
 
@@ -309,33 +288,15 @@ struct UnifiedSettingsView: View {
                         .foregroundColor(.secondary)
                 }
             }
+            Picker("음성처리 · 다음 대화부터 적용", selection: $voiceProcessing) {
+                Text("자동").tag("auto")
+                Text("켜짐").tag("on")
+                Text("꺼짐").tag("off")
+            }
         } header: {
             Text("회의 통역기")
         } footer: {
             Text("settings.apikey.jev.help".localized)
-        }
-    }
-
-    private var integrationSection: some View {
-        Section {
-            UnifiedSettingsRow(
-                icon: "link.circle.fill",
-                iconColor: .purple,
-                title: "OpenClaw",
-                value: openClawStatusText,
-                valueColor: openClawStatusColor
-            ) {
-                showOpenClawSettings = true
-            }
-
-            Toggle(
-                "settings.capture.location".localized,
-                isOn: $locationService.isEnabled
-            )
-        } header: {
-            Text("settings.integrations".localized)
-        } footer: {
-            Text("settings.capture.location.description".localized)
         }
     }
 
@@ -397,25 +358,6 @@ struct UnifiedSettingsView: View {
         return formatter.string(from: date)
     }
 
-    private var openClawStatusColor: Color {
-        switch openClawService.connectionState {
-        case .connected: return .green
-        case .connecting: return .orange
-        case .waitingForPairing: return .yellow
-        case .error: return .red
-        case .disconnected: return .gray
-        }
-    }
-
-    private var openClawStatusText: String {
-        switch openClawService.connectionState {
-        case .connected: return "openclaw.status.connected".localized
-        case .connecting: return "openclaw.status.connecting".localized
-        case .waitingForPairing: return "openclaw.status.pairing".localized
-        case .error: return "오류"
-        case .disconnected: return "openclaw.status.disconnected".localized
-        }
-    }
 }
 
 private struct UnifiedInfoRow: View {

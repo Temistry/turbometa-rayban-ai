@@ -8,7 +8,7 @@
 import Foundation
 import UIKit
 
-final class QuickVisionService {
+final class GeminiImageService {
     private let apiKey: String
     private let baseURL: String
     private let model: String
@@ -125,26 +125,26 @@ final class QuickVisionService {
         let startedAt = Date()
 
         guard !apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            print("[QuickVisionAPI][ERROR] Google Gemini 자격 증명이 설정되지 않음")
-            throw QuickVisionError.apiKeyMissing
+            print("[GeminiImageAPI][ERROR] Google Gemini 자격 증명이 설정되지 않음")
+            throw GeminiImageError.apiKeyMissing
         }
 
         guard let imageData = image.jpegData(compressionQuality: 0.72) else {
-            print("[QuickVisionAPI][ERROR] JPEG 변환 실패 size=\(image.size.width)x\(image.size.height)")
-            throw QuickVisionError.invalidImage
+            print("[GeminiImageAPI][ERROR] JPEG 변환 실패 size=\(image.size.width)x\(image.size.height)")
+            throw GeminiImageError.invalidImage
         }
 
-        let prompt = (customPrompt ?? QuickVisionModeManager.staticPrompt)
+        let prompt = (customPrompt ?? "사진의 핵심 내용을 한국어로 설명해 주세요.")
             .trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else {
-            print("[QuickVisionAPI][ERROR] 빈 프롬프트로 분석 요청 거부")
-            throw QuickVisionError.invalidResponse
+            print("[GeminiImageAPI][ERROR] 빈 프롬프트로 분석 요청 거부")
+            throw GeminiImageError.invalidResponse
         }
 
         let imageBase64 = imageData.base64EncodedString()
 
         print(
-            "[QuickVisionAPI][INFO] Gemini 분석 준비 model=\(model) "
+            "[GeminiImageAPI][INFO] Gemini 분석 준비 model=\(model) "
             + "imageBytes=\(imageData.count) promptLength=\(prompt.count)"
         )
 
@@ -165,15 +165,15 @@ final class QuickVisionService {
                     mediaResolution: useMedia ? mediaResolution : nil
                 )
                 output = try await makeRequest(body, usageLane: usageLane)
-            } catch QuickVisionError.apiError(statusCode: 400, requestID: _, message: _) where useMedia || useThinking {
+            } catch GeminiImageError.apiError(statusCode: 400, requestID: _, message: _) where useMedia || useThinking {
                 if useMedia {
                     useMedia = false
                     droppedMedia = true
-                    print("[QuickVisionAPI][WARN] mediaResolution 포함 요청 거부, 해상도 옵션 없이 재시도")
+                    print("[GeminiImageAPI][WARN] mediaResolution 포함 요청 거부, 해상도 옵션 없이 재시도")
                 } else {
                     useThinking = false
                     droppedThinking = true
-                    print("[QuickVisionAPI][WARN] thinkingConfig 포함 요청 거부, 생각 설정 없이 재시도")
+                    print("[GeminiImageAPI][WARN] thinkingConfig 포함 요청 거부, 생각 설정 없이 재시도")
                 }
             }
         }
@@ -184,7 +184,7 @@ final class QuickVisionService {
         }
         let result = output ?? ""
         let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
-        print("[QuickVisionAPI][INFO] Gemini 분석 완료 elapsedMs=\(elapsedMs) resultLength=\(result.count)")
+        print("[GeminiImageAPI][INFO] Gemini 분석 완료 elapsedMs=\(elapsedMs) resultLength=\(result.count)")
         return result
     }
 
@@ -236,8 +236,8 @@ final class QuickVisionService {
 
     private func makeRequest(_ requestBody: GenerateContentRequest, usageLane: String) async throws -> String {
         guard let url = URL(string: "\(baseURL)/models/\(model):generateContent") else {
-            print("[QuickVisionAPI][ERROR] Gemini URL 생성 실패 model=\(model)")
-            throw QuickVisionError.invalidResponse
+            print("[GeminiImageAPI][ERROR] Gemini URL 생성 실패 model=\(model)")
+            throw GeminiImageError.invalidResponse
         }
 
         var request = URLRequest(url: url)
@@ -252,14 +252,14 @@ final class QuickVisionService {
         } catch {
             let nsError = error as NSError
             print(
-                "[QuickVisionAPI][ERROR] Gemini 요청 인코딩 실패 "
+                "[GeminiImageAPI][ERROR] Gemini 요청 인코딩 실패 "
                 + "domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)"
             )
             throw error
         }
 
         print(
-            "[QuickVisionAPI][HTTP] POST host=\(url.host ?? "-") model=\(model) "
+            "[GeminiImageAPI][HTTP] POST host=\(url.host ?? "-") model=\(model) "
             + "requestBytes=\(request.httpBody?.count ?? 0) timeout=\(Int(request.timeoutInterval))s"
         )
 
@@ -277,10 +277,10 @@ final class QuickVisionService {
         } catch {
             let nsError = error as NSError
             print(
-                "[QuickVisionAPI][ERROR] Gemini 네트워크 요청 실패 "
+                "[GeminiImageAPI][ERROR] Gemini 네트워크 요청 실패 "
                 + "domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)"
             )
-            throw QuickVisionError.network(
+            throw GeminiImageError.network(
                 domain: nsError.domain,
                 code: nsError.code,
                 message: nsError.localizedDescription
@@ -288,8 +288,8 @@ final class QuickVisionService {
         }
 
         guard let httpResponse = response as? HTTPURLResponse else {
-            print("[QuickVisionAPI][ERROR] Gemini HTTP 응답 형식 아님 bytes=\(data.count)")
-            throw QuickVisionError.invalidResponse
+            print("[GeminiImageAPI][ERROR] Gemini HTTP 응답 형식 아님 bytes=\(data.count)")
+            throw GeminiImageError.invalidResponse
         }
 
         let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
@@ -300,20 +300,20 @@ final class QuickVisionService {
         let contentType = httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "-"
 
         print(
-            "[QuickVisionAPI][HTTP] Gemini 응답 status=\(httpResponse.statusCode) "
+            "[GeminiImageAPI][HTTP] Gemini 응답 status=\(httpResponse.statusCode) "
             + "elapsedMs=\(elapsedMs) bytes=\(data.count) contentType=\(contentType) requestID=\(requestID)"
         )
 
         guard (200..<300).contains(httpResponse.statusCode) else {
             let message = extractServerError(from: data)
             if httpResponse.statusCode == 429 {
-                print("[QuickVisionAPI][WARN] quota \(MeetingGeminiService.quotaDiagnostic(from: data))")
+                print("[GeminiImageAPI][WARN] quota \(MeetingGeminiService.quotaDiagnostic(from: data))")
             }
             print(
-                "[QuickVisionAPI][ERROR] Gemini API 오류 status=\(httpResponse.statusCode) "
+                "[GeminiImageAPI][ERROR] Gemini API 오류 status=\(httpResponse.statusCode) "
                 + "requestID=\(requestID) message=\(message)"
             )
-            throw QuickVisionError.apiError(
+            throw GeminiImageError.apiError(
                 statusCode: httpResponse.statusCode,
                 requestID: requestID,
                 message: message
@@ -326,28 +326,28 @@ final class QuickVisionService {
         } catch {
             let nsError = error as NSError
             print(
-                "[QuickVisionAPI][ERROR] Gemini 응답 디코딩 실패 "
+                "[GeminiImageAPI][ERROR] Gemini 응답 디코딩 실패 "
                 + "domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription) "
                 + "responseBytes=\(data.count)"
             )
-            throw QuickVisionError.invalidResponse
+            throw GeminiImageError.invalidResponse
         }
 
         // 응답이 비거나 차단돼도 토큰은 청구되므로 해석 직후에 기록한다.
         if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
            let usage = GeminiUsage.from(object) {
             GeminiUsageLedger.shared.record(lane: usageLane, usage: usage)
-            print("[QuickVisionAPI][INFO] usage lane=\(usageLane) in=\(usage.input) out=\(usage.candidates) thoughts=\(usage.thoughts)")
+            print("[GeminiImageAPI][INFO] usage lane=\(usageLane) in=\(usage.input) out=\(usage.candidates) thoughts=\(usage.thoughts)")
         }
 
         if let blockReason = responseBody.promptFeedback?.blockReason, !blockReason.isEmpty {
-            print("[QuickVisionAPI][WARN] Gemini 요청 차단 reason=\(sanitize(blockReason))")
-            throw QuickVisionError.blocked(reason: sanitize(blockReason))
+            print("[GeminiImageAPI][WARN] Gemini 요청 차단 reason=\(sanitize(blockReason))")
+            throw GeminiImageError.blocked(reason: sanitize(blockReason))
         }
 
         guard let candidate = responseBody.candidates?.first else {
-            print("[QuickVisionAPI][ERROR] Gemini candidates 비어 있음 responseBytes=\(data.count)")
-            throw QuickVisionError.emptyResponse
+            print("[GeminiImageAPI][ERROR] Gemini candidates 비어 있음 responseBytes=\(data.count)")
+            throw GeminiImageError.emptyResponse
         }
 
         let result = candidate.content?.parts?
@@ -357,10 +357,10 @@ final class QuickVisionService {
 
         guard !result.isEmpty else {
             print(
-                "[QuickVisionAPI][ERROR] Gemini 텍스트 응답 비어 있음 "
+                "[GeminiImageAPI][ERROR] Gemini 텍스트 응답 비어 있음 "
                 + "finishReason=\(candidate.finishReason ?? "-")"
             )
-            throw QuickVisionError.emptyResponse
+            throw GeminiImageError.emptyResponse
         }
 
         return result
@@ -403,7 +403,7 @@ final class QuickVisionService {
 
 // MARK: - Errors
 
-enum QuickVisionError: LocalizedError {
+enum GeminiImageError: LocalizedError {
     case noDevice
     case streamNotReady
     case frameTimeout

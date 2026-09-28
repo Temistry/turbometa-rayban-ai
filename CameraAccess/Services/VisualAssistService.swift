@@ -218,7 +218,7 @@ final class VisualAssistService: ObservableObject {
     }
 
     private func handleAnalysisFailure(_ error: Error) {
-        if case QuickVisionError.apiError(let statusCode, _, _) = error,
+        if case GeminiImageError.apiError(let statusCode, _, _) = error,
            statusCode == 429 {
             pausedUntil = Date().addingTimeInterval(Self.quotaPauseInterval)
             currentInterval = baseInterval

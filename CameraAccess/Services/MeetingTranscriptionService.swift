@@ -17,6 +17,34 @@
 import AVFoundation
 import Speech
 
+struct MeetingTimedWord: Equatable {
+    let text: String
+    let start: Date
+    let end: Date
+
+    func overlaps(_ other: MeetingTimedWord) -> Bool {
+        start < other.end && other.start < end
+    }
+}
+
+/// Keeps the capture tap independent of the lifetime of a recognition request.
+final class MeetingRecognitionInput {
+    private let lock = NSLock()
+    private var request: SFSpeechAudioBufferRecognitionRequest?
+
+    func replace(_ next: SFSpeechAudioBufferRecognitionRequest?) {
+        lock.lock()
+        request = next
+        lock.unlock()
+    }
+
+    func append(_ buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        defer { lock.unlock() }
+        request?.append(buffer)
+    }
+}
+
 enum MeetingTranscriptionError: Error {
     case recognizerUnavailable
     case permissionDenied
@@ -145,8 +173,12 @@ final class MeetingTranscriptionService: ObservableObject {
 
     @Published private(set) var state: ServiceState = .idle
     @Published private(set) var inputRouteName = "-"
+    var outputRouteName: String {
+        AVAudioSession.sharedInstance().currentRoute.outputs.map(\.portName).joined(separator: ", ")
+    }
 
     var onSegment: ((String) -> Void)?
+    private(set) var latestWords: [MeetingTimedWord] = []
     var onPartial: ((String) -> Void)?
     var onStable: ((String) -> Void)?
     var onFailure: ((String) -> Void)?
@@ -166,6 +198,8 @@ final class MeetingTranscriptionService: ObservableObject {
     private let audioEngine = AVAudioEngine()
     private let speechRecognizer = SFSpeechRecognizer(locale: Locale(identifier: "ko-KR"))
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private let recognitionInput = MeetingRecognitionInput()
+    private var recognitionOrigin = Date()
     private var recognitionTask: SFSpeechRecognitionTask?
     private var restartWorkItem: DispatchWorkItem?
     private var tickerWorkItem: DispatchWorkItem?
@@ -302,6 +336,9 @@ final class MeetingTranscriptionService: ObservableObject {
 
         let outputs = session.currentRoute.outputs.map(\.portType)
         usesVoiceProcessing = micMode == .headset || Self.needsEchoCancellation(outputs: outputs)
+        usesVoiceProcessing = Self.voiceProcessingEnabled(
+            preference: UserDefaults.standard.string(forKey: "meeting.voiceProcessingMode"),
+            automatic: usesVoiceProcessing)
         inputRouteName = session.currentRoute.inputs.first?.portName ?? "-"
         DeveloperConsole.shared.log(.info, category: "MeetingAudio", "mic=\(micMode.rawValue) input=\(inputRouteName) source=\(dataSourceName) outputs=\(outputs.map(\.rawValue).joined(separator: ",")) voiceProcessing=\(usesVoiceProcessing) rate=\(session.sampleRate)")
     }
@@ -309,6 +346,14 @@ final class MeetingTranscriptionService: ObservableObject {
     /// 귓속말이 폰 스피커·수화기로 나오면 마이크가 되받으므로 에코 제거가 필요하다.
     nonisolated static func needsEchoCancellation(outputs: [AVAudioSession.Port]) -> Bool {
         outputs.contains { $0 == .builtInSpeaker || $0 == .builtInReceiver }
+    }
+
+    nonisolated static func voiceProcessingEnabled(preference: String?, automatic: Bool) -> Bool {
+        switch preference {
+        case "on": return true
+        case "off": return false
+        default: return automatic
+        }
     }
 
     /// 테이블 위 폰이 주변 사람 목소리를 고르게 받도록 무지향 패턴의 아래쪽 마이크를 고른다.
@@ -331,11 +376,6 @@ final class MeetingTranscriptionService: ObservableObject {
             prefersOnDevice = false
             DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "retry server recognition")
         }
-        audioEngine.stop()
-        if hasInputTap {
-            audioEngine.inputNode.removeTap(onBus: 0)
-            hasInputTap = false
-        }
         teardownTask()
         pendingText = ""
         lastStableText = ""
@@ -355,7 +395,12 @@ final class MeetingTranscriptionService: ObservableObject {
             request.requiresOnDeviceRecognition = true
         }
         recognitionRequest = request
+        recognitionOrigin = Date()
+        latestWords = []
+        recognitionInput.replace(request)
+        lastPartialAt = Date()
 
+        if !audioEngine.isRunning {
         let inputNode = audioEngine.inputNode
         if inputNode.isVoiceProcessingEnabled != usesVoiceProcessing {
             do { try inputNode.setVoiceProcessingEnabled(usesVoiceProcessing) }
@@ -387,8 +432,13 @@ final class MeetingTranscriptionService: ObservableObject {
         let audioFileBox = self.audioFileBox
         let inputMeter = self.inputMeter
         let diarizationSink = self.diarizationSink
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak request] buffer, _ in
-            request?.append(buffer)
+        let recognitionInput = self.recognitionInput
+        if hasInputTap {
+            inputNode.removeTap(onBus: 0)
+            hasInputTap = false
+        }
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, _ in
+            recognitionInput.append(buffer)
             audioFileBox.write(buffer)
             inputMeter.add(buffer)
             diarizationSink?.append(buffer)
@@ -419,6 +469,7 @@ final class MeetingTranscriptionService: ObservableObject {
             engineRetryWorkItem = item
             DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: item)
             return
+        }
         }
 
         recognitionGeneration += 1
@@ -482,6 +533,15 @@ final class MeetingTranscriptionService: ObservableObject {
                 )
             }
             onInputQuality?(window, MeetingInputMeter.isQuiet(recentWindows))
+            if let window, Self.shouldRecoverStall(window: window,
+                secondsWithoutResult: Date().timeIntervalSince(lastPartialAt)) {
+                DeveloperConsole.shared.log(.warning, category: "MeetingSpeech", "stall recovery captureRunning=\(audioEngine.isRunning)")
+                if speechRecognizer?.supportsOnDeviceRecognition == true {
+                    prefersOnDevice = true
+                    onDeviceUntil = Date().addingTimeInterval(120)
+                }
+                restartCycle()
+            }
         }
         scheduleMeter()
     }
@@ -505,6 +565,11 @@ final class MeetingTranscriptionService: ObservableObject {
             && pending != previous && (quietTime >= 1 || elapsed >= 4)
     }
 
+    nonisolated static func shouldRecoverStall(window: MeetingInputWindow,
+                                               secondsWithoutResult: TimeInterval) -> Bool {
+        window.speechRatio >= 0.5 && secondsWithoutResult >= 15
+    }
+
     private func restartCycle() {
         guard state == .running else { return }
         flushRemainder()
@@ -521,6 +586,11 @@ final class MeetingTranscriptionService: ObservableObject {
         if let result {
             consecutiveTaskErrors = 0
             let text = result.bestTranscription.formattedString
+            latestWords = result.bestTranscription.segments.map {
+                MeetingTimedWord(text: $0.substring,
+                    start: recognitionOrigin.addingTimeInterval($0.timestamp),
+                    end: recognitionOrigin.addingTimeInterval($0.timestamp + max(0.05, $0.duration)))
+            }
             if text != pendingText {
                 pendingText = text
                 lastPartialAt = Date()
@@ -549,8 +619,9 @@ final class MeetingTranscriptionService: ObservableObject {
                 onDeviceUntil = Date().addingTimeInterval(120)
             }
             flushRemainder()
-            teardownEngine(keepAudioSession: true)
+            teardownTask()
             guard consecutiveTaskErrors < 5 else {
+                teardownEngine(keepAudioSession: true)
                 state = .idle
                 onFailure?("음성 인식을 계속할 수 없습니다. 다시 시작해 주세요.")
                 return
@@ -577,6 +648,7 @@ final class MeetingTranscriptionService: ObservableObject {
 
     private func teardownTask() {
         recognitionGeneration += 1
+        recognitionInput.replace(nil)
         recognitionTask?.cancel()
         recognitionTask = nil
         recognitionRequest?.endAudio()
@@ -645,6 +717,8 @@ final class MeetingTranscriptionService: ObservableObject {
     /// 방해·라우트 변경 뒤 세션을 다시 구성하고 전사를 이어간다.
     private func recoverSession() {
         guard state == .running else { return }
+        flushRemainder()
+        teardownEngine(keepAudioSession: true)
         do {
             try configureAudioSession()
         } catch {

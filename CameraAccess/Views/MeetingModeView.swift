@@ -127,6 +127,7 @@ struct MeetingModeView: View {
             )
             if viewModel.runState == .listening {
                 MeetingChip(text: viewModel.inputRouteName, color: .blue)
+                MeetingChip(text: "출력: \(viewModel.outputRouteName)", color: .blue)
             }
             if viewModel.runState == .listening, let startedAt = viewModel.conversationStartedAt {
                 TimelineView(.periodic(from: .now, by: 1)) { _ in

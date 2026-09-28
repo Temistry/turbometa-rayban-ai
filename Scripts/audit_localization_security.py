@@ -306,23 +306,10 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
         "CameraAccess/Utils/APIKeyManager.swift": [
             "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
         ],
-        "CameraAccess/Services/OpenClaw/OpenClawNodeService.swift": [
-            "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
-            "OpenClawTransportMode",
-            "openclaw_transport_mode",
-            "transportMode == .meshnet && isMeshnetPeer",
-            "octets[0] == 100 && (64...127).contains(octets[1])",
-            "insecurePublicWebSocket",
-            "credentialsOrQueryNotAllowed",
-        ],
         "CameraAccess/ViewModels/RTMPStreamingViewModel.swift": [
             "kSecAttrAccessibleWhenUnlockedThisDeviceOnly",
         ],
         "CameraAccess/Services/ConversationStorage.swift": [
-            "completeFileProtectionUntilFirstUserAuthentication",
-            "FileProtectionType.completeUntilFirstUserAuthentication",
-        ],
-        "CameraAccess/Services/QuickVisionStorage.swift": [
             "completeFileProtectionUntilFirstUserAuthentication",
             "FileProtectionType.completeUntilFirstUserAuthentication",
         ],
@@ -344,7 +331,6 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
             "<식별정보 숨김>",
         ],
         "CameraAccess/TurboMetaApp.swift": [
-            "TurboMetaShortcuts.updateAppShortcutParameters()",
             'Locale(identifier: "ko-KR")',
             "DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS",
         ],
@@ -385,9 +371,9 @@ def audit_secrets_and_transport(findings: list[Finding]) -> None:
                 )
 
     meshnet_settings_path = SOURCE_ROOT / "Views" / "OpenClawSettingsView.swift"
-    if not meshnet_settings_path.exists():
+    if openclaw_service_path.exists() and not meshnet_settings_path.exists():
         findings.append(Finding("치명", relative(meshnet_settings_path), 1, "Meshnet opt-in 설정 화면이 없습니다"))
-    else:
+    elif meshnet_settings_path.exists():
         meshnet_settings_text = meshnet_settings_path.read_text(encoding="utf-8", errors="replace")
         for marker in ("Nord Meshnet", "OpenClawTransportMode.meshnet", "Gateway 토큰과 기기 페어링"):
             if marker not in meshnet_settings_text:

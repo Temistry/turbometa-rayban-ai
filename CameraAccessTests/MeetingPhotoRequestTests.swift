@@ -121,7 +121,7 @@ final class MeetingPhotoRequestTests: XCTestCase {
 
     /// 자동 장면 사진만 중간 해상도를 붙이고, 형식은 Gemini 3 사진별 해상도 규격을 따른다.
     func testSceneImageRequestCarriesMediaResolution() throws {
-        let data = try QuickVisionService.encodedRequestBody(
+        let data = try GeminiImageService.encodedRequestBody(
             prompt: "장면", imageBase64: "AAAA", thinking: true,
             mediaResolution: VisualAssistService.sceneMediaResolution
         )
@@ -133,7 +133,7 @@ final class MeetingPhotoRequestTests: XCTestCase {
         XCTAssertEqual(resolution["level"] as? String, "MEDIA_RESOLUTION_MEDIUM")
         XCTAssertNil(parts.first?["mediaResolution"])
 
-        let plain = try QuickVisionService.encodedRequestBody(
+        let plain = try GeminiImageService.encodedRequestBody(
             prompt: "장면", imageBase64: "AAAA", thinking: false, mediaResolution: nil
         )
         let plainText = String(decoding: plain, as: UTF8.self)

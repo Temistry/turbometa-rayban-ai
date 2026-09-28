@@ -131,6 +131,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var failure: Failure?
     @Published private(set) var isSpeakingWhisper = false
     @Published private(set) var inputRouteName = "-"
+    @Published private(set) var outputRouteName = "-"
     @Published private(set) var jevReady = false
     @Published private(set) var isStarting = false
     @Published private(set) var isStopping = false
@@ -174,6 +175,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private var photoTask: Task<Void, Never>?
     private var isPreparingWhisper = false
     private var liveLineID: UUID?
+    private var timedWordsByLine: [UUID: [MeetingTimedWord]] = [:]
+    private var supplementalWords: [MeetingTimedWord] = []
     private var analysisQueue: [(String, UUID)] = []
     private var analysisTask: Task<Void, Never>?
     private var analyzedTexts: [String] = []
@@ -227,6 +230,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
         transcription.onInputQuality = { [weak self] _, quiet in
             self?.isInputQuiet = quiet
+            guard let self else { return }
+            self.inputRouteName = self.transcription.inputRouteName
+            self.outputRouteName = self.transcription.outputRouteName
         }
         playbackCancellable = tts.$playbackState
             .receive(on: DispatchQueue.main)
@@ -312,6 +318,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
         enrollmentSamples = VoiceEnrollmentStore.load()
         voiceEnrolled = enrollmentSamples != nil
         diarizationBuffer.reset()
+        timedWordsByLine.removeAll()
+        supplementalWords.removeAll()
         transcription.diarizationSink = diarizationBuffer
         catches.removeAll()
         otherHistory.removeAll()
@@ -344,6 +352,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 guard generation == self.generation, !Task.isCancelled else { return }
                 guard transcription.state == .running else { return }
                 inputRouteName = transcription.inputRouteName
+                outputRouteName = transcription.outputRouteName
                 runState = .listening
                 visualAssist?.start()
                 startDiarizationLoop()
@@ -467,12 +476,20 @@ final class MeetingInterpreterViewModel: ObservableObject {
 
     private func updateLiveCaption(_ text: String) {
         guard runState == .listening else { return }
+        let words = transcription.latestWords.filter { word in
+            !supplementalWords.contains { $0.overlaps(word) }
+        }
+        guard !words.isEmpty else { return }
+        let displayText = words.count == transcription.latestWords.count
+            ? text : words.map(\.text).joined(separator: " ")
         if let id = liveLineID {
-            updateLine(id) { $0.text = text }
+            updateLine(id) { $0.text = displayText }
+            timedWordsByLine[id] = words
         } else {
-            let line = TranscriptLine(timestamp: Date(), text: text)
+            let line = TranscriptLine(timestamp: words[0].start, text: displayText)
             liveLineID = line.id
             lines.append(line)
+            timedWordsByLine[line.id] = words
             if lines.count > 200 { lines.removeFirst(lines.count - 200) }
         }
         syncWatch()
@@ -854,6 +871,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func handlePlaybackStateChange(_ state: TTSService.PlaybackState) {
+        outputRouteName = transcription.outputRouteName
         DeveloperConsole.shared.log(.info, category: "MeetingPlayback", "state=\(state) listening=\(runState == .listening)")
         switch state {
         case .queued(let requestID), .speaking(let requestID):
@@ -916,23 +934,58 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 try? await Task.sleep(nanoseconds: UInt64(MeetingPolicy.diarizationInterval * 1_000_000_000))
                 guard let self, !Task.isCancelled, generation == self.generation else { return }
                 guard self.runState == .listening, self.failure == nil else { continue }
-                let chunk = self.diarizationBuffer.drain()
-                if Date() < (self.catchPausedUntil ?? .distantPast) { continue }
+                let captured = self.diarizationBuffer.drainTimed()
+                let chunk = captured.samples
                 let speech = DiarizationAudio.speechSeconds(chunk)
                 guard speech >= DiarizationAudio.minimumSpeechSeconds else {
                     DeveloperConsole.shared.log(.info, category: "MeetingDiarize", "skipped speechSec=\(String(format: "%.1f", speech))")
                     continue
                 }
-                await self.processChunk(chunk, generation: generation)
+                await self.processChunk(chunk, origin: captured.origin, generation: generation)
             }
         }
     }
 
-    private func processChunk(_ chunk: [Int16], generation: UUID) async {
+    /// Only fill uncovered audio time; text equality alone would erase repeated utterances.
+    private func supplementTranscript(_ turns: [DiarizedTurn], origin: Date, duration: TimeInterval) {
+        let coverage = timedWordsByLine.values.flatMap { $0 } + supplementalWords
+        let allWords = turns.flatMap(\.words).sorted { $0.start < $1.start }
+        var added = 0
+        for turn in turns {
+            let missing = turn.words.compactMap { word -> MeetingTimedWord? in
+                guard word.start.isFinite, word.start >= 0, word.start < duration else { return nil }
+                let next = allWords.first { $0.start > word.start }?.start ?? duration
+                let end = min(duration, word.start + min(0.8, max(0.05, next - word.start)))
+                let timed = MeetingTimedWord(text: word.text,
+                    start: origin.addingTimeInterval(word.start), end: origin.addingTimeInterval(end))
+                return coverage.contains { $0.overlaps(timed) } ? nil : timed
+            }
+            guard let first = missing.first else { continue }
+            let line = TranscriptLine(timestamp: first.start, text: missing.map(\.text).joined(separator: " "))
+            lines.append(line)
+            supplementalWords.append(contentsOf: missing)
+            added += missing.count
+        }
+        lines.sort { $0.timestamp < $1.timestamp }
+        if lines.count > 200 { lines.removeFirst(lines.count - 200) }
+        let retained = Set(lines.map(\.id))
+        timedWordsByLine = timedWordsByLine.filter { retained.contains($0.key) }
+        // Keep enough history for the bounded 90-second audio queue and in-flight requests.
+        let cutoff = Date().addingTimeInterval(-240)
+        supplementalWords.removeAll { $0.end < cutoff }
+        if added > 0 {
+            DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "gemini supplemented words=\(added)")
+            syncWatch()
+        }
+    }
+
+    private func processChunk(_ chunk: [Int16], origin: Date, generation: UUID) async {
         do {
             let turns = try await diarizer.diarize(chunk: chunk, enrollment: enrollmentSamples)
             guard generation == self.generation, runState == .listening else { return }
+            supplementTranscript(turns, origin: origin, duration: Double(chunk.count) / Double(DiarizationAudio.sampleRate))
             lastDiarizationSuccessAt = Date()
+            if Date() < (catchPausedUntil ?? .distantPast) { return }
             let speakerKnown = turns.contains { $0.role != .unknown }
             let mine = turns.filter { $0.role == .me }.map(\.text)
             let others = turns.filter { $0.role != .me }.map(\.text)

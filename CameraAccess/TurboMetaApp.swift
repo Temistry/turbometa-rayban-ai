@@ -46,19 +46,6 @@ struct TurboMetaApp: App {
     DeveloperConsole.shared.startCapturing()
     #endif
 
-    OpenClawNotificationCoordinator.shared.install()
-
-    if #available(iOS 16.0, *) {
-      TurboMetaShortcuts.updateAppShortcutParameters()
-      #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS
-      DeveloperConsole.shared.log(
-        .info,
-        category: "Siri",
-        "한국어 App Shortcut 등록 정보 갱신 요청 완료"
-      )
-      #endif
-    }
-
     do {
       try Wearables.configure()
       #if DEBUG || TESTFLIGHT_TTS_DIAGNOSTICS

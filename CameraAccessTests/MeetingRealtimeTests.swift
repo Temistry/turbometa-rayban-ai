@@ -2,6 +2,37 @@ import XCTest
 @testable import CameraAccess
 
 final class MeetingRealtimeTests: XCTestCase {
+    func testTranscriptTimeOverlapDoesNotCollapseRepeatedTextAtDifferentTimes() {
+        let origin = Date(timeIntervalSince1970: 0)
+        let first = MeetingTimedWord(text: "맞아요", start: origin, end: origin.addingTimeInterval(1))
+        let repeatWord = MeetingTimedWord(text: "맞아요", start: origin.addingTimeInterval(2), end: origin.addingTimeInterval(3))
+        let duplicate = MeetingTimedWord(text: "맞아", start: origin.addingTimeInterval(0.2), end: origin.addingTimeInterval(0.8))
+        XCTAssertFalse(first.overlaps(repeatWord))
+        XCTAssertTrue(first.overlaps(duplicate))
+    }
+
+    func testDiarizationConversationOffsetExcludesWholeEnrollmentGap() {
+        let words = [DiarizedWord(text: "안녕", speaker: "a", start: 0),
+                     DiarizedWord(text: "하세요", speaker: "a", start: 1),
+                     DiarizedWord(text: "대화", speaker: "b", start: 6.6)]
+        let turns = DiarizationParser.turns(words: words, enrollmentEnd: 5.3, conversationOffset: 5.6)
+        XCTAssertEqual(turns.first?.start ?? -1, 1, accuracy: 0.001)
+        XCTAssertEqual(turns.first?.words.count, 1)
+    }
+    func testVoiceProcessingComparisonPreservesAutomaticRouting() {
+        XCTAssertFalse(MeetingTranscriptionService.voiceProcessingEnabled(preference: nil, automatic: false))
+        XCTAssertTrue(MeetingTranscriptionService.voiceProcessingEnabled(preference: "auto", automatic: true))
+        XCTAssertTrue(MeetingTranscriptionService.voiceProcessingEnabled(preference: "on", automatic: false))
+        XCTAssertFalse(MeetingTranscriptionService.voiceProcessingEnabled(preference: "off", automatic: true))
+    }
+    func testStallRecoveryRequiresSustainedInputAndMissingResults() {
+        let speech = MeetingInputWindow(buffers: 100, averageDb: -30, peakDb: -15, speechRatio: 0.9)
+        let quiet = MeetingInputWindow(buffers: 100, averageDb: -70, peakDb: -60, speechRatio: 0)
+        XCTAssertTrue(MeetingTranscriptionService.shouldRecoverStall(window: speech, secondsWithoutResult: 20))
+        XCTAssertFalse(MeetingTranscriptionService.shouldRecoverStall(window: speech, secondsWithoutResult: 5))
+        XCTAssertFalse(MeetingTranscriptionService.shouldRecoverStall(window: quiet, secondsWithoutResult: 60))
+    }
+
     func testShortUndelimitedSpeechIsAnalyzedAfterPause() {
         XCTAssertTrue(MeetingTranscriptionService.shouldAnalyze(
             pending: "EBITDA가 뭐죠", previous: "", quietTime: 1.1, elapsed: 1.1))
