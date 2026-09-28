@@ -31,16 +31,27 @@ struct MeetingTimedWord: Equatable {
 final class MeetingRecognitionInput {
     private let lock = NSLock()
     private var request: SFSpeechAudioBufferRecognitionRequest?
+    private var firstBufferAt: Date?
+
+    var origin: Date? {
+        lock.lock()
+        defer { lock.unlock() }
+        return firstBufferAt
+    }
 
     func replace(_ next: SFSpeechAudioBufferRecognitionRequest?) {
         lock.lock()
         request = next
+        firstBufferAt = nil
         lock.unlock()
     }
 
     func append(_ buffer: AVAudioPCMBuffer) {
         lock.lock()
         defer { lock.unlock() }
+        if request != nil, firstBufferAt == nil, buffer.format.sampleRate > 0 {
+            firstBufferAt = Date().addingTimeInterval(-Double(buffer.frameLength) / buffer.format.sampleRate)
+        }
         request?.append(buffer)
     }
 }
@@ -474,6 +485,7 @@ final class MeetingTranscriptionService: ObservableObject {
 
         recognitionGeneration += 1
         let generation = recognitionGeneration
+        DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "request started generation=\(generation) onDevice=\(prefersOnDevice) captureRunning=\(audioEngine.isRunning)")
         recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
             Task { @MainActor [weak self] in
                 self?.handleRecognition(generation: generation, result: result, error: error)
@@ -586,10 +598,11 @@ final class MeetingTranscriptionService: ObservableObject {
         if let result {
             consecutiveTaskErrors = 0
             let text = result.bestTranscription.formattedString
+            let audioOrigin = recognitionInput.origin ?? recognitionOrigin
             latestWords = result.bestTranscription.segments.map {
                 MeetingTimedWord(text: $0.substring,
-                    start: recognitionOrigin.addingTimeInterval($0.timestamp),
-                    end: recognitionOrigin.addingTimeInterval($0.timestamp + max(0.05, $0.duration)))
+                    start: audioOrigin.addingTimeInterval($0.timestamp),
+                    end: audioOrigin.addingTimeInterval($0.timestamp + max(0.05, $0.duration)))
             }
             if text != pendingText {
                 pendingText = text

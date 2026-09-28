@@ -544,6 +544,20 @@ def audit_swift_strings(findings: list[Finding]) -> None:
                 )
 
 
+def audit_project_sources(findings: list[Finding]) -> None:
+    project = ROOT / "CameraAccess.xcodeproj" / "project.pbxproj"
+    text = project.read_text(encoding="utf-8")
+    source_files = list(SOURCE_ROOT.rglob("*.swift"))
+    watch_files = list((ROOT / "TurboMetaWatch").rglob("*.swift"))
+    names = {path.name for path in source_files + watch_files}
+    for path in source_files:
+        if f"/* {path.name} in Sources */" not in text:
+            findings.append(Finding("치명", relative(path), 1, "Swift 파일의 빌드 등록이 없습니다"))
+    for name in re.findall(r"/\* ([^*]+\.swift) \*/ = \{isa = PBXFileReference", text):
+        if name not in names:
+            findings.append(Finding("치명", relative(project), 1, f"삭제된 Swift 파일 참조: {name}"))
+
+
 def write_report(findings: list[Finding]) -> None:
     counts = {severity: sum(item.severity == severity for item in findings) for severity in ("치명", "경고", "참고")}
     lines = [
@@ -571,6 +585,7 @@ def write_report(findings: list[Finding]) -> None:
 
 if __name__ == "__main__":
     findings: list[Finding] = []
+    audit_project_sources(findings)
     audit_package_resolution(findings)
     audit_openclaw_cloud_inference(findings)
     audit_diagnostic_exports(findings)
