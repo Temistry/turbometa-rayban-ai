@@ -273,7 +273,7 @@ final class MeetingTranscriptionService: ObservableObject {
         do {
             try configureAudioSession()
         } catch {
-            throw MeetingTranscriptionError.sessionFailed(error.localizedDescription)
+            throw MeetingTranscriptionError.sessionFailed((error as? MeetingTranscriptionError)?.message ?? error.localizedDescription)
         }
 
         state = .running

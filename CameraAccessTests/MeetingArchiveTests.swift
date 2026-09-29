@@ -34,6 +34,45 @@ final class MeetingArchiveTests: XCTestCase {
         XCTAssertNil(saved?.endedAt)
     }
 
+    func testLongArchiveSurvivesNewServiceInstance() {
+        let id = UUID()
+        let start = Date(timeIntervalSince1970: 100)
+        let allLines = (0..<350).map { ArchivedMeetingLine(offset: Double($0), text: "문장 \($0)") }
+        XCTAssertTrue(archive.checkpoint(ArchivedMeeting(id: id, startedAt: start,
+            lines: Array(allLines.prefix(200)), mode: .realtime)))
+        XCTAssertTrue(archive.checkpoint(ArchivedMeeting(id: id, startedAt: start,
+            lines: Array(allLines.suffix(200)), mode: .realtime)))
+        let reopened = MeetingArchiveService(rootURL: tempRoot)
+        XCTAssertEqual(reopened.loadAll().first?.lines, allLines)
+    }
+
+    func testLegacyJSONMigratesWithoutLosingOffscreenTranscript() throws {
+        let original = sampleMeeting()
+        try archive.prepare(id: original.id)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(original).write(to: archive.sessionURL(id: original.id).appendingPathComponent("transcript.json"))
+        var checkpoint = original
+        checkpoint.lines = [ArchivedMeetingLine(offset: 160, text: "추가 문장")]
+        XCTAssertTrue(archive.checkpoint(checkpoint))
+        XCTAssertEqual(archive.loadAll().first?.lines.count, 3)
+        XCTAssertTrue(FileManager.default.fileExists(atPath:
+            archive.sessionURL(id: original.id).appendingPathComponent("transcript.json").path))
+    }
+
+    func testProcessingProgressAndSourcesPersistWithoutExecutingProcessing() {
+        var meeting = sampleMeeting()
+        meeting.mode = .passive
+        meeting.processingState = .failed
+        meeting.transcribedUnits = ["audio-000000.caf:0"]
+        meeting.analyzedLines = [meeting.lines[0].id]
+        meeting.lines[0].sourceURLs = ["https://example.com/evidence"]
+        XCTAssertTrue(archive.save(meeting))
+        let reopened = MeetingArchiveService(rootURL: tempRoot)
+        XCTAssertEqual(reopened.loadAll().first, meeting)
+        XCTAssertFalse(MeetingArchiveService.isProcessing)
+    }
+
     func testPassiveSessionWithoutTranscriptIsPreserved() {
         let meeting = ArchivedMeeting(id: UUID(), startedAt: Date(timeIntervalSince1970: 100),
             lines: [], mode: .passive, processingState: .unprocessed)

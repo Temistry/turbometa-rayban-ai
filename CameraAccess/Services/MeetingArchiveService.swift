@@ -189,6 +189,7 @@ struct ArchivedMeeting: Codable, Identifiable, Equatable {
 final class MeetingArchiveService: ObservableObject {
     static var recordingID: UUID?
     private static var processingIDs = Set<UUID>()
+    static var isProcessing: Bool { !processingIDs.isEmpty }
     private let fileManager = FileManager.default
     private let rootOverride: URL?
 
@@ -367,7 +368,7 @@ final class MeetingArchiveService: ObservableObject {
                         meeting.lines += turns.map { turn in
                             ArchivedMeetingLine(offset: offset + Double(frame) / rate + turn.start,
                                 text: turn.text, speaker: turn.speaker,
-                                role: turn.role == .me ? "me" : "other")
+                                role: turn.role.rawValue)
                         }
                         meeting.transcribedUnits = (meeting.transcribedUnits ?? []) + [unit]
                         try store(meeting, merge: false)
@@ -396,12 +397,12 @@ final class MeetingArchiveService: ObservableObject {
                 }
                 if line.role != "me" {
                     let decision = try await jev.evaluateCatch(statement: line.text,
-                        earlier: earlier.map(\.text).joined(separator: " / "), speakerKnown: enrollment != nil)
+                        earlier: earlier.map(\.text).joined(separator: " / "), speakerKnown: ["me", "other"].contains(line.role ?? ""))
                     if decision.shouldAnalyze {
                         let found = try await gemini.critique(statement: line.text,
                             earlierOther: earlier.filter { $0.role != "me" }.map(\.text),
                             mine: earlier.filter { $0.role == "me" }.map(\.text),
-                            hint: decision.kind, speakerKnown: enrollment != nil)
+                            hint: decision.kind, speakerKnown: ["me", "other"].contains(line.role ?? ""))
                         if found.contains(where: { $0.kind == .claim }) {
                             let fact = try await gemini.factCheck(claim: line.text)
                             meeting.lines[index].sourceURLs = fact.links.map(\.urlString)
@@ -447,6 +448,10 @@ final class MeetingArchiveService: ObservableObject {
             output += "종료: \(formatter.string(from: endedAt))\n"
         }
         output += "발화 \(meeting.lines.count)건\n"
+        output += "모드: \((meeting.mode ?? .realtime).title)\n"
+        for event in meeting.routeEvents ?? [] {
+            output += "[\(offsetText(event.offset))] \(event.message)\n"
+        }
 
         if let catches = meeting.catches, !catches.isEmpty {
             let counts = Dictionary(grouping: catches, by: \.kind).mapValues(\.count)
@@ -473,6 +478,7 @@ final class MeetingArchiveService: ObservableObject {
                 let term = line.term.map { "\($0) — " } ?? ""
                 output += "  └ 귓속말: \(term)\(whisper)\n"
             }
+            for url in line.sourceURLs ?? [] { output += "  출처: \(url)\n" }
         }
         return output
     }

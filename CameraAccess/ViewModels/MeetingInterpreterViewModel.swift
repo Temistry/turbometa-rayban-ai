@@ -128,7 +128,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var lines: [TranscriptLine] = [] {
         didSet { persistCheckpoint() }
     }
-    @Published private(set) var factCards: [FactCard] = []
+    @Published private(set) var factCards: [FactCard] = [] {
+        didSet { persistCheckpoint() }
+    }
     @Published private(set) var runState: RunState = .idle
     @Published private(set) var failure: Failure?
     @Published private(set) var isSpeakingWhisper = false
@@ -317,6 +319,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     func start() {
+        guard !MeetingArchiveService.isProcessing else {
+            routeNotice = "보관된 녹음의 분석이 끝난 뒤 시작할 수 있습니다."
+            return
+        }
         guard runState == .idle, !isStarting, !isStopping, !isDescribingPhoto, !isSpeakingWhisper else { return }
         failure = nil
         analyzedTexts.removeAll()
@@ -325,6 +331,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
         explainPausedUntil = nil
         factPausedUntil = nil
         latestStable = ""
+        closeDetail()
+        factCards.removeAll()
         detailBubble = nil
         summaryReport = nil
 
@@ -424,7 +432,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     id: line.id,
                     offset: line.timestamp.timeIntervalSince(archiveStartedAt),
                     text: line.text, term: line.whisper?.term,
-                    whisper: line.whisper?.text, category: line.whisper?.category
+                    whisper: line.whisper?.text, category: line.whisper?.category,
+                    sourceURLs: factLinks(for: line.id).map(\.urlString)
                 )
             },
             catches: catches.map { item in
@@ -481,7 +490,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     text: line.text,
                     term: line.whisper?.term.isEmpty == false ? line.whisper?.term : nil,
                     whisper: line.whisper?.text.isEmpty == false ? line.whisper?.text : nil,
-                    category: line.whisper?.category.isEmpty == false ? line.whisper?.category : nil
+                    category: line.whisper?.category.isEmpty == false ? line.whisper?.category : nil,
+                    sourceURLs: factLinks(for: line.id).map(\.urlString)
                 )
             }
             let archivedCatches = catches.reversed().map { item in
@@ -584,6 +594,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func queueAnalysis(_ text: String, lineID: UUID) {
+        guard mode.permitsLiveAI else { return }
         guard runState == .listening, text.count >= 2, !analyzedTexts.contains(text) else { return }
         // Only the newest revision of an unprocessed live line is useful.
         analysisQueue.removeAll { $0.1 == lineID }
@@ -657,6 +668,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     private func beginFactCheck(claim: String, lineID: UUID) {
+        guard mode.permitsLiveAI else { return }
         if Date() < (factPausedUntil ?? .distantPast) {
             DeveloperConsole.shared.log(.info, category: "MeetingDecision", "factcheck skipped quotaPaused=true")
             return
@@ -802,6 +814,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     /// 전사 줄을 터치하면 보관된 설명·근거 링크를 말풍선으로 보여주고 읽어 준다.
     /// 보관된 설명이 없으면 사용자가 직접 요청한 것이므로 Jev 게이트 없이 생성한다.
     func handleLineTap(_ lineID: UUID) {
+        guard mode.permitsLiveAI else { return }
         guard failure == nil, !isStopping,
               let line = lines.first(where: { $0.id == lineID }) else { return }
         closeDetail()
@@ -1016,6 +1029,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     // MARK: - 느린 흐름: 화자 구분 → 상대 발언 허점
 
     private func startDiarizationLoop() {
+        guard mode.permitsLiveAI else { return }
         diarizationTask?.cancel()
         let generation = self.generation
         diarizationTask = Task { [weak self] in
