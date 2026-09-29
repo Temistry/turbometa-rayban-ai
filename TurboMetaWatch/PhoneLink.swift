@@ -98,7 +98,7 @@ final class PhoneLink: NSObject, ObservableObject {
         ], replyHandler: { [weak self] reply in
             let accepted = reply[WatchCapture.resultKey] as? String == WatchCapture.accepted
             DispatchQueue.main.async {
-                guard let self, self.stopToken == token else { return }
+                guard let self, self.stopToken == token, self.startedAt == startedAt else { return }
                 self.stopPending = false
                 if accepted {
                     self.state = "idle"
