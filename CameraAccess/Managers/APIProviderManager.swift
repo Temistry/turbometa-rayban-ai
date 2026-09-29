@@ -1,12 +1,23 @@
 /*
- * API Provider Manager
- * 管理不同的 API 提供商 (阿里云 Dashscope / OpenRouter)
+ * Google Gemini 중심 AI 설정 관리자
+ *
+ * 일반 사용자 실행 경로는 Google Gemini로 고정한다.
+ * Alibaba/OpenRouter 타입과 Keychain 항목은 기존 설치 데이터와 개발자 호환성을 위해
+ * 당분간 남기지만 일반 UI와 기본 실행 경로에서는 사용하지 않는다.
  */
 
 import Foundation
 import SwiftUI
 
-// MARK: - Alibaba Endpoint Enum
+// MARK: - Gemini models
+
+enum GeminiModelCatalog {
+    static let quickVision = "gemini-3.6-flash"
+    static let live = "gemini-3.1-flash-live-preview"
+    static let liveTranslate = live
+}
+
+// MARK: - Legacy Alibaba endpoint compatibility
 
 enum AlibabaEndpoint: String, CaseIterable, Codable {
     case beijing = "beijing"
@@ -14,8 +25,8 @@ enum AlibabaEndpoint: String, CaseIterable, Codable {
 
     var displayName: String {
         switch self {
-        case .beijing: return "北京 (中国大陆)"
-        case .singapore: return "新加坡 (国际)"
+        case .beijing: return "베이징(중국 본토)"
+        case .singapore: return "싱가포르(국제)"
         }
     }
 
@@ -34,85 +45,91 @@ enum AlibabaEndpoint: String, CaseIterable, Codable {
     }
 }
 
-// MARK: - API Provider Enum (Vision API)
+// MARK: - Vision provider
 
 enum APIProvider: String, CaseIterable, Codable {
+    case google = "google"
     case alibaba = "alibaba"
     case openrouter = "openrouter"
 
     var displayName: String {
         switch self {
-        case .alibaba: return "阿里云 Dashscope"
+        case .google: return "Google Gemini"
+        case .alibaba: return "Alibaba Cloud DashScope"
         case .openrouter: return "OpenRouter"
         }
     }
 
     func baseURL(endpoint: AlibabaEndpoint = .beijing) -> String {
         switch self {
-        case .alibaba: return endpoint.baseURL
-        case .openrouter: return "https://openrouter.ai/api/v1"
+        case .google:
+            return "https://generativelanguage.googleapis.com/v1beta"
+        case .alibaba:
+            return endpoint.baseURL
+        case .openrouter:
+            return "https://openrouter.ai/api/v1"
         }
     }
 
-    var baseURL: String {
-        return baseURL(endpoint: .beijing)
-    }
+    var baseURL: String { baseURL(endpoint: .beijing) }
 
     var defaultModel: String {
         switch self {
+        case .google: return GeminiModelCatalog.quickVision
         case .alibaba: return "qwen3-vl-plus"
-        case .openrouter: return "google/gemini-3-flash-preview"
+        case .openrouter: return "google/gemini-3.6-flash"
         }
     }
 
     var apiKeyHelpURL: String {
         switch self {
+        case .google: return "https://aistudio.google.com/apikey"
         case .alibaba: return "https://help.aliyun.com/zh/model-studio/get-api-key"
         case .openrouter: return "https://openrouter.ai/keys"
         }
     }
 
-    var supportsVision: Bool {
-        return true
-    }
+    var supportsVision: Bool { true }
 }
 
-// MARK: - Live AI Provider Enum
+// MARK: - Live AI provider
 
 enum LiveAIProvider: String, CaseIterable, Codable {
-    case alibaba = "alibaba"
     case google = "google"
+    case alibaba = "alibaba"
 
     var displayName: String {
         switch self {
-        case .alibaba: return "阿里云 Qwen Omni"
         case .google: return "Google Gemini Live"
+        case .alibaba: return "Alibaba Qwen Omni"
         }
     }
 
     var defaultModel: String {
         switch self {
+        case .google: return GeminiModelCatalog.live
         case .alibaba: return "qwen3-omni-flash-realtime"
-        case .google: return "gemini-2.0-flash-exp"
         }
     }
 
     var apiKeyHelpURL: String {
         switch self {
-        case .alibaba: return "https://help.aliyun.com/zh/model-studio/get-api-key"
         case .google: return "https://aistudio.google.com/apikey"
+        case .alibaba: return "https://help.aliyun.com/zh/model-studio/get-api-key"
         }
     }
 
     func websocketURL(endpoint: AlibabaEndpoint = .beijing) -> String {
         switch self {
-        case .alibaba: return endpoint.websocketURL
-        case .google: return "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+        case .google:
+            return "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent"
+        case .alibaba:
+            return endpoint.websocketURL
         }
     }
 }
 
-// MARK: - OpenRouter Model
+// MARK: - Legacy OpenRouter model compatibility
 
 struct OpenRouterModel: Codable, Identifiable, Hashable {
     let id: String
@@ -122,26 +139,23 @@ struct OpenRouterModel: Codable, Identifiable, Hashable {
     let pricing: Pricing?
     let architecture: Architecture?
 
-    var displayName: String {
-        return name.isEmpty ? id : name
-    }
+    var displayName: String { name.isEmpty ? id : name }
 
     var isVisionCapable: Bool {
-        // Check if model supports vision based on architecture or ID
-        if let arch = architecture {
-            return arch.modality?.contains("image") == true ||
-                   arch.modality?.contains("multimodal") == true
+        if let architecture {
+            return architecture.modality?.contains("image") == true
+                || architecture.modality?.contains("multimodal") == true
         }
-        // Fallback: check common vision model patterns
-        let visionPatterns = ["vision", "vl", "gpt-4o", "claude-3", "gemini"]
-        return visionPatterns.contains { id.lowercased().contains($0) }
+
+        let patterns = ["vision", "vl", "gpt-4o", "claude-3", "gemini"]
+        return patterns.contains { id.lowercased().contains($0) }
     }
 
     var priceDisplay: String {
-        guard let pricing = pricing else { return "" }
+        guard let pricing else { return "" }
         let promptPrice = (Double(pricing.prompt) ?? 0) * 1_000_000
         let completionPrice = (Double(pricing.completion) ?? 0) * 1_000_000
-        return String(format: "$%.2f / $%.2f per 1M tokens", promptPrice, completionPrice)
+        return String(format: "입력 $%.2f / 출력 $%.2f · 100만 토큰", promptPrice, completionPrice)
     }
 
     struct Pricing: Codable, Hashable {
@@ -175,25 +189,21 @@ struct OpenRouterModelsResponse: Codable {
     let data: [OpenRouterModel]
 }
 
-// MARK: - API Provider Manager
+// MARK: - Manager
 
 @MainActor
-class APIProviderManager: ObservableObject {
+final class APIProviderManager: ObservableObject {
     static let shared = APIProviderManager()
 
-    // Vision API Provider
     private let providerKey = "api_provider"
     private let selectedModelKey = "selected_vision_model"
     private let alibabaEndpointKey = "alibaba_endpoint"
-
-    // Live AI Provider
     private let liveAIProviderKey = "liveai_provider"
     private let liveAIModelKey = "liveai_model"
 
     @Published var currentProvider: APIProvider {
         didSet {
             UserDefaults.standard.set(currentProvider.rawValue, forKey: providerKey)
-            // Reset to default model when provider changes
             if oldValue != currentProvider {
                 selectedModel = currentProvider.defaultModel
             }
@@ -206,14 +216,12 @@ class APIProviderManager: ObservableObject {
         }
     }
 
-    // Alibaba Endpoint (Beijing/Singapore)
     @Published var alibabaEndpoint: AlibabaEndpoint {
         didSet {
             UserDefaults.standard.set(alibabaEndpoint.rawValue, forKey: alibabaEndpointKey)
         }
     }
 
-    // Live AI Provider
     @Published var liveAIProvider: LiveAIProvider {
         didSet {
             UserDefaults.standard.set(liveAIProvider.rawValue, forKey: liveAIProviderKey)
@@ -234,176 +242,170 @@ class APIProviderManager: ObservableObject {
     @Published var modelsError: String?
 
     private init() {
-        // Alibaba Endpoint
-        let savedEndpoint = UserDefaults.standard.string(forKey: alibabaEndpointKey) ?? "beijing"
-        self.alibabaEndpoint = AlibabaEndpoint(rawValue: savedEndpoint) ?? .beijing
+        let defaults = UserDefaults.standard
+        let savedEndpoint = defaults.string(forKey: alibabaEndpointKey)
+            ?? AlibabaEndpoint.beijing.rawValue
+        alibabaEndpoint = AlibabaEndpoint(rawValue: savedEndpoint) ?? .beijing
 
-        // Vision API Provider
-        let savedProvider = UserDefaults.standard.string(forKey: providerKey) ?? "alibaba"
-        let provider = APIProvider(rawValue: savedProvider) ?? .alibaba
-        self.currentProvider = provider
+        currentProvider = .google
+        selectedModel = GeminiModelCatalog.quickVision
+        liveAIProvider = .google
 
-        let savedModel = UserDefaults.standard.string(forKey: selectedModelKey)
-        self.selectedModel = savedModel ?? provider.defaultModel
+        let storedLiveModel = defaults.string(forKey: liveAIModelKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        liveAIModel = Self.normalizedLiveAIModel(storedLiveModel)
 
-        // Live AI Provider
-        let savedLiveAIProvider = UserDefaults.standard.string(forKey: liveAIProviderKey) ?? "alibaba"
-        let liveProvider = LiveAIProvider(rawValue: savedLiveAIProvider) ?? .alibaba
-        self.liveAIProvider = liveProvider
-
-        let savedLiveAIModel = UserDefaults.standard.string(forKey: liveAIModelKey)
-        self.liveAIModel = savedLiveAIModel ?? liveProvider.defaultModel
+        defaults.set(APIProvider.google.rawValue, forKey: providerKey)
+        defaults.set(GeminiModelCatalog.quickVision, forKey: selectedModelKey)
+        defaults.set(LiveAIProvider.google.rawValue, forKey: liveAIProviderKey)
+        defaults.set(liveAIModel, forKey: liveAIModelKey)
     }
 
-    // MARK: - Live AI Configuration
+    nonisolated static func normalizedLiveAIModel(_ storedModel: String?) -> String {
+        let model = storedModel?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        switch model {
+        case "", "gemini-2.0-flash-exp":
+            return GeminiModelCatalog.live
+        default:
+            return model
+        }
+    }
 
     var liveAIWebSocketURL: String {
-        return liveAIProvider.websocketURL(endpoint: alibabaEndpoint)
+        LiveAIProvider.google.websocketURL()
     }
 
     var liveAIAPIKey: String {
-        switch liveAIProvider {
-        case .alibaba:
-            return APIKeyManager.shared.getAPIKey(for: .alibaba, endpoint: alibabaEndpoint) ?? ""
-        case .google:
-            return APIKeyManager.shared.getGoogleAPIKey() ?? ""
-        }
+        APIKeyManager.shared.getGoogleAPIKey() ?? ""
     }
 
-    var hasLiveAIAPIKey: Bool {
-        return !liveAIAPIKey.isEmpty
-    }
-
-    // MARK: - Get Current Configuration
+    var hasLiveAIAPIKey: Bool { !liveAIAPIKey.isEmpty }
 
     var currentBaseURL: String {
-        return currentProvider.baseURL(endpoint: alibabaEndpoint)
+        APIProvider.google.baseURL()
     }
 
     var currentAPIKey: String {
-        if currentProvider == .alibaba {
-            return APIKeyManager.shared.getAPIKey(for: currentProvider, endpoint: alibabaEndpoint) ?? ""
-        }
-        return APIKeyManager.shared.getAPIKey(for: currentProvider) ?? ""
+        APIKeyManager.shared.getGoogleAPIKey() ?? ""
     }
 
-    var currentModel: String {
-        return selectedModel
-    }
+    var currentModel: String { GeminiModelCatalog.quickVision }
 
     var hasAPIKey: Bool {
-        if currentProvider == .alibaba {
-            return APIKeyManager.shared.hasAPIKey(for: currentProvider, endpoint: alibabaEndpoint)
-        }
-        return APIKeyManager.shared.hasAPIKey(for: currentProvider)
+        APIKeyManager.shared.hasGoogleAPIKey()
     }
 
-    // MARK: - OpenRouter Models
-
+    // 개발자 호환 화면에서만 사용한다. 일반 사용자 UI에서는 호출하지 않는다.
     func fetchOpenRouterModels() async {
-        guard currentProvider == .openrouter else { return }
         guard let apiKey = APIKeyManager.shared.getAPIKey(for: .openrouter), !apiKey.isEmpty else {
-            modelsError = "请先配置 OpenRouter API Key"
+            modelsError = "OpenRouter API Key가 설정되어 있지 않습니다"
+            print("[APIProvider][WARN] 개발자용 OpenRouter 모델 목록 요청 생략 reason=credentialUnavailable")
             return
         }
 
         isLoadingModels = true
         modelsError = nil
+        defer { isLoadingModels = false }
 
         do {
-            let url = URL(string: "https://openrouter.ai/api/v1/models")!
+            guard let url = URL(string: "https://openrouter.ai/api/v1/models") else {
+                throw NSError(
+                    domain: "OpenRouter",
+                    code: -1,
+                    userInfo: [NSLocalizedDescriptionKey: "모델 목록 URL이 올바르지 않습니다"]
+                )
+            }
+
             var request = URLRequest(url: url)
             request.httpMethod = "GET"
             request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
             request.setValue("TurboMeta", forHTTPHeaderField: "X-Title")
             request.timeoutInterval = 30
 
+            let startedAt = Date()
             let (data, response) = try await URLSession.shared.data(for: request)
-
-            guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-                throw NSError(domain: "OpenRouter", code: -1, userInfo: [NSLocalizedDescriptionKey: "获取模型列表失败"])
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw NSError(
+                    domain: "OpenRouter",
+                    code: -2,
+                    userInfo: [NSLocalizedDescriptionKey: "HTTP 응답을 받지 못했습니다"]
+                )
             }
 
-            let decoder = JSONDecoder()
-            let modelsResponse = try decoder.decode(OpenRouterModelsResponse.self, from: data)
+            let elapsedMs = Int(Date().timeIntervalSince(startedAt) * 1_000)
+            print("[APIProvider][HTTP] 개발자용 모델 목록 status=\(httpResponse.statusCode) elapsedMs=\(elapsedMs) bytes=\(data.count)")
 
-            // Sort models: vision-capable first, then by name
-            openRouterModels = modelsResponse.data.sorted { m1, m2 in
-                if m1.isVisionCapable != m2.isVisionCapable {
-                    return m1.isVisionCapable
+            guard httpResponse.statusCode == 200 else {
+                throw NSError(
+                    domain: "OpenRouter",
+                    code: httpResponse.statusCode,
+                    userInfo: [NSLocalizedDescriptionKey: "모델 목록을 가져오지 못했습니다"]
+                )
+            }
+
+            let responseBody = try JSONDecoder().decode(OpenRouterModelsResponse.self, from: data)
+            openRouterModels = responseBody.data.sorted { first, second in
+                if first.isVisionCapable != second.isVisionCapable {
+                    return first.isVisionCapable
                 }
-                return m1.displayName < m2.displayName
+                return first.displayName < second.displayName
             }
-
-            print("✅ Loaded \(openRouterModels.count) OpenRouter models")
-
         } catch {
+            let nsError = error as NSError
             modelsError = error.localizedDescription
-            print("❌ Failed to fetch OpenRouter models: \(error)")
+            print("[APIProvider][ERROR] 개발자용 모델 목록 실패 domain=\(nsError.domain) code=\(nsError.code) description=\(nsError.localizedDescription)")
         }
-
-        isLoadingModels = false
     }
 
     func searchModels(_ query: String) -> [OpenRouterModel] {
         guard !query.isEmpty else { return openRouterModels }
-        let lowercaseQuery = query.lowercased()
+        let lowercasedQuery = query.lowercased()
         return openRouterModels.filter { model in
-            model.id.lowercased().contains(lowercaseQuery) ||
-            model.displayName.lowercased().contains(lowercaseQuery) ||
-            (model.description?.lowercased().contains(lowercaseQuery) ?? false)
+            model.id.lowercased().contains(lowercasedQuery)
+                || model.displayName.lowercased().contains(lowercasedQuery)
+                || (model.description?.lowercased().contains(lowercasedQuery) ?? false)
         }
     }
 
     func visionCapableModels() -> [OpenRouterModel] {
-        return openRouterModels.filter { $0.isVisionCapable }
+        openRouterModels.filter(\.isVisionCapable)
     }
 }
 
-// MARK: - Static Helpers for Non-MainActor Access
+// MARK: - Static access for services
 
 extension APIProviderManager {
-    nonisolated static var staticCurrentProvider: APIProvider {
-        let savedProvider = UserDefaults.standard.string(forKey: "api_provider") ?? "alibaba"
-        return APIProvider(rawValue: savedProvider) ?? .alibaba
-    }
+    nonisolated static var staticCurrentProvider: APIProvider { .google }
 
     nonisolated static var staticAlibabaEndpoint: AlibabaEndpoint {
-        let savedEndpoint = UserDefaults.standard.string(forKey: "alibaba_endpoint") ?? "beijing"
-        return AlibabaEndpoint(rawValue: savedEndpoint) ?? .beijing
+        let value = UserDefaults.standard.string(forKey: "alibaba_endpoint")
+            ?? AlibabaEndpoint.beijing.rawValue
+        return AlibabaEndpoint(rawValue: value) ?? .beijing
     }
 
-    nonisolated static var staticLiveAIProvider: LiveAIProvider {
-        let savedProvider = UserDefaults.standard.string(forKey: "liveai_provider") ?? "alibaba"
-        return LiveAIProvider(rawValue: savedProvider) ?? .alibaba
-    }
+    nonisolated static var staticLiveAIProvider: LiveAIProvider { .google }
 
     nonisolated static var staticLiveAIAPIKey: String {
-        switch staticLiveAIProvider {
-        case .alibaba:
-            return APIKeyManager.shared.getAPIKey(for: .alibaba, endpoint: staticAlibabaEndpoint) ?? ""
-        case .google:
-            return APIKeyManager.shared.getGoogleAPIKey() ?? ""
-        }
+        APIKeyManager.shared.getGoogleAPIKey() ?? ""
+    }
+
+    nonisolated static var staticLiveAIModel: String {
+        normalizedLiveAIModel(UserDefaults.standard.string(forKey: "liveai_model"))
     }
 
     nonisolated static var staticCurrentModel: String {
-        let savedModel = UserDefaults.standard.string(forKey: "selected_vision_model")
-        return savedModel ?? staticCurrentProvider.defaultModel
+        GeminiModelCatalog.quickVision
     }
 
     nonisolated static var staticBaseURL: String {
-        return staticCurrentProvider.baseURL(endpoint: staticAlibabaEndpoint)
+        APIProvider.google.baseURL()
     }
 
     nonisolated static var staticAPIKey: String {
-        if staticCurrentProvider == .alibaba {
-            return APIKeyManager.shared.getAPIKey(for: staticCurrentProvider, endpoint: staticAlibabaEndpoint) ?? ""
-        }
-        return APIKeyManager.shared.getAPIKey(for: staticCurrentProvider) ?? ""
+        APIKeyManager.shared.getGoogleAPIKey() ?? ""
     }
 
     nonisolated static var staticLiveAIWebsocketURL: String {
-        return staticLiveAIProvider.websocketURL(endpoint: staticAlibabaEndpoint)
+        LiveAIProvider.google.websocketURL()
     }
 }

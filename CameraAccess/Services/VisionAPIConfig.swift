@@ -1,63 +1,29 @@
 /*
- * Vision API Configuration
- * Centralized configuration for Vision API
- * Supports multiple providers: Alibaba Cloud Dashscope, OpenRouter
+ * Google Gemini 이미지 이해 API 설정
+ *
+ * 일반 실행 경로는 Google Gemini로 고정한다. 실제 인증값은 APIKeyManager를 통해
+ * iOS Keychain에서만 읽으며 URL, 콘솔, UserDefaults 또는 파일에 기록하지 않는다.
  */
 
 import Foundation
 
 struct VisionAPIConfig {
-    // MARK: - Dynamic Configuration (based on current provider)
-
-    /// Current API Key based on selected provider
     static var apiKey: String {
-        return APIProviderManager.staticAPIKey
+        APIKeyManager.shared.getGoogleAPIKey() ?? ""
     }
 
-    /// Current Base URL based on selected provider
-    static var baseURL: String {
-        return APIProviderManager.staticBaseURL
+    static let baseURL = "https://generativelanguage.googleapis.com/v1beta"
+    static let model = GeminiModelCatalog.quickVision
+    static let provider: APIProvider = .google
+
+    static func generateContentURL(model: String = model) -> URL? {
+        URL(string: "\(baseURL)/models/\(model):generateContent")
     }
 
-    /// Current Model based on selected provider
-    static var model: String {
-        return APIProviderManager.staticCurrentModel
-    }
-
-    /// Current Provider
-    static var provider: APIProvider {
-        return APIProviderManager.staticCurrentProvider
-    }
-
-    // MARK: - Provider-specific URLs
-
-    /// Alibaba Cloud Dashscope API URLs
-    static let alibabaBeijingURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    static let alibabaSingaporeURL = "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
-
-    /// OpenRouter API URL
-    static let openRouterURL = "https://openrouter.ai/api/v1"
-
-    // MARK: - Default Models
-
-    static let defaultAlibabaModel = "qwen3-vl-plus"
-    static let defaultOpenRouterModel = "google/gemini-3-flash-preview"
-
-    // MARK: - Request Headers
-
-    /// Get headers for the current provider
     static func headers(with apiKey: String) -> [String: String] {
-        var headers = [
+        [
             "Content-Type": "application/json",
-            "Authorization": "Bearer \(apiKey)"
+            "x-goog-api-key": apiKey
         ]
-
-        // Add OpenRouter-specific headers
-        if provider == .openrouter {
-            headers["HTTP-Referer"] = "https://turbometa.app"
-            headers["X-Title"] = "TurboMeta"
-        }
-
-        return headers
     }
 }

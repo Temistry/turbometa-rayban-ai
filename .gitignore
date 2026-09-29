@@ -17,11 +17,15 @@ DerivedData/
 *.xcuserstate
 *.xcworkspace
 !default.xcworkspace
+!CameraAccess.xcodeproj/project.xcworkspace/
+!CameraAccess.xcodeproj/project.xcworkspace/xcshareddata/
 
 # Swift Package Manager
 .build/
 Packages/
 Package.resolved
+!CameraAccess.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/
+!CameraAccess.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved
 
 # CocoaPods
 Pods/

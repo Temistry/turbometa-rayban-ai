@@ -1,0 +1,33 @@
+{
+  "originHash" : "3f801ecfc13e97a7f05a26f680b7327ee3c466c7e98ffcd942fad86b9b889e0a",
+  "pins" : [
+    {
+      "identity" : "haishinkit.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Turbo1123/HaishinKit.swift",
+      "state" : {
+        "branch" : "fix-concurrency",
+        "revision" : "8b18210cb2d1c939cd28fa4896217db54907c550"
+      }
+    },
+    {
+      "identity" : "logboard",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/shogo4405/Logboard.git",
+      "state" : {
+        "revision" : "8f41c63afb903040b77049ee2efa8c257b8c0d50",
+        "version" : "2.6.0"
+      }
+    },
+    {
+      "identity" : "meta-wearables-dat-ios",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/facebook/meta-wearables-dat-ios",
+      "state" : {
+        "revision" : "2ea30fa228359315baf71c404aec821472e994c1",
+        "version" : "0.5.0"
+      }
+    }
+  ],
+  "version" : 3
+}

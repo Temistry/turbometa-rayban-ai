@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="1080" viewBox="0 0 1160 1080">
+<style>text{font-family:'Malgun Gothic',sans-serif;fill:#eee}.muted{fill:#aaa;font-size:14px}.body{font-size:19px}.small{font-size:15px}.title{font-size:24px;font-weight:bold}.blue{fill:#83b5ff}</style>
+<rect width="1160" height="1080" fill="#e9e8e5"/>
+<text x="70" y="65" style="fill:#20242b;font-size:30px;font-weight:bold">TurboMeta · 대화 화면 개선</text>
+<text x="70" y="97" style="fill:#62656a;font-size:16px">코드 구조 기반 미리보기 · 예시 데이터 · 실제 iPhone 캡처 아님</text>
+<rect x="65" y="140" width="475" height="850" rx="38" fill="#17191d"/>
+<rect x="76" y="151" width="453" height="828" rx="29" fill="#000"/>
+<text x="99" y="187" class="small">9:41</text><text x="429" y="187" class="small">100%</text>
+<text x="99" y="235" class="title">대화 분석</text>
+<rect x="411" y="206" width="42" height="42" rx="12" fill="#222"/><text x="420" y="232" class="small">서랍</text>
+<rect x="463" y="206" width="42" height="42" rx="12" fill="#222"/><text x="471" y="232" class="small">설정</text>
+<rect x="99" y="266" width="100" height="29" rx="14" fill="#1b1d21"/><circle cx="113" cy="280" r="3" fill="#61d8a2"/><text x="126" y="285" class="small">듣는 중</text>
+<text x="213" y="285" class="muted">iPhone 마이크</text><text x="346" y="285" class="muted">12:34</text><text x="416" y="285" class="muted">등록됨</text>
+<rect x="99" y="314" width="83" height="38" rx="19" fill="#eee"/><text x="115" y="339" style="fill:#111;font-size:15px">전체 3</text>
+<rect x="192" y="314" width="119" height="38" rx="19" fill="#251a30"/><text x="207" y="339" style="fill:#c58cef;font-size:15px">논리 비약 1</text>
+<text x="99" y="390" class="muted">오전 10:09</text>
+<text x="99" y="429" class="body">이번 분기 리텐션이 올랐으니</text>
+<text x="99" y="463" class="body">매출도 반드시 늘겠죠.</text>
+<path d="M191 435H266" stroke="#ead76d" stroke-width="2"/>
+<text x="99" y="503" class="small blue">귓속말 · 기존 고객이 계속 이용하는 비율이에요.</text>
+<rect x="99" y="527" width="403" height="157" rx="12" fill="#201628" stroke="#714b89"/>
+<text x="115" y="556" style="fill:#c58cef;font-size:15px">논리 비약</text>
+<text x="115" y="591" class="body">유지율 상승만으로 매출 증가를</text><text x="115" y="618" class="body">단정하기 어려워요.</text>
+<text x="115" y="657" class="small" style="fill:#bcb4c3">↳ 객단가도 늘었나요?</text>
+<text x="99" y="726" class="muted">오전 10:10</text><text x="99" y="763" class="body">신규 고객 수도 확인해 볼게요.</text>
+<rect x="99" y="806" width="403" height="51" rx="25" fill="#a33438"/><text x="259" y="839" class="body">대화 종료</text>
+<rect x="99" y="874" width="403" height="80" rx="24" fill="#2462bf"/><text x="226" y="922" class="title">촬영해서 듣기</text>
+<rect x="620" y="140" width="475" height="850" rx="38" fill="#17191d"/>
+<rect x="631" y="151" width="453" height="828" rx="29" fill="#000"/>
+<text x="654" y="187" class="small">9:41</text><text x="984" y="187" class="small">100%</text>
+<text x="654" y="235" class="title" opacity=".4">대화 분석</text>
+<text x="654" y="295" class="muted" opacity=".4">듣는 중 · 12:34</text>
+<rect x="638" y="332" width="439" height="637" rx="23" fill="#16171b"/>
+<rect x="833" y="344" width="50" height="5" rx="3" fill="#73757c"/>
+<text x="660" y="398" class="muted">리텐션이 오르면 매출도 늘어난다</text><text x="1024" y="398" class="body">×</text>
+<text x="660" y="460" class="body">매출은 유지율 외에도 고객 수와</text>
+<text x="660" y="493" class="body">객단가의 영향을 받아요.</text>
+<text x="660" y="545" class="body">신규 고객과 객단가 변화까지</text>
+<text x="660" y="578" class="body">함께 확인하면 좋겠어요.</text>
+<rect x="654" y="625" width="405" height="81" rx="12" fill="#22262c"/>
+<text x="672" y="657" class="body blue">고객 유지율과 매출</text><text x="672" y="684" class="muted">예시 자료 · example.com</text><text x="1019" y="666" class="body blue">↗</text>
+<rect x="654" y="722" width="405" height="81" rx="12" fill="#22262c"/>
+<text x="672" y="754" class="body blue">매출 지표 읽는 법</text><text x="672" y="781" class="muted">예시 자료 · example.com</text><text x="1019" y="763" class="body blue">↗</text>
+<text x="70" y="1040" style="fill:#45484e;font-size:18px">읽기 편한 전사와 감지 카드</text>
+<text x="625" y="1040" style="fill:#45484e;font-size:18px">높이를 조절하는 설명·근거 패널</text>
+</svg>

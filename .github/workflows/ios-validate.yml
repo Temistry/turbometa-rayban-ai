@@ -1,0 +1,125 @@
+name: iOS 빌드 검증
+
+on:
+  push:
+    branches:
+      - feature/testflight-signing-config
+  pull_request:
+    paths:
+      - "CameraAccess/**"
+      - "CameraAccess.xcodeproj/**"
+      - "Scripts/audit_localization_security.py"
+      - ".github/workflows/ios-validate.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-validate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: iPhone 시뮬레이터 빌드
+    runs-on: macos-15
+    timeout-minutes: 30
+
+    steps:
+      - name: 소스 체크아웃
+        uses: actions/checkout@v4
+
+      - name: iPhone Simulator SDK가 있는 Xcode 선택
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          selected=""
+          while IFS= read -r candidate; do
+            developer_dir="$candidate/Contents/Developer"
+            if DEVELOPER_DIR="$developer_dir" xcrun --sdk iphonesimulator --show-sdk-path >/dev/null 2>&1; then
+              selected="$developer_dir"
+              break
+            fi
+          done < <(find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print | sort -Vr)
+
+          if [[ -z "$selected" ]]; then
+            echo "설치된 Xcode 중 iPhone Simulator SDK를 포함한 항목을 찾지 못했습니다." >&2
+            find /Applications -maxdepth 1 -type d -name 'Xcode*.app' -print >&2 || true
+            exit 1
+          fi
+
+          sudo xcode-select --switch "$selected"
+          echo "DEVELOPER_DIR=$selected" >> "$GITHUB_ENV"
+          echo "선택한 Developer 디렉터리: $selected"
+
+      - name: Xcode, SDK 및 프로젝트 정보
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          xcodebuild -showsdks
+          echo "Simulator SDK: $(xcrun --sdk iphonesimulator --show-sdk-path)"
+          xcodebuild -list -project CameraAccess.xcodeproj
+
+      - name: 한국어 및 보안 정적 점검
+        run: python3 Scripts/audit_localization_security.py
+
+      - name: 고정된 Swift 패키지 의존성 확인
+        run: |
+          xcodebuild \
+            -resolvePackageDependencies \
+            -project CameraAccess.xcodeproj \
+            -onlyUsePackageVersionsFromResolvedFile
+
+      - name: iOS 시뮬레이터 빌드
+        shell: bash
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project CameraAccess.xcodeproj \
+            -scheme TurboMeta \
+            -configuration Debug \
+            -destination 'generic/platform=iOS Simulator' \
+            -onlyUsePackageVersionsFromResolvedFile \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            ONLY_ACTIVE_ARCH=NO \
+            clean build 2>&1 | tee xcodebuild.log
+
+      - name: 회의 통역 회귀 테스트
+        shell: bash
+        run: |
+          set -euo pipefail
+          device_id=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin); print(next(x["udid"] for k,v in d["devices"].items() if "iOS" in k for x in v if "iPhone" in x["name"]))')
+          xcodebuild test \
+            -project CameraAccess.xcodeproj \
+            -scheme TurboMeta \
+            -destination "platform=iOS Simulator,id=$device_id" \
+            -onlyUsePackageVersionsFromResolvedFile \
+            -parallel-testing-enabled NO \
+            -resultBundlePath meeting-tests.xcresult \
+            -only-testing:CameraAccessTests/MeetingRealtimeTests \
+            -only-testing:CameraAccessTests/JevDecisionParsingTests \
+            -only-testing:CameraAccessTests/MeetingContextParsingTests \
+            -only-testing:CameraAccessTests/MeetingPhotoRequestTests \
+            -only-testing:CameraAccessTests/MeetingArchiveTests \
+            -only-testing:CameraAccessTests/MeetingLexiconTests \
+            -only-testing:CameraAccessTests/WatchPayloadTests \
+            -only-testing:CameraAccessTests/ConversationCatchTests \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            'SWIFT_ACTIVE_COMPILATION_CONDITIONS=DEBUG MEETING_LOGIC_TESTS' \
+            2>&1 | tee meeting-tests.log
+
+      - name: 검증 결과 업로드
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-validation-results
+          path: |
+            xcodebuild.log
+            meeting-tests.log
+            meeting-tests.xcresult
+            audit-report.txt
+          if-no-files-found: ignore
+          retention-days: 7

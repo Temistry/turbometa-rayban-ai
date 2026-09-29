@@ -1,6 +1,5 @@
 /*
- * Permissions Request View
- * 应用启动时的权限请求界面
+ * 앱 시작 시 필요한 권한 안내 화면
  */
 
 import SwiftUI
@@ -13,7 +12,6 @@ struct PermissionsRequestView: View {
 
     var body: some View {
         ZStack {
-            // Background
             LinearGradient(
                 colors: [AppColors.primary.opacity(0.1), AppColors.secondary.opacity(0.1)],
                 startPoint: .topLeading,
@@ -24,43 +22,39 @@ struct PermissionsRequestView: View {
             VStack(spacing: AppSpacing.xl) {
                 Spacer()
 
-                // Icon
                 Image(systemName: "checkmark.shield.fill")
                     .font(.system(size: 80))
                     .foregroundColor(AppColors.primary)
 
-                // Title
                 VStack(spacing: AppSpacing.sm) {
-                    Text("需要您的授权")
+                    Text("권한이 필요합니다")
                         .font(AppTypography.title)
                         .foregroundColor(AppColors.textPrimary)
 
-                    Text("TurboMeta 需要以下权限才能正常工作")
+                    Text("TurboMeta의 음성 대화와 사진 저장 기능에 필요한 권한입니다")
                         .font(AppTypography.body)
                         .foregroundColor(AppColors.textSecondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, AppSpacing.xl)
                 }
 
-                // Permissions List
                 VStack(spacing: AppSpacing.md) {
                     PermissionRow(
                         icon: "mic.fill",
-                        title: "麦克风",
-                        description: "语音对话和录音"
+                        title: "마이크",
+                        description: "실시간 음성 대화와 번역"
                     )
 
                     PermissionRow(
                         icon: "photo.fill",
-                        title: "相册",
-                        description: "保存眼镜拍摄的照片"
+                        title: "사진 추가",
+                        description: "안경으로 촬영한 사진 저장"
                     )
                 }
                 .padding(.horizontal, AppSpacing.xl)
 
                 Spacer()
 
-                // Request Button
                 VStack(spacing: AppSpacing.md) {
                     if isRequesting {
                         ProgressView()
@@ -68,7 +62,7 @@ struct PermissionsRequestView: View {
                             .scaleEffect(1.5)
                     } else if showSettings {
                         VStack(spacing: AppSpacing.sm) {
-                            Text("部分权限未授予")
+                            Text("일부 권한이 허용되지 않았습니다")
                                 .font(AppTypography.caption)
                                 .foregroundColor(.red)
 
@@ -77,7 +71,7 @@ struct PermissionsRequestView: View {
                             } label: {
                                 HStack {
                                     Image(systemName: "gear")
-                                    Text("前往设置")
+                                    Text("iPhone 설정 열기")
                                         .font(AppTypography.headline)
                                 }
                                 .frame(maxWidth: .infinity)
@@ -87,7 +81,8 @@ struct PermissionsRequestView: View {
                                 .cornerRadius(AppCornerRadius.lg)
                             }
 
-                            Button("继续使用（功能受限）") {
+                            Button("제한된 기능으로 계속") {
+                                print("[Permission][WARN] 일부 권한 없이 계속 진행")
                                 onComplete(false)
                             }
                             .font(AppTypography.body)
@@ -99,7 +94,7 @@ struct PermissionsRequestView: View {
                         } label: {
                             HStack {
                                 Image(systemName: "checkmark.circle.fill")
-                                Text("授予权限")
+                                Text("권한 요청")
                                     .font(AppTypography.headline)
                             }
                             .frame(maxWidth: .infinity)
@@ -115,8 +110,8 @@ struct PermissionsRequestView: View {
             }
         }
         .onAppear {
-            // 检查是否已有权限
             if permissionsManager.checkAllPermissions() {
+                print("[Permission][INFO] 필수 권한이 이미 허용됨")
                 onComplete(true)
             }
         }
@@ -124,22 +119,20 @@ struct PermissionsRequestView: View {
 
     private func requestPermissions() {
         isRequesting = true
+        print("[Permission][INFO] 마이크 및 사진 추가 권한 요청 시작")
 
         permissionsManager.requestAllPermissions { allGranted in
             isRequesting = false
+            print("[Permission][INFO] 권한 요청 종료 allGranted=\(allGranted)")
 
             if allGranted {
-                // 所有权限已授予，继续
                 onComplete(true)
             } else {
-                // 部分权限未授予，显示设置按钮
                 showSettings = true
             }
         }
     }
 }
-
-// MARK: - Permission Row
 
 struct PermissionRow: View {
     let icon: String

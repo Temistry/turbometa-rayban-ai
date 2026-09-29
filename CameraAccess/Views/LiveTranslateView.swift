@@ -325,5 +325,5 @@ struct LiveTranslateView: View {
 
 // Preview requires WearablesInterface - use in app context
 // #Preview {
-//     LiveTranslateView(streamViewModel: ...)
+//     // 실시간 번역 화면은 현재 비활성화되어 있습니다.
 // }

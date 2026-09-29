@@ -1,6 +1,5 @@
 /*
- * Omni Realtime View
- * Real-time multimodal conversation interface
+ * 실시간 AI 음성 대화 화면
  */
 
 import SwiftUI
@@ -9,6 +8,7 @@ struct OmniRealtimeView: View {
     @StateObject private var viewModel: OmniRealtimeViewModel
     @ObservedObject var streamViewModel: StreamSessionViewModel
     @Environment(\.dismiss) private var dismiss
+    @State private var frameTimer: Timer?
 
     init(streamViewModel: StreamSessionViewModel, apiKey: String) {
         self.streamViewModel = streamViewModel
@@ -17,7 +17,6 @@ struct OmniRealtimeView: View {
 
     var body: some View {
         ZStack {
-            // Video background from glasses
             if let videoFrame = streamViewModel.currentVideoFrame {
                 Image(uiImage: videoFrame)
                     .resizable()
@@ -29,10 +28,8 @@ struct OmniRealtimeView: View {
             }
 
             VStack(spacing: 0) {
-                // Header
                 headerView
 
-                // Conversation history
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(spacing: 12) {
@@ -41,7 +38,6 @@ struct OmniRealtimeView: View {
                                     .id(message.id)
                             }
 
-                            // Current AI response (streaming)
                             if !viewModel.currentTranscript.isEmpty {
                                 MessageBubble(
                                     message: ConversationMessage(
@@ -68,24 +64,28 @@ struct OmniRealtimeView: View {
                     }
                 }
 
-                // Status and controls
                 controlsView
             }
         }
         .onAppear {
+            print("[OmniView][INFO] 실시간 AI 화면 열림")
             viewModel.connect()
-            // Update video frames
-            Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+
+            frameTimer?.invalidate()
+            frameTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { _ in
                 if let frame = streamViewModel.currentVideoFrame {
                     viewModel.updateVideoFrame(frame)
                 }
             }
         }
         .onDisappear {
+            print("[OmniView][INFO] 실시간 AI 화면 닫힘")
+            frameTimer?.invalidate()
+            frameTimer = nil
             viewModel.disconnect()
         }
-        .alert("错误", isPresented: $viewModel.showError) {
-            Button("确定") {
+        .alert("error".localized, isPresented: $viewModel.showError) {
+            Button("ok".localized) {
                 viewModel.dismissError()
             }
         } message: {
@@ -95,22 +95,19 @@ struct OmniRealtimeView: View {
         }
     }
 
-    // MARK: - Header
-
     private var headerView: some View {
         HStack {
-            Text("AI 实时对话")
+            Text("실시간 AI 대화")
                 .font(.headline)
                 .foregroundColor(.white)
 
             Spacer()
 
-            // Connection status
             HStack(spacing: 6) {
                 Circle()
                     .fill(viewModel.isConnected ? Color.green : Color.red)
                     .frame(width: 8, height: 8)
-                Text(viewModel.isConnected ? "已连接" : "未连接")
+                Text(viewModel.isConnected ? "연결됨" : "연결 안 됨")
                     .font(.caption)
                     .foregroundColor(.white)
             }
@@ -122,76 +119,56 @@ struct OmniRealtimeView: View {
                     .foregroundColor(.white)
                     .font(.title2)
             }
+            .accessibilityLabel("닫기")
         }
         .padding()
         .background(Color.black.opacity(0.7))
     }
 
-    // MARK: - Controls
-
     private var controlsView: some View {
         VStack(spacing: 12) {
-            // Speaking indicator
             if viewModel.isSpeaking {
-                HStack(spacing: 8) {
-                    Image(systemName: "waveform")
-                        .foregroundColor(.green)
-                    Text("正在说话...")
-                        .font(.caption)
-                        .foregroundColor(.white)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.green.opacity(0.2))
-                .cornerRadius(20)
+                Label("AI가 말하는 중...", systemImage: "waveform")
+                    .font(.caption)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 8)
+                    .background(Color.green.opacity(0.2))
+                    .cornerRadius(20)
             }
 
-            // Recording status
             HStack(spacing: 8) {
-                if viewModel.isRecording {
-                    Circle()
-                        .fill(Color.red)
-                        .frame(width: 8, height: 8)
-                    Text("录音中")
-                        .font(.caption)
-                        .foregroundColor(.white)
-                } else {
-                    Circle()
-                        .fill(Color.gray)
-                        .frame(width: 8, height: 8)
-                    Text("未录音")
-                        .font(.caption)
-                        .foregroundColor(.white)
-                }
+                Circle()
+                    .fill(viewModel.isRecording ? Color.red : Color.gray)
+                    .frame(width: 8, height: 8)
+                Text(viewModel.isRecording ? "듣는 중" : "마이크 중지됨")
+                    .font(.caption)
+                    .foregroundColor(.white)
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(Color.black.opacity(0.6))
             .cornerRadius(20)
 
-            // Control buttons
-            HStack(spacing: 20) {
-                // Start/Stop Recording
-                Button {
-                    if viewModel.isRecording {
-                        viewModel.stopRecording()
-                    } else {
-                        viewModel.startRecording()
-                    }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: viewModel.isRecording ? "mic.fill" : "mic.slash.fill")
-                            .font(.title)
-                        Text(viewModel.isRecording ? "停止" : "开始")
-                            .font(.caption)
-                    }
-                    .frame(width: 80, height: 80)
-                    .background(viewModel.isRecording ? Color.red : Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(16)
+            Button {
+                if viewModel.isRecording {
+                    viewModel.stopRecording()
+                } else {
+                    viewModel.startRecording()
                 }
-                .disabled(!viewModel.isConnected)
+            } label: {
+                VStack(spacing: 4) {
+                    Image(systemName: viewModel.isRecording ? "mic.fill" : "mic.slash.fill")
+                        .font(.title)
+                    Text(viewModel.isRecording ? "마이크 중지" : "마이크 시작")
+                        .font(.caption)
+                }
+                .frame(width: 100, height: 80)
+                .background(viewModel.isRecording ? Color.red : Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(16)
             }
+            .disabled(!viewModel.isConnected)
             .padding()
         }
         .padding(.bottom, 20)
@@ -205,16 +182,12 @@ struct OmniRealtimeView: View {
     }
 }
 
-// MARK: - Message Bubble
-
 struct MessageBubble: View {
     let message: ConversationMessage
 
     var body: some View {
         HStack {
-            if message.role == .user {
-                Spacer()
-            }
+            if message.role == .user { Spacer() }
 
             VStack(alignment: message.role == .user ? .trailing : .leading, spacing: 4) {
                 Text(message.content)
@@ -223,6 +196,7 @@ struct MessageBubble: View {
                     .background(message.role == .user ? Color.blue : Color.gray.opacity(0.8))
                     .foregroundColor(.white)
                     .cornerRadius(18)
+                    .textSelection(.enabled)
 
                 Text(message.timestamp.formatted(date: .omitted, time: .shortened))
                     .font(.caption2)
@@ -230,12 +204,7 @@ struct MessageBubble: View {
                     .padding(.horizontal, 4)
             }
 
-            if message.role == .assistant {
-                Spacer()
-            }
+            if message.role == .assistant { Spacer() }
         }
     }
 }
-
-// MARK: - Preview
-// Preview requires real wearables instance
