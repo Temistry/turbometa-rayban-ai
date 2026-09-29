@@ -64,6 +64,17 @@ private final class MeetingArchiveDatabase {
 
     deinit { sqlite3_close(handle) }
 
+    func containsSession() throws -> Bool {
+        var statement: OpaquePointer?
+        guard sqlite3_prepare_v2(handle, "SELECT 1 FROM records WHERE kind='session' LIMIT 1", -1, &statement, nil) == SQLITE_OK else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        defer { sqlite3_finalize(statement) }
+        let result = sqlite3_step(statement)
+        guard result == SQLITE_ROW || result == SQLITE_DONE else { throw CocoaError(.fileReadCorruptFile) }
+        return result == SQLITE_ROW
+    }
+
     private func execute(_ sql: String) throws {
         guard sqlite3_exec(handle, sql, nil, nil, nil) == SQLITE_OK else {
             throw CocoaError(.fileWriteUnknown)
@@ -264,9 +275,8 @@ final class MeetingArchiveService: ObservableObject {
     private func store(_ meeting: ArchivedMeeting, merge: Bool) throws {
         try prepare(id: meeting.id)
         let url = sessionURL(id: meeting.id).appendingPathComponent("archive.sqlite")
-        let needsMigration = !fileManager.fileExists(atPath: url.path)
         let database = try MeetingArchiveDatabase(url: url)
-        if needsMigration, let legacy = legacyMeeting(folder: sessionURL(id: meeting.id)) {
+        if try !database.containsSession(), let legacy = legacyMeeting(folder: sessionURL(id: meeting.id)) {
             try database.write(legacy, merge: false)
         }
         try database.write(meeting, merge: merge)
@@ -299,7 +309,9 @@ final class MeetingArchiveService: ObservableObject {
         return folders.compactMap { folder in
             let databaseURL = folder.appendingPathComponent("archive.sqlite")
             if fileManager.fileExists(atPath: databaseURL.path) {
-                return try? MeetingArchiveDatabase(url: databaseURL).read()
+                do {
+                    return try MeetingArchiveDatabase(url: databaseURL).read() ?? legacyMeeting(folder: folder)
+                } catch { return nil }
             }
             return legacyMeeting(folder: folder)
         }

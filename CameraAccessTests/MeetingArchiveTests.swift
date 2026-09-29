@@ -84,6 +84,21 @@ final class MeetingArchiveTests: XCTestCase {
         XCTAssertFalse(MeetingArchiveService.isProcessing)
     }
 
+    func testInterruptedMigrationRetriesEvenWhenEmptyDatabaseFileExists() throws {
+        let original = sampleMeeting()
+        try archive.prepare(id: original.id)
+        let folder = archive.sessionURL(id: original.id)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(original).write(to: folder.appendingPathComponent("transcript.json"))
+        try Data().write(to: folder.appendingPathComponent("archive.sqlite"))
+        XCTAssertEqual(archive.loadAll().first?.lines, original.lines)
+        var revision = original
+        revision.lines = [ArchivedMeetingLine(offset: 180, text: "추가 발언")]
+        XCTAssertTrue(archive.checkpoint(revision))
+        XCTAssertEqual(archive.loadAll().first?.lines.count, original.lines.count + 1)
+    }
+
     func testPassiveSessionWithoutTranscriptIsPreserved() {
         let meeting = ArchivedMeeting(id: UUID(), startedAt: Date(timeIntervalSince1970: 100),
             lines: [], mode: .passive, processingState: .unprocessed)
