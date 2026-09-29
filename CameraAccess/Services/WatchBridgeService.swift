@@ -20,6 +20,7 @@ final class WatchBridgeService: NSObject, ObservableObject {
     /// 워치의 촬영 버튼 요청을 처리한다. WatchCapture 응답 값을 돌려준다.
     /// 회의 화면이 준비되지 않았으면 nil이며 unavailable로 응답한다.
     var onCaptureRequest: (() -> String)?
+    var onStopRequest: ((TimeInterval?) -> String)?
 
     func activate() {
         guard WCSession.isSupported() else { return }
@@ -31,7 +32,8 @@ final class WatchBridgeService: NSObject, ObservableObject {
 
     func update(state: String, route: String, startedAt: Date?, latest: String,
                 recent: [String], whisperCount: Int, error: String, quotaPaused: Bool,
-                scene: String = "", micQuiet: Bool = false, catches: [[String: String]] = []) {
+                scene: String = "", micQuiet: Bool = false, catches: [[String: String]] = [],
+                mode: String = "realtime", notice: String = "") {
         guard WCSession.isSupported(), WCSession.default.activationState == .activated else { return }
         let payload = WatchMeetingStatus.payload(
             state: state,
@@ -44,7 +46,9 @@ final class WatchBridgeService: NSObject, ObservableObject {
             quotaPaused: quotaPaused,
             scene: scene,
             micQuiet: micQuiet,
-            catches: catches
+            catches: catches,
+            mode: mode,
+            notice: notice
         )
         send(payload)
     }
@@ -75,7 +79,10 @@ final class WatchBridgeService: NSObject, ObservableObject {
         send(payload)
     }
 
-    fileprivate func handleMessage(action: String?) -> String {
+    fileprivate func handleMessage(action: String?, startedAt: TimeInterval?) -> String {
+        if action == WatchCapture.stopAction {
+            return onStopRequest?(startedAt) ?? WatchCapture.unavailable
+        }
         guard action == WatchCapture.captureAction else { return WatchCapture.unavailable }
         guard let handler = onCaptureRequest else {
             DeveloperConsole.shared.log(.warning, category: "MeetingWatch", "capture request without meeting screen")
@@ -114,8 +121,9 @@ extension WatchBridgeService: WCSessionDelegate {
         replyHandler: @escaping ([String: Any]) -> Void
     ) {
         let action = message[WatchCapture.actionKey] as? String
+        let startedAt = message[WatchCapture.sessionStartedAt] as? TimeInterval
         Task { @MainActor in
-            let result = WatchBridgeService.shared.handleMessage(action: action)
+            let result = WatchBridgeService.shared.handleMessage(action: action, startedAt: startedAt)
             replyHandler([WatchCapture.resultKey: result])
         }
     }

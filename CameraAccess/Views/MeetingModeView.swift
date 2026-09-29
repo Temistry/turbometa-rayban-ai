@@ -27,6 +27,33 @@ struct MeetingModeView: View {
             Color.black.ignoresSafeArea()
             VStack(spacing: 0) {
                 topBar
+                if !viewModel.routeNotice.isEmpty {
+                    Text(viewModel.routeNotice).font(.caption).foregroundStyle(.orange).padding(.horizontal)
+                }
+                Picker("모드", selection: Binding(
+                    get: { viewModel.mode },
+                    set: { viewModel.selectMode($0) }
+                )) {
+                    ForEach(ConversationMode.allCases) { mode in
+                        Text(mode.title).tag(mode)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .disabled(viewModel.runState == .listening || viewModel.isStarting || viewModel.isStopping)
+                if viewModel.mode == .passive {
+                    if viewModel.runState == .listening {
+                        VStack(spacing: 20) {
+                            Spacer()
+                            Image(systemName: "waveform").font(.system(size: 48)).foregroundStyle(.red)
+                            Text("녹음 중").foregroundStyle(.white)
+                            Spacer()
+                            stopBar
+                        }
+                    } else {
+                        idleArea
+                    }
+                } else {
                 filterBar
                 if viewModel.runState == .listening || !viewModel.lines.isEmpty {
                     captionArea
@@ -34,6 +61,7 @@ struct MeetingModeView: View {
                     idleArea
                 }
                 cameraBar
+                }
             }
 
             if let failure = viewModel.failure {

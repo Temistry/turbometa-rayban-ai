@@ -1,4 +1,5 @@
 import XCTest
+import AVFoundation
 @testable import CameraAccess
 
 @MainActor
@@ -18,6 +19,66 @@ final class MeetingArchiveTests: XCTestCase {
         tempRoot = nil
         archive = nil
         try await super.tearDown()
+    }
+
+    func testCheckpointPreservesOffscreenLinesAndUpdatesRevisions() {
+        let first = ArchivedMeetingLine(offset: 0, text: "첫 문장")
+        let second = ArchivedMeetingLine(offset: 1, text: "임시 문장")
+        var meeting = ArchivedMeeting(id: UUID(), startedAt: Date(timeIntervalSince1970: 100),
+            lines: [first, second], mode: .realtime)
+        archive.checkpoint(meeting)
+        meeting.lines = [ArchivedMeetingLine(id: second.id, offset: 1, text: "확정 문장")]
+        archive.checkpoint(meeting)
+        let saved = archive.loadAll().first
+        XCTAssertEqual(saved?.lines.map(\.text), ["첫 문장", "확정 문장"])
+        XCTAssertNil(saved?.endedAt)
+    }
+
+    func testPassiveSessionWithoutTranscriptIsPreserved() {
+        let meeting = ArchivedMeeting(id: UUID(), startedAt: Date(timeIntervalSince1970: 100),
+            lines: [], mode: .passive, processingState: .unprocessed)
+        archive.checkpoint(meeting)
+        XCTAssertEqual(archive.loadAll().first, meeting)
+    }
+
+    func testRecoveryDoesNotTouchActiveRecording() {
+        let meeting = ArchivedMeeting(id: UUID(), startedAt: Date(), lines: [],
+            mode: .passive, processingState: .unprocessed)
+        archive.save(meeting)
+        MeetingArchiveService.recordingID = meeting.id
+        defer { MeetingArchiveService.recordingID = nil }
+        archive.recoverInterruptedRecordings()
+        archive.delete(id: meeting.id)
+        XCTAssertEqual(archive.loadAll().first, meeting)
+    }
+
+    func testInterruptedPassiveRecordingRecoversWithoutProcessing() {
+        let meeting = ArchivedMeeting(id: UUID(), startedAt: Date(), lines: [],
+            mode: .passive, processingState: .unprocessed)
+        archive.save(meeting)
+        archive.recoverInterruptedRecordings()
+        let recovered = archive.loadAll().first
+        XCTAssertEqual(recovered?.recovered, true)
+        XCTAssertNotNil(recovered?.endedAt)
+        XCTAssertEqual(recovered?.processingState, .unprocessed)
+    }
+
+    func testAudioChunksRotateAndRemainDiscoverable() throws {
+        let id = UUID()
+        try archive.prepare(id: id)
+        let box = MeetingAudioFileBox()
+        let format = try XCTUnwrap(AVAudioFormat(standardFormatWithSampleRate: 16000, channels: 1))
+        let buffer = try XCTUnwrap(AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 16000))
+        buffer.frameLength = 16000
+        let samples = try XCTUnwrap(buffer.floatChannelData)[0]
+        for index in 0..<16000 { samples[index] = 0 }
+        try box.configure(destination: archive.audioURL(id: id), format: format)
+        for _ in 0..<31 { XCTAssertTrue(box.write(buffer)) }
+        box.clear()
+        let urls = archive.audioFileURLs(id: id)
+        XCTAssertEqual(urls.count, 2)
+        XCTAssertEqual(try AVAudioFile(forReading: urls[0]).length, 480000)
+        XCTAssertEqual(try AVAudioFile(forReading: urls[1]).length, 16000)
     }
 
     private func sampleMeeting() -> ArchivedMeeting {

@@ -85,7 +85,7 @@ enum MeetingMicMode: String, CaseIterable, Identifiable {
     var detailKey: String { "settings.mic.\(rawValue).detail" }
 
     static func resolve(stored: String?) -> MeetingMicMode {
-        stored.flatMap(MeetingMicMode.init(rawValue:)) ?? .phone
+        stored.flatMap(MeetingMicMode.init(rawValue:)) ?? .headset
     }
 
     static var current: MeetingMicMode {
@@ -196,7 +196,9 @@ final class MeetingTranscriptionService: ObservableObject {
     /// 10초마다 입력 음량 구간과 "마이크 소리 작음" 판단을 전달한다.
     var onInputQuality: ((MeetingInputWindow?, Bool) -> Void)?
     /// 회의 시작 전에 설정한다. start() 이후 바꾸면 다음 세션 구성부터 적용된다.
-    var micMode: MeetingMicMode = .phone
+    var micMode: MeetingMicMode = .headset
+    var onRouteEvent: ((String) -> Void)?
+    var transcriptionEnabled = true
     /// 화자 구분용 16kHz 조각 버퍼. 입력 탭 설치 시점의 값을 쓴다.
     var diarizationSink: DiarizationAudioBuffer?
     /// 시각 보조가 뽑은 화면 용어. 인식 작업 시작 시 contextualStrings로 주입된다.
@@ -242,6 +244,7 @@ final class MeetingTranscriptionService: ObservableObject {
     static let segmentTickerInterval: TimeInterval = 0.5
 
     func start() async throws {
+        if transcriptionEnabled {
         guard let speechRecognizer, speechRecognizer.isAvailable else {
             throw MeetingTranscriptionError.recognizerUnavailable
         }
@@ -253,6 +256,7 @@ final class MeetingTranscriptionService: ObservableObject {
         }
         guard authorized else {
             throw MeetingTranscriptionError.permissionDenied
+        }
         }
         let microphoneAuthorized = await withCheckedContinuation { continuation in
             AVAudioSession.sharedInstance().requestRecordPermission { granted in
@@ -338,10 +342,21 @@ final class MeetingTranscriptionService: ObservableObject {
                 options: [.allowBluetooth, .allowBluetoothA2DP, .defaultToSpeaker]
             )
             try session.setActive(true)
-            if let bluetoothInput = session.availableInputs?.first(where: {
+            let bluetoothInputs = (session.availableInputs ?? []).filter {
                 $0.portType == .bluetoothHFP || $0.portType == .bluetoothLE
-            }) {
-                try? session.setPreferredInput(bluetoothInput)
+            }
+            let glasses = bluetoothInputs.first {
+                let name = $0.portName.lowercased()
+                return name.contains("oakley") || name.contains("hstn") || name.contains("ray-ban") || name.contains("meta")
+            }
+            if let bluetoothInput = glasses ?? bluetoothInputs.first {
+                try session.setPreferredInput(bluetoothInput)
+            } else if UserDefaults.standard.bool(forKey: "meeting.allowPhoneFallback"),
+                      let phone = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+                try session.setPreferredInput(phone)
+                onRouteEvent?("안경 입력 없음 · 아이폰 마이크로 전환")
+            } else {
+                throw MeetingTranscriptionError.sessionFailed("안경 마이크가 연결되지 않았습니다. 안경을 연결하거나 아이폰 입력을 선택하세요.")
             }
         }
 
@@ -382,7 +397,7 @@ final class MeetingTranscriptionService: ObservableObject {
     }
 
     private func startRecognitionLoop() {
-        guard state == .running, let speechRecognizer else { return }
+        guard state == .running else { return }
         if prefersOnDevice, Date() >= onDeviceUntil {
             prefersOnDevice = false
             DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "retry server recognition")
@@ -392,18 +407,18 @@ final class MeetingTranscriptionService: ObservableObject {
         lastStableText = ""
         lastStableAt = Date()
 
-        let request = SFSpeechAudioBufferRecognitionRequest()
-        request.shouldReportPartialResults = true
-        request.addsPunctuation = true
+        let request = transcriptionEnabled ? SFSpeechAudioBufferRecognitionRequest() : nil
+        request?.shouldReportPartialResults = true
+        request?.addsPunctuation = true
         if !contextualTerms.isEmpty {
-            request.contextualStrings = Array(
+            request?.contextualStrings = Array(
                 contextualTerms
                     .filter { !$0.isEmpty && $0.count <= 60 }
                     .prefix(40)
             )
         }
         if prefersOnDevice {
-            request.requiresOnDeviceRecognition = true
+            request?.requiresOnDeviceRecognition = true
         }
         recognitionRequest = request
         recognitionOrigin = Date()
@@ -426,17 +441,15 @@ final class MeetingTranscriptionService: ObservableObject {
             state = .idle
             return
         }
-        if let destination = recordingDestination, audioFileBox.currentFile == nil {
+        if let destination = recordingDestination {
             do {
-                audioFileBox.set(try AVAudioFile(
-                    forWriting: destination,
-                    settings: inputFormat.settings,
-                    commonFormat: inputFormat.commonFormat,
-                    interleaved: inputFormat.isInterleaved
-                ))
+                try audioFileBox.configure(destination: destination, format: inputFormat)
                 DeveloperConsole.shared.log(.info, category: "MeetingArchive", "audio recording started rate=\(inputFormat.sampleRate)")
             } catch {
                 DeveloperConsole.shared.log(.warning, category: "MeetingArchive", "audio open failed code=\((error as NSError).code)")
+                state = .idle
+                onFailure?("녹음 파일을 만들지 못했습니다. 저장 공간을 확인해 주세요.")
+                return
             }
         }
 
@@ -448,9 +461,13 @@ final class MeetingTranscriptionService: ObservableObject {
             inputNode.removeTap(onBus: 0)
             hasInputTap = false
         }
-        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { buffer, _ in
+        inputNode.installTap(onBus: 0, bufferSize: 4096, format: nil) { [weak self] buffer, _ in
             recognitionInput.append(buffer)
-            audioFileBox.write(buffer)
+            if !audioFileBox.write(buffer) {
+                Task { @MainActor [weak self] in
+                    self?.onFailure?("녹음 저장이 중단됐습니다. 저장 공간을 확인해 주세요.")
+                }
+            }
             inputMeter.add(buffer)
             diarizationSink?.append(buffer)
         }
@@ -486,6 +503,7 @@ final class MeetingTranscriptionService: ObservableObject {
         recognitionGeneration += 1
         let generation = recognitionGeneration
         DeveloperConsole.shared.log(.info, category: "MeetingSpeech", "request started generation=\(generation) onDevice=\(prefersOnDevice) captureRunning=\(audioEngine.isRunning)")
+        guard transcriptionEnabled, let request, let speechRecognizer else { return }
         recognitionTask = speechRecognizer.recognitionTask(with: request) { [weak self] result, error in
             Task { @MainActor [weak self] in
                 self?.handleRecognition(generation: generation, result: result, error: error)
@@ -545,7 +563,7 @@ final class MeetingTranscriptionService: ObservableObject {
                 )
             }
             onInputQuality?(window, MeetingInputMeter.isQuiet(recentWindows))
-            if let window, Self.shouldRecoverStall(window: window,
+            if transcriptionEnabled, let window, Self.shouldRecoverStall(window: window,
                 secondsWithoutResult: Date().timeIntervalSince(lastPartialAt)) {
                 DeveloperConsole.shared.log(.warning, category: "MeetingSpeech", "stall recovery captureRunning=\(audioEngine.isRunning)")
                 if speechRecognizer?.supportsOnDeviceRecognition == true {
@@ -710,9 +728,12 @@ final class MeetingTranscriptionService: ObservableObject {
         switch type {
         case .began:
             DeveloperConsole.shared.log(.warning, category: "MeetingAudio", "interruption began")
+            onRouteEvent?("오디오 방해 · 녹음 공백 시작")
+            teardownEngine(keepAudioSession: true)
         case .ended:
             DeveloperConsole.shared.log(.info, category: "MeetingAudio", "interruption ended")
             recoverSession()
+            if audioEngine.isRunning { onRouteEvent?("오디오 방해 종료 · 녹음 재개") }
         @unknown default:
             break
         }
@@ -724,7 +745,9 @@ final class MeetingTranscriptionService: ObservableObject {
               let reason = AVAudioSession.RouteChangeReason(rawValue: reasonRaw),
               reason == .oldDeviceUnavailable || reason == .newDeviceAvailable else { return }
         DeveloperConsole.shared.log(.info, category: "MeetingAudio", "route changed reason=\(reason.rawValue)")
+        onRouteEvent?(reason == .oldDeviceUnavailable ? "입력 기기 연결 해제" : "입력 기기 연결 변경")
         recoverSession()
+        if audioEngine.isRunning { onRouteEvent?("현재 입력: \(inputRouteName)") }
     }
 
     /// 방해·라우트 변경 뒤 세션을 다시 구성하고 전사를 이어간다.
@@ -736,6 +759,7 @@ final class MeetingTranscriptionService: ObservableObject {
             try configureAudioSession()
         } catch {
             DeveloperConsole.shared.log(.warning, category: "MeetingAudio", "recover failed code=\((error as NSError).code)")
+            onFailure?((error as? MeetingTranscriptionError)?.message ?? "입력 기기를 복구하지 못했습니다.")
             return
         }
         startRecognitionLoop()
@@ -765,28 +789,76 @@ final class MeetingTranscriptionService: ObservableObject {
 final class MeetingAudioFileBox {
     private let lock = NSLock()
     private var file: AVAudioFile?
+    private var destination: URL?
+    private var format: AVAudioFormat?
+    private var index = 0
+    private var failed = false
+    private var pendingStampURL: URL?
 
-    var currentFile: AVAudioFile? {
+    func configure(destination: URL, format: AVAudioFormat) throws {
         lock.lock()
         defer { lock.unlock() }
-        return file
+        if self.destination != destination {
+            file = nil
+            index = 0
+            failed = false
+        } else if file != nil {
+            file = nil
+            index += 1
+        }
+        self.destination = destination
+        self.format = format
+        try openNextFile()
     }
 
-    func set(_ newFile: AVAudioFile) {
-        lock.lock()
-        file = newFile
-        lock.unlock()
+    private func openNextFile() throws {
+        guard let destination, let format else { return }
+        let folder = destination.deletingLastPathComponent()
+        var url = folder.appendingPathComponent(String(format: "audio-%06d.caf", index))
+        // A restart must never overwrite audio already on disk.
+        while FileManager.default.fileExists(atPath: url.path) {
+            index += 1
+            url = folder.appendingPathComponent(String(format: "audio-%06d.caf", index))
+        }
+        file = try AVAudioFile(forWriting: url, settings: format.settings,
+                               commonFormat: format.commonFormat, interleaved: format.isInterleaved)
+        pendingStampURL = url.appendingPathExtension("start")
     }
 
-    func write(_ buffer: AVAudioPCMBuffer) {
+    /// False is emitted once on write failure, so the caller can stop safely.
+    func write(_ buffer: AVAudioPCMBuffer) -> Bool {
         lock.lock()
-        try? file?.write(from: buffer)
-        lock.unlock()
+        defer { lock.unlock() }
+        guard !failed, let current = file else { return true }
+        do {
+            if Double(current.length) / current.processingFormat.sampleRate >= 30 {
+                file = nil
+                index += 1
+                try openNextFile()
+            }
+            if let stampURL = pendingStampURL {
+                let start = Date().addingTimeInterval(-Double(buffer.frameLength) / buffer.format.sampleRate)
+                try JSONEncoder().encode(start).write(to: stampURL,
+                    options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+                pendingStampURL = nil
+            }
+            try file?.write(from: buffer)
+            return true
+        } catch {
+            failed = true
+            file = nil
+            return false
+        }
     }
 
     func clear() {
         lock.lock()
         file = nil
+        destination = nil
+        format = nil
+        index = 0
+        failed = false
+        pendingStampURL = nil
         lock.unlock()
     }
 }

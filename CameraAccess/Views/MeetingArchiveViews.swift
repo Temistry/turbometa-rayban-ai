@@ -6,10 +6,20 @@
  */
 
 import SwiftUI
+import AVFoundation
 
 struct MeetingArchiveListView: View {
     @StateObject private var archive = MeetingArchiveService()
     @State private var meetings: [ArchivedMeeting] = []
+    @State private var search = ""
+
+    private var filteredMeetings: [ArchivedMeeting] {
+        guard !search.isEmpty else { return meetings }
+        return meetings.filter { meeting in
+            meeting.lines.contains { $0.text.localizedCaseInsensitiveContains(search) }
+                || (meeting.catches ?? []).contains { $0.point.localizedCaseInsensitiveContains(search) }
+        }
+    }
 
     var body: some View {
         Group {
@@ -19,13 +29,24 @@ struct MeetingArchiveListView: View {
                     .foregroundColor(.secondary)
             } else {
                 List {
-                    ForEach(meetings) { meeting in
+                    ForEach(filteredMeetings) { meeting in
                         NavigationLink {
                             MeetingArchiveDetailView(meeting: meeting)
                         } label: {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(Self.title(meeting.startedAt))
                                     .font(.subheadline.weight(.semibold))
+                                Text((meeting.mode ?? .realtime).title + " · " +
+                                     (meeting.processingState == .completed ? "처리 완료" :
+                                        meeting.mode == .passive ? "미처리 녹음" : "기록"))
+                                    .font(.caption2).foregroundStyle(.secondary)
+                                if let endedAt = meeting.endedAt {
+                                    Text(MeetingArchiveService.offsetText(endedAt.timeIntervalSince(meeting.startedAt)))
+                                        .font(.caption2.monospaced()).foregroundStyle(.secondary)
+                                }
+                                if meeting.recovered == true {
+                                    Text("중단된 기록 복구됨").font(.caption2).foregroundStyle(.orange)
+                                }
                                 if let catches = meeting.catches, !catches.isEmpty {
                                     Text("meeting.catch.count".localized(catches.count))
                                         .font(.caption2)
@@ -44,6 +65,7 @@ struct MeetingArchiveListView: View {
         }
         .navigationTitle("meeting.archive.title".localized)
         .navigationBarTitleDisplayMode(.inline)
+        .searchable(text: $search, prompt: "전사·감지 내용 검색")
         .toolbar {
             if !meetings.isEmpty {
                 ShareLink(item: meetings.map(MeetingArchiveService.exportText).joined(separator: "\n\n")) {
@@ -52,15 +74,16 @@ struct MeetingArchiveListView: View {
                 .accessibilityLabel("meeting.archive.exportAll".localized)
             }
         }
-        .task { reload() }
+        .onAppear { reload() }
     }
 
     private func reload() {
+        archive.recoverInterruptedRecordings()
         meetings = archive.loadAll()
     }
 
     private func delete(at offsets: IndexSet) {
-        offsets.map { meetings[$0].id }.forEach { archive.delete(id: $0) }
+        offsets.map { filteredMeetings[$0].id }.forEach { archive.delete(id: $0) }
         reload()
     }
 
@@ -74,13 +97,39 @@ struct MeetingArchiveListView: View {
 }
 
 struct MeetingArchiveDetailView: View {
-    let meeting: ArchivedMeeting
+    @State var meeting: ArchivedMeeting
+    @State private var confirmProcessing = false
+    @State private var processing = false
+    @State private var processingError: String?
     @Environment(\.dismiss) private var dismiss
     @StateObject private var archive = MeetingArchiveService()
+    @StateObject private var playback = ArchiveAudioPlayback()
+    @State private var selectedLine: ArchivedMeetingLine?
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Button(playback.isPlaying ? "재생 중지" : "원본 듣기") {
+                        if playback.isPlaying { playback.stop() }
+                        else { play(at: 0) }
+                    }
+                    .disabled(MeetingInterpreterViewModel.isConversationActive)
+                    if let error = playback.error {
+                        Text(error).font(.caption).foregroundStyle(.orange)
+                    }
+                }
+                if meeting.mode == .passive {
+                    Text(meeting.processingState == .completed ? "분석 완료" : "미처리 녹음")
+                        .font(.caption).foregroundStyle(.secondary)
+                    if meeting.processingState != .completed {
+                        Button(processing ? "처리 중" : "전사·분석하기") { confirmProcessing = true }
+                            .disabled(processing || MeetingInterpreterViewModel.isConversationActive)
+                    }
+                    if let processingError {
+                        Text(processingError).font(.caption).foregroundStyle(.orange)
+                    }
+                }
                 if let catches = meeting.catches, !catches.isEmpty {
                     ForEach(catches) { item in
                         ArchivedCatchRow(item: item)
@@ -93,11 +142,19 @@ struct MeetingArchiveDetailView: View {
                             .foregroundColor(.secondary)
                         Text(line.text)
                             .font(.subheadline)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .contentShape(Rectangle())
+                            .onTapGesture { selectedLine = line }
                         if let whisper = line.whisper {
                             let termLabel = line.term.map { $0 + " · " } ?? ""
                             Text("귓속말: " + termLabel + whisper)
                                 .font(.caption)
                                 .foregroundColor(.blue)
+                        }
+                        ForEach(line.sourceURLs ?? [], id: \.self) { source in
+                            if let url = URL(string: source), ["https", "http"].contains(url.scheme ?? "") {
+                                Link(url.host ?? source, destination: url)
+                            }
                         }
                     }
                 }
@@ -106,14 +163,52 @@ struct MeetingArchiveDetailView: View {
         }
         .navigationTitle(MeetingArchiveListView.title(meeting.startedAt))
         .navigationBarTitleDisplayMode(.inline)
+        .onDisappear { playback.stop() }
+        .sheet(item: $selectedLine) { line in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text(line.text).font(.headline)
+                    Button("이 구간 듣기") { play(at: line.offset) }
+                        .disabled(MeetingInterpreterViewModel.isConversationActive)
+                    if let explanation = line.whisper, !explanation.isEmpty {
+                        Text(explanation)
+                        Button("설명 읽어주기") { playback.speak(explanation) }
+                            .disabled(MeetingInterpreterViewModel.isConversationActive)
+                    }
+                    ForEach(line.sourceURLs ?? [], id: \.self) { source in
+                        if let url = URL(string: source), ["https", "http"].contains(url.scheme ?? "") {
+                            Link(source, destination: url)
+                        }
+                    }
+                    Button("재생 중지") { playback.stop() }
+                }.padding()
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .confirmationDialog("녹음을 외부 AI 서비스로 보내 전사·분석할까요?", isPresented: $confirmProcessing,
+                            titleVisibility: .visible) {
+            Button("전사·분석하기") {
+                processing = true
+                processingError = nil
+                Task {
+                    defer { processing = false }
+                    do {
+                        try await archive.process(meeting) { meeting = $0 }
+                    } catch {
+                        processingError = "처리 실패 · 저장된 구간부터 다시 시도할 수 있습니다."
+                    }
+                }
+            }
+        }
         .toolbar {
             ShareLink(item: MeetingArchiveService.exportText(meeting)) {
                 Image(systemName: "text.quote")
             }
             .accessibilityLabel("meeting.archive.exportText".localized)
 
-            if let audioURL = archive.audioFileURL(id: meeting.id) {
-                ShareLink(item: audioURL) {
+            if !archive.audioFileURLs(id: meeting.id).isEmpty {
+                ShareLink(items: archive.audioFileURLs(id: meeting.id)) {
                     Image(systemName: "waveform")
                 }
                 .accessibilityLabel("meeting.archive.exportAudio".localized)
@@ -126,6 +221,76 @@ struct MeetingArchiveDetailView: View {
                 Image(systemName: "trash")
             }
             .accessibilityLabel("meeting.archive.delete".localized)
+            .disabled(processing || archive.isBusy(id: meeting.id))
+        }
+    }
+
+    private func play(at offset: TimeInterval) {
+        playback.play(folder: archive.sessionURL(id: meeting.id),
+                      chunks: archive.audioChunks(for: meeting), offset: offset)
+    }
+}
+
+@MainActor
+private final class ArchiveAudioPlayback: NSObject, ObservableObject, AVAudioPlayerDelegate {
+    @Published private(set) var isPlaying = false
+    @Published private(set) var error: String?
+    private var player: AVAudioPlayer?
+    private var chunks: [ArchivedAudioChunk] = []
+    private var folder: URL?
+    private var index = 0
+    private var ownsSpeech = false
+
+    func play(folder: URL, chunks: [ArchivedAudioChunk], offset: TimeInterval) {
+        guard !MeetingInterpreterViewModel.isConversationActive else { return }
+        stop()
+        error = nil
+        self.folder = folder
+        self.chunks = chunks.sorted { $0.offset < $1.offset }
+        guard let selected = self.chunks.firstIndex(where: { $0.offset + $0.duration > offset }) else {
+            error = "재생할 음성이 없습니다."
+            return
+        }
+        index = selected
+        startChunk(at: max(0, offset - self.chunks[selected].offset))
+    }
+
+    private func startChunk(at offset: TimeInterval = 0) {
+        guard let folder, chunks.indices.contains(index) else { stop(); return }
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio)
+            try session.setActive(true)
+            let next = try AVAudioPlayer(contentsOf: folder.appendingPathComponent(chunks[index].filename))
+            player = next
+            next.delegate = self
+            next.currentTime = offset
+            guard next.play() else { throw CocoaError(.fileReadCorruptFile) }
+            isPlaying = true
+        } catch {
+            self.error = "음성을 재생하지 못했습니다."
+            stop()
+        }
+    }
+
+    func speak(_ text: String) {
+        guard !MeetingInterpreterViewModel.isConversationActive else { return }
+        stop()
+        ownsSpeech = TTSService.shared.enqueue(text, volume: 0.35, pan: WhisperSide.current.pan) != nil
+    }
+
+    func stop() {
+        player?.stop()
+        player = nil
+        isPlaying = false
+        if ownsSpeech { TTSService.shared.stop(); ownsSpeech = false }
+    }
+
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [weak self] in
+            guard let self, self.player === player else { return }
+            if flag { self.index += 1; self.startChunk() }
+            else { self.error = "음성 재생이 중단됐습니다."; self.stop() }
         }
     }
 }

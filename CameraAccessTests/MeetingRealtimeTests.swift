@@ -107,9 +107,9 @@ final class MeetingRealtimeTests: XCTestCase {
 
     // MARK: - 마이크 선택과 입력 품질
 
-    func testMicModeDefaultsToPhone() {
-        XCTAssertEqual(MeetingMicMode.resolve(stored: nil), .phone)
-        XCTAssertEqual(MeetingMicMode.resolve(stored: "unknown"), .phone)
+    func testMicModeDefaultsToHeadset() {
+        XCTAssertEqual(MeetingMicMode.resolve(stored: nil), .headset)
+        XCTAssertEqual(MeetingMicMode.resolve(stored: "unknown"), .headset)
         XCTAssertEqual(MeetingMicMode.resolve(stored: "headset"), .headset)
     }
 

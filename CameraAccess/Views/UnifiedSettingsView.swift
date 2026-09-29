@@ -202,7 +202,8 @@ struct UnifiedSettingsView: View {
     @State private var hasGoogleAPIKey = false
     @State private var hasJevAPIKey = false
     @AppStorage(MeetingSceneMode.storageKey) private var sceneModeRaw = ""
-    @AppStorage(MeetingMicMode.storageKey) private var micModeRaw = MeetingMicMode.phone.rawValue
+    @AppStorage(MeetingMicMode.storageKey) private var micModeRaw = MeetingMicMode.headset.rawValue
+    @AppStorage("meeting.allowPhoneFallback") private var allowPhoneFallback = false
     @AppStorage("meeting.voiceProcessingMode") private var voiceProcessing = "auto"
     @AppStorage(WhisperSide.storageKey) private var whisperSideRaw = WhisperSide.right.rawValue
 
@@ -472,6 +473,7 @@ struct UnifiedSettingsView: View {
                 Text("켜짐").tag("on")
                 Text("꺼짐").tag("off")
             }
+            Toggle("안경 연결 해제 시 아이폰 마이크 사용", isOn: $allowPhoneFallback)
         } header: {
             Text("회의 통역기")
         } footer: {

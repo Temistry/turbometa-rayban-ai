@@ -4,6 +4,8 @@ import Foundation
 /// iOS와 watchOS 두 타깃에서 모두 컴파일된다.
 enum WatchMeetingStatus {
     static let state = "state"
+    static let mode = "mode"
+    static let notice = "notice"
     static let route = "route"
     static let startedAt = "startedAt"
     static let latest = "latest"
@@ -32,9 +34,11 @@ enum WatchMeetingStatus {
     static func payload(state: String, route: String, startedAt: Date?, latest: String,
                         recent: [String], whisperCount: Int, error: String,
                         quotaPaused: Bool, scene: String = "", micQuiet: Bool = false,
-                        catches: [[String: String]] = []) -> [String: Any] {
+                        catches: [[String: String]] = [], mode: String = "realtime", notice: String = "") -> [String: Any] {
         var payload: [String: Any] = [
             Self.state: state,
+            Self.mode: mode,
+            Self.notice: notice,
             Self.route: route,
             Self.latest: latest,
             Self.recent: recent,
@@ -56,6 +60,8 @@ enum WatchMeetingStatus {
 enum WatchCapture {
     static let actionKey = "action"
     static let captureAction = "capturePhoto"
+    static let stopAction = "stopRecording"
+    static let sessionStartedAt = "sessionStartedAt"
     static let resultKey = "result"
     /// 촬영을 시작했다.
     static let accepted = "accepted"

@@ -16,6 +16,8 @@ enum CaptureFeedback: Equatable {
 
 final class PhoneLink: NSObject, ObservableObject {
     @Published var state = "idle"
+    @Published var mode = "realtime"
+    @Published var notice = ""
     @Published var route = "-"
     @Published var startedAt: Date?
     @Published var latest = ""
@@ -29,6 +31,9 @@ final class PhoneLink: NSObject, ObservableObject {
     @Published var catches: [[String: String]] = []
     private var hasReceivedCatches = false
     @Published var captureFeedback: CaptureFeedback = .idle
+    @Published var stopPending = false
+    @Published var stopError = ""
+    private var stopToken = UUID()
 
     private var feedbackToken = UUID()
 
@@ -41,7 +46,16 @@ final class PhoneLink: NSObject, ObservableObject {
     }
 
     func apply(_ context: [String: Any]) {
+        let newNotice = context[WatchMeetingStatus.notice] as? String ?? ""
+        if !newNotice.isEmpty, newNotice != notice { WKInterfaceDevice.current().play(.notification) }
+        notice = newNotice
+        let previousState = state
+        mode = context[WatchMeetingStatus.mode] as? String ?? "realtime"
         if let value = context[WatchMeetingStatus.state] as? String { state = value }
+        if previousState == "listening", state != "listening" {
+            WKInterfaceDevice.current().play(.notification)
+            stopPending = false
+        }
         if let value = context[WatchMeetingStatus.route] as? String { route = value }
         if let value = context[WatchMeetingStatus.startedAt] as? TimeInterval {
             startedAt = Date(timeIntervalSince1970: value)
@@ -66,7 +80,49 @@ final class PhoneLink: NSObject, ObservableObject {
     }
 
     /// 폰에 촬영을 요청한다. 폰은 앱의 촬영 버튼과 같은 동작(촬영→설명→귓속말)을 한다.
+    func requestStop() {
+        guard state == "listening", !stopPending, let startedAt else { return }
+        let session = WCSession.default
+        guard session.activationState == .activated, session.isReachable else {
+            stopError = "폰 연결 안 됨 · 폰에서 종료하세요"
+            WKInterfaceDevice.current().play(.failure)
+            return
+        }
+        stopPending = true
+        stopError = ""
+        let token = UUID()
+        stopToken = token
+        session.sendMessage([
+            WatchCapture.actionKey: WatchCapture.stopAction,
+            WatchCapture.sessionStartedAt: startedAt.timeIntervalSince1970
+        ], replyHandler: { [weak self] reply in
+            let accepted = reply[WatchCapture.resultKey] as? String == WatchCapture.accepted
+            DispatchQueue.main.async {
+                guard let self, self.stopToken == token else { return }
+                self.stopPending = false
+                if accepted {
+                    self.state = "idle"
+                    WKInterfaceDevice.current().play(.success)
+                } else {
+                    self.stopError = "종료 확인 실패 · 폰에서 확인하세요"
+                }
+            }
+        }, errorHandler: { [weak self] _ in
+            DispatchQueue.main.async {
+                guard let self, self.stopToken == token else { return }
+                self.stopPending = false
+                self.stopError = "전송 실패 · 폰에서 종료하세요"
+            }
+        })
+        DispatchQueue.main.asyncAfter(deadline: .now() + 10) { [weak self] in
+            guard let self, self.stopToken == token, self.stopPending else { return }
+            self.stopPending = false
+            self.stopError = "응답 없음 · 폰에서 확인하세요"
+        }
+    }
+
     func requestCapture() {
+        guard mode == "realtime" else { return }
         guard captureFeedback != .sending else { return }
         let session = WCSession.default
         guard session.activationState == .activated, session.isReachable else {

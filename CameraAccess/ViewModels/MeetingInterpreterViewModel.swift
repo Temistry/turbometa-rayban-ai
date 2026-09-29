@@ -125,12 +125,24 @@ final class MeetingInterpreterViewModel: ObservableObject {
         var state: State
     }
 
-    @Published private(set) var lines: [TranscriptLine] = []
+    @Published private(set) var lines: [TranscriptLine] = [] {
+        didSet { persistCheckpoint() }
+    }
     @Published private(set) var factCards: [FactCard] = []
     @Published private(set) var runState: RunState = .idle
     @Published private(set) var failure: Failure?
     @Published private(set) var isSpeakingWhisper = false
     @Published private(set) var inputRouteName = "-"
+    @Published private(set) var routeNotice = ""
+    private var routeEvents: [ArchivedRouteEvent] = []
+    @Published private(set) var mode: ConversationMode = .realtime
+
+    func selectMode(_ selected: ConversationMode) {
+        guard runState == .idle, !isStarting, !isStopping,
+              !isDescribingPhoto, !isSpeakingWhisper else { return }
+        mode = selected
+        syncWatch(force: true)
+    }
     @Published private(set) var outputRouteName = "-"
     @Published private(set) var jevReady = false
     @Published private(set) var isStarting = false
@@ -147,7 +159,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
     @Published private(set) var detailBubble: DetailBubble?
     /// 상대 발언에서 잡아낸 허점(최신이 앞).
-    @Published private(set) var catches: [ConversationCatch] = []
+    @Published private(set) var catches: [ConversationCatch] = [] {
+        didSet { persistCheckpoint() }
+    }
     /// 대화 종료 후 뜨는 요약 리포트.
     @Published private(set) var summaryReport: MeetingSummaryBuilder.Summary?
     /// 이번 대화에서 내 목소리 견본이 등록돼 있는지.
@@ -228,6 +242,13 @@ final class MeetingInterpreterViewModel: ObservableObject {
         transcription.onFailure = { [weak self] message in
             self?.failMicrophone(message)
         }
+        transcription.onRouteEvent = { [weak self] message in
+            guard let self, let started = self.archiveStartedAt else { return }
+            self.routeNotice = message
+            self.routeEvents.append(ArchivedRouteEvent(offset: Date().timeIntervalSince(started), message: message))
+            self.persistCheckpoint()
+            self.syncWatch(force: true)
+        }
         transcription.onInputQuality = { [weak self] _, quiet in
             self?.isInputQuiet = quiet
             guard let self else { return }
@@ -243,6 +264,15 @@ final class MeetingInterpreterViewModel: ObservableObject {
         watchBridge.onCaptureRequest = { [weak self] in
             self?.handleWatchCaptureRequest() ?? WatchCapture.unavailable
         }
+        watchBridge.onStopRequest = { [weak self] startedAt in
+            guard let self, self.runState == .listening,
+                  let startedAt, let current = self.archiveStartedAt,
+                  abs(current.timeIntervalSince1970 - startedAt) < 0.001 else {
+                return WatchCapture.unavailable
+            }
+            self.stop()
+            return WatchCapture.accepted
+        }
     }
 
     /// 워치 촬영 버튼. 앱 촬영 버튼과 같은 describeCurrentScene()을 실행한다.
@@ -252,7 +282,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
             category: "MeetingWatch",
             "capture request app=\(Self.appStateName) stream=\(streamViewModel.streamingStatus) run=\(runState)"
         )
-        guard failure == nil, !isStarting, !isStopping else { return WatchCapture.unavailable }
+        guard mode.permitsCamera, failure == nil, !isStarting, !isStopping else { return WatchCapture.unavailable }
         guard !isDescribingPhoto, !isSpeakingWhisper else { return WatchCapture.busy }
         describeCurrentScene()
         return isDescribingPhoto ? WatchCapture.accepted : WatchCapture.busy
@@ -298,6 +328,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         detailBubble = nil
         summaryReport = nil
 
+        if mode.permitsLiveAI {
         do {
             _ = try JevClient.loadAPIKey()
         } catch JevClientError.keyLocked {
@@ -312,15 +343,17 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
         // 화면이 잠긴 뒤에도 회의가 이어지도록 Gemini 키도 지금 읽어 둔다.
         APIKeyManager.shared.prewarmMeetingKeys()
+        }
         // 설정 변경이 앱 재실행 없이 다음 회의부터 적용되도록 시작할 때마다 구성한다.
-        configureVisualAssist(for: MeetingSceneMode.current)
+        if mode.permitsCamera { configureVisualAssist(for: MeetingSceneMode.current) }
         GeminiUsageLedger.shared.reset()
-        enrollmentSamples = VoiceEnrollmentStore.load()
+        enrollmentSamples = mode.permitsLiveAI ? VoiceEnrollmentStore.load() : nil
         voiceEnrolled = enrollmentSamples != nil
         diarizationBuffer.reset()
         timedWordsByLine.removeAll()
         supplementalWords.removeAll()
-        transcription.diarizationSink = diarizationBuffer
+        transcription.diarizationSink = mode.permitsLiveAI ? diarizationBuffer : nil
+        transcription.transcriptionEnabled = mode.permitsLiveAI
         catches.removeAll()
         otherHistory.removeAll()
         myHistory.removeAll()
@@ -333,29 +366,44 @@ final class MeetingInterpreterViewModel: ObservableObject {
         isInputQuiet = false
 
         isStarting = true
+        routeNotice = ""
+        routeEvents = []
+        lines.removeAll()
         let archiveID = UUID()
         self.archiveID = archiveID
+        MeetingArchiveService.recordingID = archiveID
         archiveStartedAt = Date()
         conversationStartedAt = archiveStartedAt
         do {
             try archive.prepare(id: archiveID)
             transcription.recordingDestination = archive.audioURL(id: archiveID)
+            guard persistCheckpoint() else { throw CocoaError(.fileWriteUnknown) }
         } catch {
             transcription.recordingDestination = nil
             DeveloperConsole.shared.log(.warning, category: "MeetingArchive", "prepare failed code=\((error as NSError).code)")
+            failMicrophone("기록 저장소를 준비하지 못했습니다. 저장 공간을 확인해 주세요.")
+            return
         }
         let generation = self.generation
         startTask = Task {
             defer { if generation == self.generation { isStarting = false } }
             do {
+                if !mode.permitsCamera {
+                    await visualAssist?.stop()
+                    visualAssist = nil
+                    await streamViewModel.stopSession()
+                    guard generation == self.generation, !Task.isCancelled else { return }
+                }
                 try await transcription.start()
                 guard generation == self.generation, !Task.isCancelled else { return }
                 guard transcription.state == .running else { return }
                 inputRouteName = transcription.inputRouteName
                 outputRouteName = transcription.outputRouteName
                 runState = .listening
-                visualAssist?.start()
-                startDiarizationLoop()
+                if mode.permitsLiveAI {
+                    visualAssist?.start()
+                    startDiarizationLoop()
+                }
                 syncWatch(force: true)
             } catch {
                 guard generation == self.generation, !Task.isCancelled else { return }
@@ -364,6 +412,39 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 failMicrophone(message)
             }
         }
+    }
+
+    @discardableResult
+    private func persistCheckpoint() -> Bool {
+        guard let archiveID, let archiveStartedAt else { return true }
+        let saved = archive.checkpoint(ArchivedMeeting(
+            id: archiveID, startedAt: archiveStartedAt, endedAt: nil,
+            lines: lines.map { line in
+                ArchivedMeetingLine(
+                    id: line.id,
+                    offset: line.timestamp.timeIntervalSince(archiveStartedAt),
+                    text: line.text, term: line.whisper?.term,
+                    whisper: line.whisper?.text, category: line.whisper?.category
+                )
+            },
+            catches: catches.map { item in
+                ArchivedMeetingCatch(
+                    id: item.id, kind: item.kind.rawValue, quote: item.quote,
+                    point: item.point, ask: item.ask, confidence: item.confidence,
+                    offset: item.timestamp.timeIntervalSince(archiveStartedAt),
+                    speakerKnown: item.speakerKnown
+                )
+            },
+            mode: mode, processingState: mode == .passive ? .unprocessed : .processing,
+            routeEvents: routeEvents
+        ))
+        if !saved, !isStopping, !isStarting {
+            Task { @MainActor [weak self] in
+                guard let self, self.archiveID == archiveID, !self.isStopping else { return }
+                self.failMicrophone("전사 저장이 중단됐습니다. 저장 공간을 확인해 주세요.")
+            }
+        }
+        return saved
     }
 
     func stop() {
@@ -395,6 +476,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         if let archiveID, let archiveStartedAt {
             let archivedLines = lines.map { line in
                 ArchivedMeetingLine(
+                    id: line.id,
                     offset: line.timestamp.timeIntervalSince(archiveStartedAt),
                     text: line.text,
                     term: line.whisper?.term.isEmpty == false ? line.whisper?.term : nil,
@@ -404,6 +486,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
             }
             let archivedCatches = catches.reversed().map { item in
                 ArchivedMeetingCatch(
+                    id: item.id,
                     kind: item.kind.rawValue,
                     quote: item.quote,
                     point: item.point,
@@ -420,18 +503,23 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 catches: catches,
                 cost: GeminiUsageLedger.shared.totalEstimatedCost()
             )
-            archive.save(ArchivedMeeting(
+            archive.checkpoint(ArchivedMeeting(
                 id: archiveID,
                 startedAt: archiveStartedAt,
                 endedAt: Date(),
                 lines: archivedLines,
-                catches: archivedCatches
+                catches: archivedCatches,
+                mode: mode,
+                processingState: mode == .passive ? .unprocessed : .completed,
+                routeEvents: routeEvents
             ))
             if summary.lineCount > 0 || !summary.catches.isEmpty {
                 summaryReport = summary
             }
         }
         archiveID = nil
+        MeetingArchiveService.recordingID = nil
+        archive.recoverInterruptedRecordings()
         archiveStartedAt = nil
         conversationStartedAt = nil
         transcription.recordingDestination = nil
@@ -788,6 +876,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     }
 
     func describeCurrentScene() {
+        guard mode.permitsCamera else { return }
         guard failure == nil, !isStarting, !isStopping, !isDescribingPhoto,
               !isSpeakingWhisper else { return }
         isDescribingPhoto = true
@@ -1081,7 +1170,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 ? WatchMeetingStatus.sceneWorking
                 : (photoError == nil ? "" : WatchMeetingStatus.sceneFailed),
             micQuiet: runState == .listening && isInputQuiet,
-            catches: catches.prefix(5).map {
+            catches: (mode.permitsLiveAI ? Array(catches.prefix(5)) : []).map {
                 WatchMeetingStatus.catchEntry(
                     id: $0.id.uuidString,
                     kind: $0.kind.rawValue,
@@ -1089,7 +1178,9 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     point: $0.point,
                     ask: $0.ask
                 )
-            }
+            },
+            mode: mode.rawValue,
+            notice: routeNotice
         )
     }
 

@@ -50,15 +50,23 @@ struct MeetingStatusView: View {
                         .font(.headline)
                     Spacer()
                     if let startedAt = link.startedAt, link.state == "listening" {
+                        TimelineView(.periodic(from: .now, by: 1)) { _ in
                         Text(Self.elapsedText(since: startedAt))
                             .font(.caption.monospacedDigit())
                             .foregroundStyle(.secondary)
+                        }
                     }
                 }
 
                 Text(link.route)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                if !link.notice.isEmpty {
+                    Text(link.notice).font(.caption2).foregroundStyle(.orange)
+                }
+
+                Text(link.mode == "passive" ? "패시브" : "실시간")
+                    .font(.caption2)
 
                 if link.quotaPaused {
                     Label("설명 재개 대기 중 · 자막은 계속", systemImage: "pause.circle")
@@ -72,6 +80,7 @@ struct MeetingStatusView: View {
                         .foregroundStyle(.yellow)
                 }
 
+                if link.mode == "realtime" {
                 if link.catches.isEmpty {
                     if link.state == "listening" {
                         Text("짚을 점을 찾는 중")
@@ -83,21 +92,36 @@ struct MeetingStatusView: View {
                         CatchCard(entry: entry)
                     }
                 }
+                }
 
                 if !link.error.isEmpty {
                     Text(link.error)
                         .font(.caption.monospaced().weight(.bold))
                         .foregroundStyle(.red)
                 }
+                if !link.stopError.isEmpty {
+                    Text(link.stopError).font(.caption2).foregroundStyle(.orange)
+                }
+                if link.state == "listening" {
+                    Button(action: link.requestStop) {
+                        Label(link.stopPending ? "종료 요청 중" : "녹음 종료", systemImage: "stop.fill")
+                            .frame(maxWidth: .infinity, minHeight: 44)
+                    }
+                    .tint(.red)
+                    .disabled(link.stopPending)
+                }
 
+                if link.mode == "realtime" {
                 Text("귓속말 \(link.whisperCount)회")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
+                }
             }
             .padding(.horizontal, 4)
         }
         // 화면을 보지 않고도 누를 수 있게 스크롤과 무관하게 아래에 고정한다.
         .safeAreaInset(edge: .bottom) {
+            if link.mode == "realtime" {
             Button(action: link.requestCapture) {
                 Label(captureTitle, systemImage: "camera.fill")
                     .font(.headline)
@@ -106,6 +130,7 @@ struct MeetingStatusView: View {
             .buttonStyle(.borderedProminent)
             .tint(captureTint)
             .disabled(captureDisabled)
+            }
         }
         .navigationTitle("TurboMeta")
         .onAppear { link.activate() }

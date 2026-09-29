@@ -2,6 +2,21 @@ import XCTest
 @testable import CameraAccess
 
 final class WatchPayloadTests: XCTestCase {
+    func testPassiveModeDisablesLiveProcessingAndCamera() {
+        XCTAssertFalse(ConversationMode.passive.permitsLiveAI)
+        XCTAssertFalse(ConversationMode.passive.permitsCamera)
+        XCTAssertTrue(ConversationMode.realtime.permitsCamera)
+    }
+
+    func testPassiveModeReachesWatch() {
+        let payload = WatchMeetingStatus.payload(
+            state: "listening", route: "Oakley Meta", startedAt: nil,
+            latest: "", recent: [], whisperCount: 0, error: "",
+            quotaPaused: false, mode: "passive"
+        )
+        XCTAssertEqual(payload[WatchMeetingStatus.mode] as? String, "passive")
+    }
+
     func testPayloadCarriesAllFields() {
         let payload = WatchMeetingStatus.payload(
             state: "listening",
