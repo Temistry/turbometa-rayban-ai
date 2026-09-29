@@ -21,6 +21,15 @@ enum ConversationMode: String, Codable, CaseIterable, Identifiable {
 
 enum ConversationProcessingState: String, Codable {
     case unprocessed, processing, completed, failed
+
+    var title: String {
+        switch self {
+        case .unprocessed: return "미처리 녹음"
+        case .processing: return "처리 중"
+        case .completed: return "처리 완료"
+        case .failed: return "처리 중단 · 재시도 가능"
+        }
+    }
 }
 
 /// One transactional database per recording; audio files remain beside it.

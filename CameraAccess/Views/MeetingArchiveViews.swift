@@ -37,8 +37,7 @@ struct MeetingArchiveListView: View {
                                 Text(Self.title(meeting.startedAt))
                                     .font(.subheadline.weight(.semibold))
                                 Text((meeting.mode ?? .realtime).title + " · " +
-                                     (meeting.processingState == .completed ? "처리 완료" :
-                                        meeting.mode == .passive ? "미처리 녹음" : "기록"))
+                                     (meeting.processingState?.title ?? "기록"))
                                     .font(.caption2).foregroundStyle(.secondary)
                                 if let endedAt = meeting.endedAt {
                                     Text(MeetingArchiveService.offsetText(endedAt.timeIntervalSince(meeting.startedAt)))
@@ -101,6 +100,7 @@ struct MeetingArchiveDetailView: View {
     @State private var confirmProcessing = false
     @State private var processing = false
     @State private var processingError: String?
+    @State private var processingTask: Task<Void, Never>?
     @Environment(\.dismiss) private var dismiss
     @StateObject private var archive = MeetingArchiveService()
     @StateObject private var playback = ArchiveAudioPlayback()
@@ -120,11 +120,17 @@ struct MeetingArchiveDetailView: View {
                     }
                 }
                 if meeting.mode == .passive {
-                    Text(meeting.processingState == .completed ? "분석 완료" : "미처리 녹음")
+                    Text((meeting.processingState ?? .unprocessed).title)
                         .font(.caption).foregroundStyle(.secondary)
                     if meeting.processingState != .completed {
                         Button(processing ? "처리 중" : "전사·분석하기") { confirmProcessing = true }
                             .disabled(processing || MeetingInterpreterViewModel.isConversationActive)
+                    }
+                    if processing {
+                        ProgressView()
+                        Text("전사 \(meeting.transcribedUnits?.count ?? 0)구간 · 분석 \(meeting.analyzedLines?.count ?? 0)/\(meeting.lines.count)문장")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Button("처리 중단") { processingTask?.cancel() }
                     }
                     if let processingError {
                         Text(processingError).font(.caption).foregroundStyle(.orange)
@@ -163,7 +169,7 @@ struct MeetingArchiveDetailView: View {
         }
         .navigationTitle(MeetingArchiveListView.title(meeting.startedAt))
         .navigationBarTitleDisplayMode(.inline)
-        .onDisappear { playback.stop() }
+        .onDisappear { playback.stop(); processingTask?.cancel() }
         .sheet(item: $selectedLine) { line in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
@@ -191,12 +197,18 @@ struct MeetingArchiveDetailView: View {
             Button("전사·분석하기") {
                 processing = true
                 processingError = nil
-                Task {
-                    defer { processing = false }
+                processingTask = Task {
+                    defer { processing = false; processingTask = nil }
                     do {
                         try await archive.process(meeting) { meeting = $0 }
                     } catch {
-                        processingError = "처리 실패 · 저장된 구간부터 다시 시도할 수 있습니다."
+                        if let jevError = error as? JevClientError {
+                            processingError = "\(jevError.code) · \(jevError.message)"
+                        } else {
+                            processingError = Task.isCancelled
+                                ? "중단됨 · 완료 구간은 보관했습니다."
+                                : "처리 실패 · 저장된 구간부터 다시 시도할 수 있습니다."
+                        }
                     }
                 }
             }
