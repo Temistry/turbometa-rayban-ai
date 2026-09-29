@@ -148,6 +148,28 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var outputRouteName = "-"
     @Published private(set) var jevReady = false
     @Published private(set) var isStarting = false
+    @Published private(set) var isCheckingInput = false
+
+    func checkInputBeforeStarting() async -> Bool {
+        guard runState == .idle, !isStarting, !isStopping, !isCheckingInput,
+              !isDescribingPhoto, !isSpeakingWhisper, !MeetingArchiveService.isProcessing else { return false }
+        isCheckingInput = true
+        defer { isCheckingInput = false }
+        do {
+            transcription.micMode = MeetingMicMode.current
+            try await transcription.checkInputRoute()
+            inputRouteName = transcription.inputRouteName
+            outputRouteName = transcription.outputRouteName
+            routeNotice = ""
+            return true
+        } catch {
+            routeNotice = (error as? MeetingTranscriptionError)?.message ?? "마이크를 확인하지 못했습니다."
+            transcription.releaseInputPreview()
+            return false
+        }
+    }
+
+    func cancelInputPreview() { transcription.releaseInputPreview() }
     @Published private(set) var isStopping = false
     @Published private(set) var isDescribingPhoto = false {
         didSet { if isDescribingPhoto != oldValue { syncWatch(force: true) } }

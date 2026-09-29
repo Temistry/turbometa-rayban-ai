@@ -199,6 +199,20 @@ final class MeetingTranscriptionService: ObservableObject {
     var micMode: MeetingMicMode = .headset
     var onRouteEvent: ((String) -> Void)?
     var transcriptionEnabled = true
+    /// Configure routing without an audio tap, Speech, or a camera session.
+    func checkInputRoute() async throws {
+        guard state == .idle else { return }
+        let allowed = await withCheckedContinuation { continuation in
+            AVAudioSession.sharedInstance().requestRecordPermission { continuation.resume(returning: $0) }
+        }
+        guard allowed else { throw MeetingTranscriptionError.permissionDenied }
+        try configureAudioSession()
+    }
+
+    func releaseInputPreview() {
+        guard state == .idle else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: [.notifyOthersOnDeactivation])
+    }
     /// 화자 구분용 16kHz 조각 버퍼. 입력 탭 설치 시점의 값을 쓴다.
     var diarizationSink: DiarizationAudioBuffer?
     /// 시각 보조가 뽑은 화면 용어. 인식 작업 시작 시 contextualStrings로 주입된다.

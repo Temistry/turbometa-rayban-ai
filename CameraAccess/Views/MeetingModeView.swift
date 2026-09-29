@@ -15,6 +15,7 @@ struct MeetingModeView: View {
     @State private var showFactSheet = false
     @State private var isFollowing = true
     @State private var catchFilter: CatchKind?
+    @State private var confirmStart = false
 
     init(streamViewModel: StreamSessionViewModel) {
         _viewModel = StateObject(
@@ -114,6 +115,12 @@ struct MeetingModeView: View {
                 catchFilter = nil
                 isFollowing = true
             }
+        }
+        .confirmationDialog("대화 시작", isPresented: $confirmStart, titleVisibility: .visible) {
+            Button("대화 시작") { viewModel.start() }
+            Button("취소", role: .cancel) { viewModel.cancelInputPreview() }
+        } message: {
+            Text("입력: \(viewModel.inputRouteName)\n출력: \(viewModel.outputRouteName)")
         }
     }
 
@@ -254,7 +261,7 @@ struct MeetingModeView: View {
         VStack(spacing: 20) {
             Spacer()
             Button {
-                viewModel.start()
+                requestStart()
             } label: {
                 ZStack {
                     Circle()
@@ -266,7 +273,7 @@ struct MeetingModeView: View {
                 }
             }
             .accessibilityLabel("meeting.start".localized)
-            .disabled(viewModel.isStarting || viewModel.isStopping || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper)
+            .disabled(viewModel.isStarting || viewModel.isCheckingInput || viewModel.isStopping || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper)
 
             Text("meeting.start".localized)
                 .font(.footnote)
@@ -341,11 +348,15 @@ struct MeetingModeView: View {
             if viewModel.runState == .listening || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper {
                 stopBar
             } else {
-                Button("meeting.start".localized) { viewModel.start() }
+                Button("meeting.start".localized) { requestStart() }
                     .disabled(viewModel.isStarting || viewModel.isStopping || viewModel.isDescribingPhoto || viewModel.isSpeakingWhisper)
                     .padding()
             }
         }
+    }
+
+    private func requestStart() {
+        Task { confirmStart = await viewModel.checkInputBeforeStarting() }
     }
 
     private struct CaptionEntry: Identifiable {
