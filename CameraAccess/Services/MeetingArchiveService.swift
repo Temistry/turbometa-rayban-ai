@@ -87,15 +87,17 @@ private final class MeetingArchiveDatabase {
     func write(_ meeting: ArchivedMeeting, merge: Bool) throws {
         try execute("BEGIN IMMEDIATE")
         do {
-            if !merge { try execute("DELETE FROM records WHERE kind IN ('line','catch')") }
+            if !merge { try execute("DELETE FROM records WHERE kind IN ('line','catch','speaker')") }
             var metadata = meeting
             metadata.lines = []
             metadata.catches = meeting.catches == nil ? nil : []
             metadata.audioChunks = meeting.audioChunks == nil ? nil : []
+            metadata.speakerTurns = meeting.speakerTurns == nil ? nil : []
             try put(metadata, kind: "session", id: meeting.id.uuidString)
             for line in meeting.lines { try put(line, kind: "line", id: line.id.uuidString) }
             for item in meeting.catches ?? [] { try put(item, kind: "catch", id: item.id.uuidString) }
             for chunk in meeting.audioChunks ?? [] { try put(chunk, kind: "audio", id: chunk.filename) }
+            for turn in meeting.speakerTurns ?? [] { try put(turn, kind: "speaker", id: turn.id.uuidString) }
             try execute("COMMIT")
         } catch {
             try? execute("ROLLBACK")
@@ -113,6 +115,7 @@ private final class MeetingArchiveDatabase {
         var lines: [ArchivedMeetingLine] = []
         var catches: [ArchivedMeetingCatch] = []
         var chunks: [ArchivedAudioChunk] = []
+        var speakers: [ArchivedSpeakerTurn] = []
         var status = sqlite3_step(statement)
         while status == SQLITE_ROW {
             guard let kind = sqlite3_column_text(statement, 0), let bytes = sqlite3_column_blob(statement, 1) else {
@@ -124,6 +127,7 @@ private final class MeetingArchiveDatabase {
             case "line": lines.append(try decoder.decode(ArchivedMeetingLine.self, from: data))
             case "catch": catches.append(try decoder.decode(ArchivedMeetingCatch.self, from: data))
             case "audio": chunks.append(try decoder.decode(ArchivedAudioChunk.self, from: data))
+            case "speaker": speakers.append(try decoder.decode(ArchivedSpeakerTurn.self, from: data))
             default: break
             }
             status = sqlite3_step(statement)
@@ -135,6 +139,9 @@ private final class MeetingArchiveDatabase {
         }
         if !chunks.isEmpty || meeting?.audioChunks != nil {
             meeting?.audioChunks = chunks.sorted { $0.offset < $1.offset }
+        }
+        if !speakers.isEmpty || meeting?.speakerTurns != nil {
+            meeting?.speakerTurns = speakers.sorted { $0.offset < $1.offset }
         }
         return meeting
     }
@@ -165,6 +172,15 @@ struct ArchivedRouteEvent: Codable, Equatable {
     let message: String
 }
 
+struct ArchivedSpeakerTurn: Codable, Equatable, Identifiable {
+    var id = UUID()
+    let offset: TimeInterval
+    let text: String
+    /// Speaker labels are scoped to each API chunk, not global person identities.
+    let speaker: String
+    let role: String
+}
+
 /// 보관된 잡아낸 항목. kind는 CatchKind.rawValue 문자열로 보관한다.
 struct ArchivedMeetingCatch: Codable, Identifiable, Equatable {
     var id = UUID()
@@ -192,6 +208,7 @@ struct ArchivedMeeting: Codable, Identifiable, Equatable {
     var audioChunks: [ArchivedAudioChunk]? = nil
     var recovered: Bool? = nil
     var routeEvents: [ArchivedRouteEvent]? = nil
+    var speakerTurns: [ArchivedSpeakerTurn]? = nil
 }
 
 @MainActor
@@ -374,9 +391,13 @@ final class MeetingArchiveService: ObservableObject {
                         let converter = DiarizationAudioBuffer()
                         converter.append(buffer)
                         let turns = try await diarizer.diarize(chunk: converter.drain(), enrollment: enrollment)
+                        meeting.speakerTurns = (meeting.speakerTurns ?? []) + turns.map { turn in
+                            ArchivedSpeakerTurn(offset: offset + Double(frame) / rate + turn.start,
+                                text: turn.text, speaker: "\(unit):\(turn.speaker)", role: turn.role.rawValue)
+                        }
                         meeting.lines += turns.map { turn in
                             ArchivedMeetingLine(offset: offset + Double(frame) / rate + turn.start,
-                                text: turn.text, speaker: turn.speaker,
+                                text: turn.text, speaker: "\(unit):\(turn.speaker)",
                                 role: turn.role.rawValue)
                         }
                         meeting.transcribedUnits = (meeting.transcribedUnits ?? []) + [unit]

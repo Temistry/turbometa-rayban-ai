@@ -46,6 +46,17 @@ final class MeetingArchiveTests: XCTestCase {
         XCTAssertEqual(reopened.loadAll().first?.lines, allLines)
     }
 
+    func testSpeakerSegmentsSurviveCheckpointWindowReplacement() {
+        let first = ArchivedSpeakerTurn(offset: 1, text: "첫 발언", speaker: "chunk1:spk_1", role: "other")
+        let second = ArchivedSpeakerTurn(offset: 31, text: "다음 발언", speaker: "chunk2:spk_1", role: "unknown")
+        var meeting = ArchivedMeeting(id: UUID(), startedAt: Date(), lines: [], mode: .realtime,
+            speakerTurns: [first])
+        XCTAssertTrue(archive.checkpoint(meeting))
+        meeting.speakerTurns = [second]
+        XCTAssertTrue(archive.checkpoint(meeting))
+        XCTAssertEqual(archive.loadAll().first?.speakerTurns, [first, second])
+    }
+
     func testLegacyJSONMigratesWithoutLosingOffscreenTranscript() throws {
         let original = sampleMeeting()
         try archive.prepare(id: original.id)

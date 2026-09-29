@@ -137,6 +137,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
     @Published private(set) var inputRouteName = "-"
     @Published private(set) var routeNotice = ""
     private var routeEvents: [ArchivedRouteEvent] = []
+    private var pendingSpeakerTurns: [ArchivedSpeakerTurn] = []
     @Published private(set) var mode: ConversationMode = .realtime
 
     func selectMode(_ selected: ConversationMode) {
@@ -398,6 +399,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
         isStarting = true
         routeNotice = ""
         routeEvents = []
+        pendingSpeakerTurns = []
         lines.removeAll()
         let archiveID = UUID()
         self.archiveID = archiveID
@@ -467,7 +469,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 )
             },
             mode: mode, processingState: mode == .passive ? .unprocessed : .processing,
-            routeEvents: routeEvents
+            routeEvents: routeEvents,
+            speakerTurns: pendingSpeakerTurns
         ))
         if !saved, !isStopping, !isStarting {
             Task { @MainActor [weak self] in
@@ -543,7 +546,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 catches: archivedCatches,
                 mode: mode,
                 processingState: mode == .passive ? .unprocessed : .completed,
-                routeEvents: routeEvents
+                routeEvents: routeEvents,
+                speakerTurns: pendingSpeakerTurns
             ))
             if summary.lineCount > 0 || !summary.catches.isEmpty {
                 summaryReport = summary
@@ -1108,6 +1112,14 @@ final class MeetingInterpreterViewModel: ObservableObject {
         do {
             let turns = try await diarizer.diarize(chunk: chunk, enrollment: enrollmentSamples)
             guard generation == self.generation, runState == .listening else { return }
+            if let startedAt = archiveStartedAt {
+                let scope = UUID().uuidString
+                pendingSpeakerTurns = turns.map { turn in
+                    ArchivedSpeakerTurn(offset: origin.timeIntervalSince(startedAt) + turn.start,
+                        text: turn.text, speaker: "\(scope):\(turn.speaker)", role: turn.role.rawValue)
+                }
+                persistCheckpoint()
+            }
             supplementTranscript(turns, origin: origin, duration: Double(chunk.count) / Double(DiarizationAudio.sampleRate))
             lastDiarizationSuccessAt = Date()
             if Date() < (catchPausedUntil ?? .distantPast) { return }
