@@ -10,7 +10,7 @@ private enum WikiBLE {
 }
 
 @MainActor
-final class WikiBluetoothTransfer: NSObject, ObservableObject, CBCentralManagerDelegate, CBPeripheralDelegate {
+final class WikiBluetoothTransfer: NSObject, ObservableObject, @preconcurrency CBCentralManagerDelegate, @preconcurrency CBPeripheralDelegate {
     @Published var message = "PC 수신기를 켜고 연결 키를 입력하세요."
     @Published var busy = false
     @Published var progress = 0.0
@@ -22,7 +22,7 @@ final class WikiBluetoothTransfer: NSObject, ObservableObject, CBCentralManagerD
     private var payload = Data()
     private var cachedPlain = Data()
     private var cachedKey = Data()
-    private var hash = ""
+    private var transferHash = ""
     private var secret: SymmetricKey?
     private var offset = 0
     private var sent = 0
@@ -60,7 +60,7 @@ final class WikiBluetoothTransfer: NSObject, ObservableObject, CBCentralManagerD
             let sealed = plain == cachedPlain && keyData == cachedKey && !payload.isEmpty
                 ? payload : try AES.GCM.seal(plain, using: key).combined!
             guard sealed.count <= 2 * 1024 * 1024 else { message = "전송 한도 2MB를 넘었습니다. 파일 내보내기를 사용하세요."; return }
-            payload = sealed; hash = SHA256.hash(data: sealed).map { String(format: "%02x", $0) }.joined()
+            payload = sealed; transferHash = SHA256.hash(data: sealed).map { String(format: "%02x", $0) }.joined()
             cachedPlain = plain; cachedKey = keyData
             secret = key; offset = 0; progress = 0; busy = true; phase = "connecting"
             saveKey(keyData)
@@ -84,7 +84,7 @@ final class WikiBluetoothTransfer: NSObject, ObservableObject, CBCentralManagerD
         write = service.characteristics?.first { $0.uuid == WikiBLE.write }
         status = service.characteristics?.first { $0.uuid == WikiBLE.status }
         guard let write, status != nil, let secret, peripheral.maximumWriteValueLength(for: .withResponse) >= 69 else { fail("이 연결의 BLE 전송 크기를 지원하지 않습니다."); return }
-        var header = Data([1]); header.append(Self.number(payload.count)); header.append(Self.hex(hash)!)
+        var header = Data([1]); header.append(Self.number(payload.count)); header.append(Self.hex(transferHash)!)
         header.append(contentsOf: HMAC<SHA256>.authenticationCode(for: header, using: secret))
         phase = "header"; peripheral.writeValue(header, for: write, type: .withResponse); armTimeout()
     }
@@ -100,7 +100,7 @@ final class WikiBluetoothTransfer: NSObject, ObservableObject, CBCentralManagerD
         guard busy, let secret, error == nil, let value = characteristic.value,
               let receipt = String(data: value, encoding: .utf8) else { fail("수신 확인 실패"); return }
         let parts = receipt.split(separator: ":", omittingEmptySubsequences: false).map(String.init)
-        guard parts.count == 4, parts[0] == hash, let count = Int(parts[1]), count >= 0, count <= payload.count,
+        guard parts.count == 4, parts[0] == transferHash, let count = Int(parts[1]), count >= 0, count <= payload.count,
               let mac = Self.hex(parts[3]), HMAC<SHA256>.isValidAuthenticationCode(mac,
                 authenticating: Data(parts.prefix(3).joined(separator: ":").utf8), using: secret) else { fail("PC 인증 실패 · 연결 키를 확인하세요."); return }
         if parts[2] == "saved", count == payload.count {
