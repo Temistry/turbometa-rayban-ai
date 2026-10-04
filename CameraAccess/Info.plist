@@ -60,7 +60,7 @@
 		<true/>
 	</dict>
 	<key>NSBluetoothAlwaysUsageDescription</key>
-	<string>Meta 스마트 안경에 연결하고 영상·음성 기능을 사용하기 위해 Bluetooth 접근이 필요합니다.</string>
+	<string>Meta 안경 연결과 선택한 대화 기록을 PC 위키 수신기로 전송하기 위해 Bluetooth 접근이 필요합니다.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>촬영한 장면을 확인하고 AI 이미지 인식 기능을 제공하기 위해 카메라 접근이 필요합니다.</string>
 	<key>NSLocalNetworkUsageDescription</key>

@@ -214,6 +214,13 @@ struct MeetingArchiveDetailView: View {
             }
         }
         .toolbar {
+            NavigationLink {
+                WikiBluetoothTransferView(meeting: meeting)
+            } label: {
+                Image(systemName: "desktopcomputer")
+            }
+            .accessibilityLabel("PC 위키로 보내기")
+            .disabled(meeting.lines.isEmpty || processing || archive.isBusy(id: meeting.id))
             ShareLink(item: MeetingArchiveService.exportText(meeting)) {
                 Image(systemName: "text.quote")
             }

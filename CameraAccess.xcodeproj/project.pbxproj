@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        BE1000000000000000000002 /* WikiBluetoothTransfer.swift in Sources */ = {isa = PBXBuildFile; fileRef = BE1000000000000000000001 /* WikiBluetoothTransfer.swift */; };
 		05043536CDB06C0B88B3C4D9 /* TTSService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 069172850B30A2766C8BD4B5 /* TTSService.swift */; };
 		5E70000000000000000000A2 /* JevClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A1 /* JevClient.swift */; };
 		5E70000000000000000000A4 /* MeetingGeminiService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5E70000000000000000000A3 /* MeetingGeminiService.swift */; };
@@ -135,6 +136,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+        BE1000000000000000000001 /* WikiBluetoothTransfer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WikiBluetoothTransfer.swift; sourceTree = "<group>"; };
 		0080AFEB87FC4CF85E53FE97 /* LanguageManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; name = LanguageManager.swift; path = Managers/LanguageManager.swift; sourceTree = "<group>"; };
 		069172850B30A2766C8BD4B5 /* TTSService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TTSService.swift; sourceTree = "<group>"; };
 		D1A600000000000000000001 /* SensitiveDataRedactor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitiveDataRedactor.swift; sourceTree = "<group>"; };
@@ -297,6 +299,7 @@
 				5E70000000000000000000A5 /* MeetingTranscriptionService.swift */,
 				5E70000000000000000000AB /* VisualAssistService.swift */,
 				5E70000000000000000000B1 /* MeetingArchiveService.swift */,
+                BE1000000000000000000001 /* WikiBluetoothTransfer.swift */,
 				5E70000000000000000000E1 /* WatchBridgeService.swift */,
 				5E70000000000000000000E3 /* WatchMeetingStatus.swift */,
 				5E7000000000000000000101 /* SpeakerDiarizationService.swift */,
@@ -684,6 +687,7 @@
 				5E70000000000000000000AA /* MeetingModeView.swift in Sources */,
 				5E70000000000000000000AC /* VisualAssistService.swift in Sources */,
 				5E70000000000000000000B2 /* MeetingArchiveService.swift in Sources */,
+                BE1000000000000000000002 /* WikiBluetoothTransfer.swift in Sources */,
 				5E70000000000000000000B4 /* MeetingArchiveViews.swift in Sources */,
 				5E70000000000000000000E2 /* WatchBridgeService.swift in Sources */,
 				5E70000000000000000000E4 /* WatchMeetingStatus.swift in Sources */,
