@@ -2,6 +2,27 @@ import XCTest
 @testable import CameraAccess
 
 final class MeetingLexiconTests: XCTestCase {
+    func testRecognitionHintsAreBoundedAndCoverBothDomains() {
+        XCTAssertLessThanOrEqual(MeetingPolicy.recognitionHints.count, 40)
+        XCTAssertTrue(MeetingPolicy.recognitionHints.contains("기술부채"))
+        XCTAssertTrue(MeetingPolicy.recognitionHints.contains("EBITDA"))
+    }
+
+    func testMeaningUnitConsumesOnlyNewTextAndPreservesCorrections() {
+        XCTAssertEqual(MeetingPolicy.meaningUnit("API 설명입니다", after: "API"), "설명입니다")
+        XCTAssertEqual(MeetingPolicy.meaningUnit("API", after: "API"), "")
+        XCTAssertEqual(MeetingPolicy.meaningUnit("API", after: "에이피"), "API")
+        XCTAssertEqual(MeetingPolicy.meaningUnit(String(repeating: "가", count: 900), after: "").count, 600)
+    }
+
+    func testWaitDecisionNeverExplainsEvenWithConflictingYes() {
+        let result = JevUtteranceDecision.make(answers: [
+            "needs_explanation": JevAnswer(value: "yes", confidence: 0.9),
+            "lane": JevAnswer(value: "wait", confidence: 0.9)
+        ])
+        XCTAssertTrue(result.needsMoreContext)
+        XCTAssertFalse(result.needsExplanation)
+    }
     func testDetectsBusinessAndDevAbbreviations() {
         XCTAssertTrue(MeetingPolicy.lexiconHit(in: "이번 분기 EBITDA가 개선됐습니다"))
         XCTAssertTrue(MeetingPolicy.lexiconHit(in: "S3 버킷에 올려서 확인해 보죠"))

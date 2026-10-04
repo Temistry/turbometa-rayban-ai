@@ -12,6 +12,20 @@ import Foundation
 import UIKit
 
 enum MeetingPolicy {
+    /// Recognition hints, not text replacement: keep the original recognizer output.
+    static let recognitionHints = [
+        "API", "SDK", "KPI", "OKR", "ROI", "ROAS", "EBITDA", "ARR", "MRR", "CAC", "LTV",
+        "기술부채", "스프린트", "리팩터링", "배포", "마이크로서비스", "쿠버네티스", "도커",
+        "CI/CD", "SQL", "NoSQL", "캐시", "레이턴시", "스루풋", "인프라", "클라우드",
+        "OAuth", "JWT", "LLM", "RAG", "전환율", "이탈률", "매출총이익", "영업이익",
+        "손익분기점", "밸류에이션", "런웨이", "현금흐름", "SaaS", "B2B"
+    ]
+
+    static func meaningUnit(_ text: String, after previous: String) -> String {
+        let fresh = !previous.isEmpty && text.hasPrefix(previous)
+            ? String(text.dropFirst(previous.count)) : text
+        return String(fresh.trimmingCharacters(in: .whitespacesAndNewlines).suffix(600))
+    }
     /// Jev confidence는 보정된 확률이 아니라 상대적 강도이므로 0.6 이상이면 개입한다.
     static let whisperConfidenceThreshold = 0.6
     /// 사전(lexicon) 적중 시 낮춘 문턱. 확정이 아니라 가중치다.
@@ -203,7 +217,6 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private let jev = JevClient.shared
     private let gemini = MeetingGeminiService()
     private let tts = TTSService.shared
-    private var visualAssist: VisualAssistService?
     private var sceneSummary: String?
     private var activeWhisperRequestID: UUID?
     private var sawWhisperPlayback = false
@@ -230,6 +243,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private var archiveID: UUID?
     private var archiveStartedAt: Date?
     private var latestStable = ""
+    private var decisionSnapshots: [UUID: String] = [:]
+    private var deferredMeaning = ""
     private var explainPausedUntil: Date?
     private var factPausedUntil: Date?
     private var detailTask: Task<Void, Never>?
@@ -322,25 +337,6 @@ final class MeetingInterpreterViewModel: ObservableObject {
         }
     }
 
-    /// 설정 단계에 맞춰 장면 분석을 구성한다. 끄기면 안경 카메라 스트림도 켜지 않는다.
-    /// 이전 회의의 장면 용어·요약은 새 회의로 넘기지 않는다.
-    private func configureVisualAssist(for mode: MeetingSceneMode) {
-        DeveloperConsole.shared.log(.info, category: "MeetingScene", "mode=\(mode.rawValue)")
-        transcription.contextualTerms = []
-        sceneSummary = nil
-        guard let interval = mode.checkInterval else {
-            visualAssist = nil
-            return
-        }
-        if let existing = visualAssist, existing.baseInterval == interval { return }
-        let assist = VisualAssistService(streamViewModel: streamViewModel, baseInterval: interval)
-        assist.onContext = { [weak self] context in
-            self?.transcription.contextualTerms = context.terms
-            self?.sceneSummary = context.scene
-        }
-        visualAssist = assist
-    }
-
     func start() {
         guard !MeetingArchiveService.isProcessing else {
             routeNotice = "보관된 녹음의 분석이 끝난 뒤 시작할 수 있습니다."
@@ -354,6 +350,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
         explainPausedUntil = nil
         factPausedUntil = nil
         latestStable = ""
+        decisionSnapshots.removeAll()
+        deferredMeaning = ""
         closeDetail()
         factCards.removeAll()
         detailBubble = nil
@@ -376,7 +374,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
         APIKeyManager.shared.prewarmMeetingKeys()
         }
         // 설정 변경이 앱 재실행 없이 다음 회의부터 적용되도록 시작할 때마다 구성한다.
-        if mode.permitsCamera { configureVisualAssist(for: MeetingSceneMode.current) }
+        // Camera access is exclusively owned by an explicit photo request.
+        // Ignore previously saved automatic scene-analysis preferences.
+        transcription.contextualTerms = mode.permitsLiveAI ? MeetingPolicy.recognitionHints : []
+        sceneSummary = nil
         GeminiUsageLedger.shared.reset()
         enrollmentSamples = mode.permitsLiveAI ? VoiceEnrollmentStore.load() : nil
         voiceEnrolled = enrollmentSamples != nil
@@ -420,12 +421,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
         startTask = Task {
             defer { if generation == self.generation { isStarting = false } }
             do {
-                if !mode.permitsCamera {
-                    await visualAssist?.stop()
-                    visualAssist = nil
-                    await streamViewModel.stopSession()
-                    guard generation == self.generation, !Task.isCancelled else { return }
-                }
+                // A stopped camera must not invoke or wait on the Meta SDK.
+                // If an earlier stream remains, close it before either audio mode.
+                await streamViewModel.stopSession()
+                guard generation == self.generation, !Task.isCancelled else { return }
                 try await transcription.start()
                 guard generation == self.generation, !Task.isCancelled else { return }
                 guard transcription.state == .running else { return }
@@ -433,7 +432,6 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 outputRouteName = transcription.outputRouteName
                 runState = .listening
                 if mode.permitsLiveAI {
-                    visualAssist?.start()
                     startDiarizationLoop()
                 }
                 syncWatch(force: true)
@@ -502,7 +500,6 @@ final class MeetingInterpreterViewModel: ObservableObject {
         photoTask = nil
         isStarting = false
         isDescribingPhoto = false
-        visualAssist?.isUserRequestActive = false
         activeTerm = nil
         isPreparingWhisper = false
         transcription.stop()
@@ -567,15 +564,10 @@ final class MeetingInterpreterViewModel: ObservableObject {
         diarizationTask?.cancel()
         diarizationTask = nil
         Self.isConversationActive = false
-        let assistToStop = visualAssist
         Task {
             await pendingStart?.value
             await pendingPhoto?.value
-            if let assistToStop {
-                await assistToStop.stop()
-            } else {
-                await streamViewModel.stopSession()
-            }
+            await streamViewModel.stopSession()
             isStopping = false
         }
         runState = .idle
@@ -646,18 +638,35 @@ final class MeetingInterpreterViewModel: ObservableObject {
     private func processUtterance(_ text: String, lineID: UUID) async {
         guard runState == .listening, failure == nil else { return }
         let generation = self.generation
-        let previous = previousContext(for: lineID)
+        let previous = [previousContext(for: lineID) ?? "", decisionSnapshots[lineID] ?? ""]
+            .filter { !$0.isEmpty }.joined(separator: "\n")
+        let unit = MeetingPolicy.meaningUnit(text, after: decisionSnapshots[lineID] ?? "")
+        guard !unit.isEmpty else { return }
+        let paragraph = String(([deferredMeaning, unit].filter { !$0.isEmpty }.joined(separator: " ")).suffix(900))
+        decisionSnapshots[lineID] = text
+        if decisionSnapshots.count > 200 {
+            let visible = Set(lines.map(\.id))
+            decisionSnapshots = decisionSnapshots.filter { visible.contains($0.key) }
+        }
 
         do {
             let decision = try await jev.evaluate(
-                utterance: text,
-                previousUtterance: previous
+                utterance: paragraph,
+                previousUtterance: previous,
+                explainedTerms: Array(spokenTerms.sorted().prefix(100))
             )
             guard generation == self.generation, runState == .listening else {
                 DeveloperConsole.shared.log(.warning, category: "MeetingWhisper", "discarded stopped=true stage=decision")
                 return
             }
             jevReady = true
+            deferredMeaning = decision.needsMoreContext ? paragraph : ""
+            if decision.needsMoreContext { return }
+            // Do not whisper an obsolete revision while a newer paragraph is queued.
+            if analysisQueue.contains(where: { $0.1 == lineID && $0.0 != text }) {
+                deferredMeaning = paragraph
+                return
+            }
             DeveloperConsole.shared.log(.info, category: "MeetingDecision", "explain=\(decision.needsExplanation) confidence=\(decision.explanationConfidence) lane=\(decision.lane.rawValue)")
 
             if decision.lane == .factcheck, !isDiarizationActive {
@@ -674,7 +683,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                decision.category != "none",
                decision.explanationConfidence >= threshold {
                 await speakExplanation(
-                    for: text,
+                    for: paragraph,
                     lineID: lineID,
                     confidence: decision.explanationConfidence
                 )
@@ -919,16 +928,13 @@ final class MeetingInterpreterViewModel: ObservableObject {
         guard failure == nil, !isStarting, !isStopping, !isDescribingPhoto,
               !isSpeakingWhisper else { return }
         isDescribingPhoto = true
-        visualAssist?.isUserRequestActive = true
         photoError = nil
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         let generation = self.generation
         photoTask = Task {
-            let temporaryStream = runState == .idle || visualAssist == nil
             defer {
                 if generation == self.generation {
                     isDescribingPhoto = false
-                    visualAssist?.isUserRequestActive = false
                 }
             }
             do {
@@ -950,7 +956,7 @@ final class MeetingInterpreterViewModel: ObservableObject {
                 try Task.checkCancellation()
                 print("[Meeting][PHOTO] captured app=\(Self.appStateName) width=\(photo.image.cgImage?.width ?? 0) height=\(photo.image.cgImage?.height ?? 0) bytes=\(photo.jpegData.count)")
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
-                if temporaryStream { await streamViewModel.stopSession() }
+                await streamViewModel.stopSession()
                 // Capture immediately; verify Jev before producing any explanation.
                 _ = try await jev.evaluate(
                     utterance: "사용자가 현재 바라보는 사진의 상황 설명을 직접 요청했습니다.",
@@ -979,6 +985,8 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     photoError = "meeting.photo.voiceFailed".localized
                 }
             } catch {
+                // Cancellation and stale requests must also release the camera.
+                await streamViewModel.stopSession()
                 guard generation == self.generation, !Task.isCancelled else { return }
                 let nsError = error as NSError
                 DeveloperConsole.shared.log(
@@ -986,7 +994,6 @@ final class MeetingInterpreterViewModel: ObservableObject {
                     category: "MeetingPhoto",
                     "failed app=\(Self.appStateName) stream=\(streamViewModel.streamingStatus) domain=\(nsError.domain) code=\(nsError.code)"
                 )
-                if temporaryStream { await streamViewModel.stopSession() }
                 guard generation == self.generation else { return }
                 if let jevError = error as? JevClientError {
                     failStopJev(code: jevError.code, message: jevError.message)

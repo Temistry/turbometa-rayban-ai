@@ -201,7 +201,6 @@ struct UnifiedSettingsView: View {
 
     @State private var hasGoogleAPIKey = false
     @State private var hasJevAPIKey = false
-    @AppStorage(MeetingSceneMode.storageKey) private var sceneModeRaw = ""
     @AppStorage(MeetingMicMode.storageKey) private var micModeRaw = MeetingMicMode.headset.rawValue
     @AppStorage("meeting.allowPhoneFallback") private var allowPhoneFallback = false
     @AppStorage("meeting.voiceProcessingMode") private var voiceProcessing = "auto"
@@ -218,19 +217,6 @@ struct UnifiedSettingsView: View {
         Binding(
             get: { MeetingMicMode.resolve(stored: micModeRaw) },
             set: { micModeRaw = $0.rawValue }
-        )
-    }
-
-    /// 저장값이 없으면 이전 켜기/끄기 스위치 값을 이어받는다.
-    private var sceneMode: Binding<MeetingSceneMode> {
-        Binding(
-            get: {
-                MeetingSceneMode.resolve(
-                    stored: sceneModeRaw.isEmpty ? nil : sceneModeRaw,
-                    legacyToggle: UserDefaults.standard.object(forKey: MeetingSceneMode.legacyToggleKey) as? Bool
-                )
-            },
-            set: { sceneModeRaw = $0.rawValue }
         )
     }
 
@@ -440,19 +426,6 @@ struct UnifiedSettingsView: View {
             Picker("settings.whisper".localized, selection: whisperSide) {
                 ForEach(WhisperSide.allCases) { side in
                     Text(side.titleKey.localized).tag(side)
-                }
-            }
-
-            Picker(selection: sceneMode) {
-                ForEach(MeetingSceneMode.allCases) { mode in
-                    Text(mode.titleKey.localized).tag(mode)
-                }
-            } label: {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("settings.scene".localized)
-                    Text(sceneMode.wrappedValue.detailKey.localized)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
                 }
             }
 

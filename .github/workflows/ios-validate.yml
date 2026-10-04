@@ -65,6 +65,9 @@ jobs:
       - name: 한국어 및 보안 정적 점검
         run: python3 Scripts/audit_localization_security.py
 
+      - name: 카메라 수동 활성화 정책 회귀 점검
+        run: python3 Scripts/test_camera_policy.py
+
       - name: 고정된 Swift 패키지 의존성 확인
         run: |
           xcodebuild \

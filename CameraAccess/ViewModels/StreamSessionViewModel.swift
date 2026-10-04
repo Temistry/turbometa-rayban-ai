@@ -265,6 +265,8 @@ class StreamSessionViewModel: ObservableObject {
   }
 
   func stopSession() async {
+    // Audio-only sessions must not call stop on an idle/unconnected SDK session.
+    guard sessionStartTask != nil || streamingStatus != .stopped || captureOwner != nil else { return }
     logger.info("⏹️ stopSession START")
     await sessionStartTask?.value
     stopTimer()

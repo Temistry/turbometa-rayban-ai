@@ -606,7 +606,7 @@ final class MeetingTranscriptionService: ObservableObject {
     nonisolated static func shouldAnalyze(pending: String, previous: String,
                                          quietTime: TimeInterval, elapsed: TimeInterval) -> Bool {
         pending.trimmingCharacters(in: .whitespacesAndNewlines).count >= 2
-            && pending != previous && (quietTime >= 1 || elapsed >= 4)
+            && pending != previous && (quietTime >= 1 || elapsed >= 6)
     }
 
     nonisolated static func shouldRecoverStall(window: MeetingInputWindow,

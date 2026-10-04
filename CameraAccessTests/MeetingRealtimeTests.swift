@@ -40,7 +40,7 @@ final class MeetingRealtimeTests: XCTestCase {
 
     func testContinuousSpeechDoesNotWaitForever() {
         XCTAssertTrue(MeetingTranscriptionService.shouldAnalyze(
-            pending: "지금 계속 설명하고 있는데", previous: "", quietTime: 0.1, elapsed: 4.1))
+            pending: "지금 계속 설명하고 있는데", previous: "", quietTime: 0.1, elapsed: 6.1))
     }
 
     func testUnchangedSnapshotIsNotResubmitted() {
