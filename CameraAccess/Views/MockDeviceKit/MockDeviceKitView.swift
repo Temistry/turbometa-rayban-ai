@@ -6,13 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-//
-// MockDeviceKitView.swift
-//
-// Debug-only interface for managing mock Meta wearable devices during development.
-// This view allows developers to create, configure, and test with simulated devices
-// without requiring physical Meta hardware.
-//
+// 개발 중 실제 Meta 기기 없이 페어링, 기능과 상태를 시험하는 DEBUG 전용 화면이다.
 
 #if DEBUG
 
@@ -29,24 +23,24 @@ struct MockDeviceKitView: View {
           CardView {
             VStack(spacing: 8) {
               HStack {
-                Text("Mock Device Kit")
+                Text("모의 기기 도구")
                   .font(.title2)
                   .foregroundColor(.primary)
                 Spacer()
 
-                Text("\(viewModel.cardViewModels.count) device(s) paired")
+                Text("페어링된 기기 \(viewModel.cardViewModels.count)개")
                   .font(.subheadline)
                   .foregroundColor(.green)
               }
 
-              Text("This screen handles simulating devices, mocking capabilities, and states")
+              Text("가상 기기를 만들고 기능과 연결 상태를 시험하는 개발용 화면입니다")
                 .font(.body)
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
               Divider()
 
-              MockDeviceKitButton("Pair RayBan Meta", disabled: viewModel.cardViewModels.count > 2) {
+              MockDeviceKitButton("Ray-Ban Meta 페어링", disabled: viewModel.cardViewModels.count > 2) {
                 viewModel.pairRaybanMeta()
               }
             }
@@ -67,6 +61,8 @@ struct MockDeviceKitView: View {
         .padding()
       }
       .background(Color(.systemGroupedBackground))
+      .navigationTitle("모의 Meta 기기")
+      .navigationBarTitleDisplayMode(.inline)
     }
   }
 }

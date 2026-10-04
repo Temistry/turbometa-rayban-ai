@@ -1,0 +1,25 @@
+name: Wiki BLE receiver validation
+on:
+  push:
+    branches: [feature/testflight-signing-config]
+    paths: ["Receiver/**", ".github/workflows/wiki-receiver.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  receiver:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - name: Build
+        run: dotnet build Receiver/TurboMetaReceiver.csproj -c Release
+      - name: Protocol and storage tests
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD 'Receiver/bin/Release/net9.0-windows10.0.19041.0/TurboMetaReceiver.exe'
+          $process = Start-Process -FilePath $exe -ArgumentList '--self-test' -WindowStyle Hidden -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw 'Receiver tests failed' }
+          Get-Content 'Receiver/bin/Release/net9.0-windows10.0.19041.0/self-test.txt'

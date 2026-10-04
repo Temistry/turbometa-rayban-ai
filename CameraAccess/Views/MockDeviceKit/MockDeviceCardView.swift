@@ -6,14 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-//
-// MockDeviceCardView.swift
-//
-// UI component for managing individual mock Meta wearable devices during development.
-// This card provides controls for simulating device states (power, wearing, folding)
-// and loading mock media content for testing DAT SDK streaming and photo capture features.
-// Useful for testing without requiring physical Meta hardware.
-//
+// 개발 중 개별 모의 Meta 기기의 전원, 착용, 접힘 상태와 테스트 미디어를 관리한다.
 
 #if DEBUG
 
@@ -43,7 +36,7 @@ struct MockDeviceCardView: View {
 
           Spacer()
 
-          MockDeviceKitButton("Unpair", style: .destructive, expandsHorizontally: false) {
+          MockDeviceKitButton("연결 해제", style: .destructive, expandsHorizontally: false) {
             onUnpairDevice()
           }
         }
@@ -52,37 +45,37 @@ struct MockDeviceCardView: View {
 
         VStack(spacing: 8) {
           HStack(spacing: 8) {
-            MockDeviceKitButton("Power On") {
+            MockDeviceKitButton("전원 켜기") {
               viewModel.powerOn()
             }
 
-            MockDeviceKitButton("Power Off") {
+            MockDeviceKitButton("전원 끄기") {
               viewModel.powerOff()
             }
           }
 
           HStack(spacing: 8) {
-            MockDeviceKitButton("Don") {
+            MockDeviceKitButton("착용") {
               viewModel.don()
             }
 
-            MockDeviceKitButton("Doff") {
+            MockDeviceKitButton("벗기") {
               viewModel.doff()
             }
           }
 
           HStack(spacing: 8) {
-            MockDeviceKitButton("Unfold") {
+            MockDeviceKitButton("펼치기") {
               viewModel.unfold()
             }
 
-            MockDeviceKitButton("Fold") {
+            MockDeviceKitButton("접기") {
               viewModel.fold()
             }
           }
 
           HStack(spacing: 8) {
-            MockDeviceKitButton("Select video") {
+            MockDeviceKitButton("비디오 선택") {
               showingVideoPicker = true
             }
             .sheet(isPresented: $showingVideoPicker) {
@@ -93,14 +86,13 @@ struct MockDeviceCardView: View {
 
             StatusText(
               isActive: viewModel.hasCameraFeed,
-              activeText: "Has camera feed",
-              inactiveText: "No camera feed"
+              activeText: "카메라 영상 있음",
+              inactiveText: "카메라 영상 없음"
             )
-
           }
 
           HStack(spacing: 8) {
-            MockDeviceKitButton("Select image") {
+            MockDeviceKitButton("이미지 선택") {
               showingImagePicker = true
             }
             .sheet(isPresented: $showingImagePicker) {
@@ -111,8 +103,8 @@ struct MockDeviceCardView: View {
 
             StatusText(
               isActive: viewModel.hasCapturedImage,
-              activeText: "Has captured image",
-              inactiveText: "No captured image"
+              activeText: "촬영 이미지 있음",
+              inactiveText: "촬영 이미지 없음"
             )
           }
         }
@@ -121,7 +113,5 @@ struct MockDeviceCardView: View {
     }
   }
 }
-
-// Replace this with PhotosPicker once we're on iOS 16 or newer
 
 #endif

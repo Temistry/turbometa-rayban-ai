@@ -1,6 +1,5 @@
 /*
- * Vision Recognition View
- * UI for analyzing captured photos using AI vision model
+ * 일반 AI 이미지 인식 화면
  */
 
 import SwiftUI
@@ -20,36 +19,23 @@ struct VisionRecognitionView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                    // Photo preview
                     photoSection
-
-                    // Prompt input section
                     promptSection
-
-                    // Quick prompt buttons
                     quickPromptsSection
-
-                    // Analyze button
                     analyzeButton
-
-                    // Result section
                     resultSection
                 }
                 .padding()
             }
-            .navigationTitle("AI 视觉识别")
+            .navigationTitle("vision.title".localized)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("关闭") {
-                        dismiss()
-                    }
+                    Button("close".localized) { dismiss() }
                 }
             }
         }
     }
-
-    // MARK: - View Components
 
     private var photoSection: some View {
         Image(uiImage: photo)
@@ -62,11 +48,11 @@ struct VisionRecognitionView: View {
 
     private var promptSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("提问内容")
+            Text("질문 내용")
                 .font(.headline)
                 .foregroundColor(.primary)
 
-            TextField("输入你的问题...", text: $viewModel.customPrompt, axis: .vertical)
+            TextField("사진에 대해 물어볼 내용을 입력하세요", text: $viewModel.customPrompt, axis: .vertical)
                 .textFieldStyle(.roundedBorder)
                 .lineLimit(3...6)
                 .disabled(viewModel.isAnalyzing)
@@ -75,7 +61,7 @@ struct VisionRecognitionView: View {
 
     private var quickPromptsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("快捷提问")
+            Text("빠른 질문")
                 .font(.headline)
                 .foregroundColor(.primary)
 
@@ -89,16 +75,8 @@ struct VisionRecognitionView: View {
                                 .font(.caption)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 8)
-                                .background(
-                                    viewModel.customPrompt == prompt
-                                        ? Color.blue
-                                        : Color.gray.opacity(0.2)
-                                )
-                                .foregroundColor(
-                                    viewModel.customPrompt == prompt
-                                        ? .white
-                                        : .primary
-                                )
+                                .background(viewModel.customPrompt == prompt ? Color.blue : Color.gray.opacity(0.2))
+                                .foregroundColor(viewModel.customPrompt == prompt ? .white : .primary)
                                 .cornerRadius(16)
                         }
                         .disabled(viewModel.isAnalyzing)
@@ -110,9 +88,7 @@ struct VisionRecognitionView: View {
 
     private var analyzeButton: some View {
         Button {
-            Task {
-                await viewModel.analyzeImage()
-            }
+            Task { await viewModel.analyzeImage() }
         } label: {
             HStack {
                 if viewModel.isAnalyzing {
@@ -120,7 +96,7 @@ struct VisionRecognitionView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                         .scaleEffect(0.8)
                 }
-                Text(viewModel.isAnalyzing ? "分析中..." : "开始分析")
+                Text(viewModel.isAnalyzing ? "vision.analyzing".localized : "분석 시작")
                     .fontWeight(.semibold)
             }
             .frame(maxWidth: .infinity)
@@ -129,92 +105,79 @@ struct VisionRecognitionView: View {
             .foregroundColor(.white)
             .cornerRadius(12)
         }
-        .disabled(viewModel.isAnalyzing || viewModel.customPrompt.isEmpty)
+        .disabled(
+            viewModel.isAnalyzing
+                || viewModel.customPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        )
     }
 
+    @ViewBuilder
     private var resultSection: some View {
-        Group {
-            if let result = viewModel.recognitionResult {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Text("识别结果")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-
-                        Spacer()
-
-                        Button {
-                            viewModel.clearResult()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.gray)
-                        }
-                    }
-
-                    Text(result)
-                        .font(.body)
+        if let result = viewModel.recognitionResult {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("vision.result".localized)
+                        .font(.headline)
                         .foregroundColor(.primary)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(12)
+                    Spacer()
+                    Button { viewModel.clearResult() } label: {
+                        Image(systemName: "xmark.circle.fill").foregroundColor(.gray)
+                    }
+                    .accessibilityLabel("결과 닫기")
+                }
 
-                    Button {
-                        UIPasteboard.general.string = result
-                    } label: {
-                        HStack {
-                            Image(systemName: "doc.on.doc")
-                            Text("复制结果")
-                        }
+                Text(result)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(12)
+                    .textSelection(.enabled)
+
+                Button {
+                    UIPasteboard.general.string = result
+                } label: {
+                    Label("결과 복사", systemImage: "doc.on.doc")
                         .font(.caption)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Color.blue.opacity(0.1))
                         .foregroundColor(.blue)
                         .cornerRadius(8)
-                    }
                 }
-            } else if let error = viewModel.errorMessage {
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("错误")
-                        .font(.headline)
-                        .foregroundColor(.red)
+            }
+        } else if let error = viewModel.errorMessage {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("error".localized)
+                    .font(.headline)
+                    .foregroundColor(.red)
 
-                    Text(error)
-                        .font(.body)
-                        .foregroundColor(.primary)
-                        .padding()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.red.opacity(0.1))
-                        .cornerRadius(12)
+                Text(error)
+                    .font(.body)
+                    .foregroundColor(.primary)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.red.opacity(0.1))
+                    .cornerRadius(12)
+                    .textSelection(.enabled)
 
-                    Button {
-                        Task {
-                            await viewModel.retryAnalysis()
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "arrow.clockwise")
-                            Text("重试")
-                        }
+                Button {
+                    Task { await viewModel.retryAnalysis() }
+                } label: {
+                    Label("retry".localized, systemImage: "arrow.clockwise")
                         .font(.caption)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Color.orange.opacity(0.1))
                         .foregroundColor(.orange)
                         .cornerRadius(8)
-                    }
                 }
             }
         }
     }
 }
 
-// MARK: - Preview
-
 #Preview {
-    VisionRecognitionView(
-        photo: UIImage(systemName: "photo")!,
-        apiKey: "sk-demo"
-    )
+    VisionRecognitionView(photo: UIImage(systemName: "photo")!, apiKey: "demo")
 }
